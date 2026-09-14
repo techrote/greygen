@@ -153,3 +153,32 @@ button:disabled {
   font-size: 0.9rem;
   line-height: 1.55;
 }
+
+.meter-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.65rem;
+  margin: 1rem 0 0;
+}
+
+.meter-strip div {
+  min-width: 0;
+  padding: 0.7rem;
+  border: 1px solid #373d36;
+  border-radius: 0.6rem;
+  background: rgba(17, 20, 18, 0.56);
+}
+
+.meter-strip dt {
+  color: #aab5a2;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.meter-strip dd {
+  margin: 0.3rem 0 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
