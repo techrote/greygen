@@ -4,6 +4,7 @@ import {
   GREYGEN_PROCESSOR_NAME,
   type MainToWorkletMessage,
   type WorkletToMainMessage,
+  deserializeGainStageState,
   deserializeSpectrumState,
   parseMainToWorkletMessage,
 } from '../protocol'
@@ -25,13 +26,21 @@ declare function registerProcessor(
   processorCtor: AudioWorkletProcessorConstructor,
 ): void
 
+const TELEMETRY_UPDATES_PER_SECOND = 10
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown DSP engine error'
 }
 
 class GreygenAudioProcessor extends AudioWorkletProcessor {
   private readonly engine = new GreygenDspEngine({ sampleRate })
+  private readonly telemetryIntervalFrames = Math.max(
+    128,
+    Math.round(sampleRate / TELEMETRY_UPDATES_PER_SECOND),
+  )
   private renderedFrames = 0
+  private framesSinceTelemetry = 0
+  private telemetrySequence = 0
   private initialized = false
   private stopped = false
 
@@ -83,8 +92,11 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
         this.engine.reset({
           seed: message.seed,
           spectrumState: deserializeSpectrumState(message.spectrum),
+          gainStageState: deserializeGainStageState(message.gainStage),
         })
         this.renderedFrames = 0
+        this.framesSinceTelemetry = 0
+        this.telemetrySequence = 0
         this.initialized = true
         this.stopped = false
         this.post({
@@ -103,6 +115,17 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
           type: 'ack',
           requestId: message.requestId,
           command: 'set-spectrum',
+        })
+        return
+      case 'set-gain-stage':
+        this.engine.setGainStageState(
+          deserializeGainStageState(message.gainStage),
+        )
+        this.post({
+          version: AUDIO_PROTOCOL_VERSION,
+          type: 'ack',
+          requestId: message.requestId,
+          command: 'set-gain-stage',
         })
         return
       case 'reset-seed':
@@ -136,6 +159,27 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
     }
   }
 
+  private emitTelemetry(): void {
+    const telemetry = this.engine.consumeTelemetry()
+    this.telemetrySequence += 1
+    if (!Number.isSafeInteger(this.telemetrySequence)) {
+      this.telemetrySequence = 1
+    }
+
+    this.post({
+      version: AUDIO_PROTOCOL_VERSION,
+      type: 'telemetry',
+      sequence: this.telemetrySequence,
+      frameCount: telemetry.frameCount,
+      peakDbfs: telemetry.peakDbfs,
+      rmsDbfs: telemetry.rmsDbfs,
+      safetyPreGainDb: telemetry.safetyPreGainDb,
+      safetyPreGainTargetDb: telemetry.safetyPreGainTargetDb,
+      masterGainDb: telemetry.masterGainDb,
+      guardInterventions: telemetry.guardInterventions,
+    })
+  }
+
   process(
     _inputs: Float32Array[][],
     outputs: Float32Array[][],
@@ -163,6 +207,11 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
 
     this.engine.renderMono(mono)
     this.renderedFrames += mono.length
+    this.framesSinceTelemetry += mono.length
+    if (this.framesSinceTelemetry >= this.telemetryIntervalFrames) {
+      this.framesSinceTelemetry = 0
+      this.emitTelemetry()
+    }
     return true
   }
 }
