@@ -9,14 +9,14 @@ import { blockStatistics } from '../../src/audio/dsp/statistics'
 import {
   BROWN_PSD_SLOPE_DB_PER_OCTAVE,
   PINK_PSD_SLOPE_DB_PER_OCTAVE,
+  PRESET_PSD_FIT_MAXIMUM_HZ,
+  PRESET_PSD_FIT_MINIMUM_HZ,
   WHITE_PSD_SLOPE_DB_PER_OCTAVE,
   type SpectralPresetId,
   applySpectrumStateToFilterBank,
   createSpectrumState,
 } from '../../src/audio/dsp/spectra'
 
-const FIT_MINIMUM_HZ = 125
-const FIT_MAXIMUM_HZ = 8000
 const SLOPE_TOLERANCE_DB_PER_OCTAVE = 0.5
 
 function renderPreset(
@@ -40,12 +40,15 @@ function renderPreset(
 function measuredSlope(
   presetId: SpectralPresetId,
   sampleRate: number,
-  frameCount = 1 << 18,
+  frameCount = 1 << 19,
 ): number {
   const output = renderPreset(presetId, sampleRate, frameCount, 0x51_0f_aa_17)
   const psd = welchPsd(output, sampleRate, 2048)
-  return fitPsdSlopeDbPerOctave(psd, FIT_MINIMUM_HZ, FIT_MAXIMUM_HZ)
-    .slopeDbPerOctave
+  return fitPsdSlopeDbPerOctave(
+    psd,
+    PRESET_PSD_FIT_MINIMUM_HZ,
+    PRESET_PSD_FIT_MAXIMUM_HZ,
+  ).slopeDbPerOctave
 }
 
 describe('rendered preset PSD', () => {
@@ -69,15 +72,12 @@ describe('rendered preset PSD', () => {
     ['white', WHITE_PSD_SLOPE_DB_PER_OCTAVE],
     ['pink', PINK_PSD_SLOPE_DB_PER_OCTAVE],
     ['brown', BROWN_PSD_SLOPE_DB_PER_OCTAVE],
-  ] as const)(
-    '%s has 96 kHz spot coverage',
-    (presetId, expectedSlope) => {
-      const slope = measuredSlope(presetId, 96_000, 1 << 17)
-      expect(Math.abs(slope - expectedSlope)).toBeLessThan(
-        SLOPE_TOLERANCE_DB_PER_OCTAVE,
-      )
-    },
-  )
+  ] as const)('%s has 96 kHz spot coverage', (presetId, expectedSlope) => {
+    const slope = measuredSlope(presetId, 96_000, 1 << 18)
+    expect(Math.abs(slope - expectedSlope)).toBeLessThan(
+      SLOPE_TOLERANCE_DB_PER_OCTAVE,
+    )
+  })
 
   it('is exactly repeatable for the same seed, preset, and sample rate', () => {
     const first = renderPreset('pink', 48_000, 8192, 0x1234_abcd)
@@ -86,7 +86,7 @@ describe('rendered preset PSD', () => {
   })
 
   it('keeps Brown / Red finite and bounded near DC rather than random-walking', () => {
-    const output = renderPreset('brown', 48_000, 1 << 18, 0xb00b_1e55)
+    const output = renderPreset('brown', 48_000, 1 << 19, 0xb00b_1e55)
     const statistics = blockStatistics(output)
     const psd = welchPsd(output, 48_000, 8192)
     const nearDcSlope = fitPsdSlopeDbPerOctave(psd, 5, 30).slopeDbPerOctave
