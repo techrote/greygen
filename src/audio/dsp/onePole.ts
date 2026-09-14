@@ -1,7 +1,4 @@
-import {
-  assertFiniteNumber,
-  assertPositiveFiniteNumber,
-} from './numbers'
+import { assertFiniteNumber, assertPositiveFiniteNumber } from './numbers'
 
 export const MAX_CUTOFF_TO_NYQUIST_RATIO = 0.9
 

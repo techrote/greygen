@@ -1,11 +1,5 @@
-import {
-  assertFiniteNumber,
-  assertPositiveFiniteNumber,
-} from './numbers'
-import {
-  BilinearOnePoleLowPass,
-  isOnePoleCutoffSupported,
-} from './onePole'
+import { assertFiniteNumber, assertPositiveFiniteNumber } from './numbers'
+import { BilinearOnePoleLowPass, isOnePoleCutoffSupported } from './onePole'
 
 export const NOMINAL_BAND_CENTERS_HZ = Object.freeze([
   31.25, 62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000,
@@ -13,9 +7,7 @@ export const NOMINAL_BAND_CENTERS_HZ = Object.freeze([
 
 export const BAND_COUNT = NOMINAL_BAND_CENTERS_HZ.length
 export const CROSSOVER_FREQUENCIES_HZ = Object.freeze(
-  NOMINAL_BAND_CENTERS_HZ.slice(0, -1).map(
-    (centerHz) => centerHz * Math.SQRT2,
-  ),
+  NOMINAL_BAND_CENTERS_HZ.slice(0, -1).map((centerHz) => centerHz * Math.SQRT2),
 )
 export const HIGH_BAND_UPPER_CROSSOVER_HZ =
   NOMINAL_BAND_CENTERS_HZ[BAND_COUNT - 1] * Math.SQRT2
@@ -25,7 +17,9 @@ export type HighBandMode = 'bounded-bandpass' | 'degraded-high-shelf'
 
 function assertBandIndex(index: number): number {
   if (!Number.isInteger(index) || index < 0 || index >= BAND_COUNT) {
-    throw new RangeError(`band index must be an integer from 0 to ${BAND_COUNT - 1}`)
+    throw new RangeError(
+      `band index must be an integer from 0 to ${BAND_COUNT - 1}`,
+    )
   }
 
   return index
@@ -65,15 +59,11 @@ export class TenBandFilterBank {
     }
 
     this.crossovers = CROSSOVER_FREQUENCIES_HZ.map(
-      (crossoverHz) =>
-        new BilinearOnePoleLowPass(crossoverHz, this.sampleRate),
+      (crossoverHz) => new BilinearOnePoleLowPass(crossoverHz, this.sampleRate),
     )
 
     if (
-      isOnePoleCutoffSupported(
-        HIGH_BAND_UPPER_CROSSOVER_HZ,
-        this.sampleRate,
-      )
+      isOnePoleCutoffSupported(HIGH_BAND_UPPER_CROSSOVER_HZ, this.sampleRate)
     ) {
       this.highBandUpperCrossover = new BilinearOnePoleLowPass(
         HIGH_BAND_UPPER_CROSSOVER_HZ,
@@ -123,12 +113,11 @@ export class TenBandFilterBank {
     this.highBandUpperCrossover?.reset()
   }
 
-  processBandComponents(
-    input: number,
-    outputBands: Float64Array,
-  ): number {
+  processBandComponents(input: number, outputBands: Float64Array): number {
     if (outputBands.length < BAND_COUNT) {
-      throw new RangeError(`outputBands must have at least ${BAND_COUNT} elements`)
+      throw new RangeError(
+        `outputBands must have at least ${BAND_COUNT} elements`,
+      )
     }
 
     let residual = input

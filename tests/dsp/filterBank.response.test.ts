@@ -108,17 +108,16 @@ function logFrequencyGrid(
   )
 }
 
-function peakFrequencyForBand(
-  sampleRate: number,
-  bandIndex: number,
-): number {
+function peakFrequencyForBand(sampleRate: number, bandIndex: number): number {
   const centerHz = NOMINAL_BAND_CENTERS_HZ[bandIndex]
   const maximumHz = Math.min(centerHz * 2, sampleRate * 0.45)
   let peakFrequencyHz = centerHz
   let peakMagnitude = -1
 
   for (const frequencyHz of logFrequencyGrid(centerHz / 2, maximumHz, 4096)) {
-    const response = componentResponses(sampleRate, frequencyHz).bands[bandIndex]
+    const response = componentResponses(sampleRate, frequencyHz).bands[
+      bandIndex
+    ]
     const responseMagnitude = magnitude(response)
 
     if (responseMagnitude > peakMagnitude) {
@@ -177,7 +176,9 @@ describe('ten-band complementary frequency response', () => {
       const responseAt125Hz = componentResponses(sampleRate, 125).bands[0]
 
       expect(responseDb(responseAt5Hz)).toBeGreaterThan(-0.2)
-      expect(magnitude(responseAt5Hz)).toBeGreaterThan(magnitude(responseAtCenter))
+      expect(magnitude(responseAt5Hz)).toBeGreaterThan(
+        magnitude(responseAtCenter),
+      )
       expect(magnitude(responseAtCenter)).toBeGreaterThan(
         magnitude(responseAt125Hz),
       )
@@ -187,7 +188,8 @@ describe('ten-band complementary frequency response', () => {
   it('uses a degraded 16 kHz high shelf at 44.1 and 48 kHz', () => {
     for (const sampleRate of [44_100, 48_000]) {
       const at16k = componentResponses(sampleRate, 16_000).bands[9]
-      const nearNyquist = componentResponses(sampleRate, sampleRate * 0.49).bands[9]
+      const nearNyquist = componentResponses(sampleRate, sampleRate * 0.49)
+        .bands[9]
 
       expect(responseDb(at16k)).toBeGreaterThan(-2)
       expect(magnitude(nearNyquist)).toBeGreaterThan(magnitude(at16k))
