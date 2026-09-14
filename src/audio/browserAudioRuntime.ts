@@ -20,7 +20,8 @@ export function createBrowserAudioRuntime(): AudioEngineRuntime {
   return {
     secureContext: browserGlobal.isSecureContext === true,
     audioContextSupported: typeof AudioContextConstructor === 'function',
-    audioWorkletNodeSupported: typeof AudioWorkletNodeConstructor === 'function',
+    audioWorkletNodeSupported:
+      typeof AudioWorkletNodeConstructor === 'function',
     workletModuleUrl,
     createAudioContext(): AudioContextPort {
       if (!AudioContextConstructor) {
