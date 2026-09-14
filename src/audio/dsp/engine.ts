@@ -88,7 +88,9 @@ export class GreygenDspEngine {
 
   renderMono(output: Float32Array): void {
     for (let index = 0; index < output.length; index += 1) {
-      output[index] = this.filterBank.processSample(this.generator.nextBipolar())
+      output[index] = this.filterBank.processSample(
+        this.generator.nextBipolar(),
+      )
     }
   }
 }
