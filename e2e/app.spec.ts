@@ -14,7 +14,9 @@ test('loads Ready and remains silent until the explicit Start action', async ({
   const startButton = page.getByRole('button', { name: 'Start audio' })
   await expect(startButton).toBeEnabled()
   await expect(
-    page.getByText('Audio stays silent until you choose Start', { exact: false }),
+    page.getByText('Audio stays silent until you choose Start', {
+      exact: false,
+    }),
   ).toBeVisible()
 })
 
@@ -28,7 +30,9 @@ test('starts the worklet through a user action and closes it cleanly', async ({
   await page.getByRole('button', { name: 'Start audio' }).click()
 
   await expect(page.getByText('Running', { exact: true })).toBeVisible()
-  await expect(page.getByText('Audio engine active', { exact: false })).toBeVisible()
+  await expect(
+    page.getByText('Audio engine active', { exact: false }),
+  ).toBeVisible()
   await expect(page.locator('.status-dot[data-status="running"]')).toBeVisible()
 
   await page.getByRole('button', { name: 'Stop audio' }).click()
@@ -52,6 +56,8 @@ test('surfaces missing AudioWorklet capability instead of swallowing it', async 
   await page.goto('/')
 
   await expect(page.getByText('Unsupported', { exact: true })).toBeVisible()
-  await expect(page.getByText('AudioWorkletNode support', { exact: false })).toBeVisible()
+  await expect(
+    page.getByText('AudioWorkletNode support', { exact: false }),
+  ).toBeVisible()
   await expect(page.getByRole('button', { name: 'Start audio' })).toBeDisabled()
 })
