@@ -1,4 +1,4 @@
-import { type HighBandMode } from './dsp/filterBank'
+import type { HighBandMode } from './dsp/filterBank'
 import {
   SPECTRAL_PRESET_IDS,
   type SpectralPresetId,
