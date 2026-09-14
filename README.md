@@ -65,9 +65,10 @@ Start with:
 2. `docs/RAG/PLAN_REVIEW.md`
 3. `docs/RAG/ARCHITECTURE.md`
 4. `docs/RAG/DSP_VALIDATION.md`
-5. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
-6. `docs/RAG/UX_STATE.md`
-7. `docs/RAG/AGENT_PLAYBOOK.md`
-8. `docs/RAG/ROADMAP.md`
+5. `docs/RAG/SPECTRAL_TARGETS.md`
+6. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
+7. `docs/RAG/UX_STATE.md`
+8. `docs/RAG/AGENT_PLAYBOOK.md`
+9. `docs/RAG/ROADMAP.md`
 
 The GitHub issues are executable work packets. Each issue must be completed end-to-end: implementation, tests, documentation updates, PR, automated checks, review of failures, and merge only after required checks pass.
