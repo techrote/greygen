@@ -1,7 +1,4 @@
-import {
-  DEFAULT_ENGINE_PRESET,
-  DEFAULT_ENGINE_SEED,
-} from './dsp/engine'
+import { DEFAULT_ENGINE_PRESET, DEFAULT_ENGINE_SEED } from './dsp/engine'
 import type { HighBandMode } from './dsp/filterBank'
 import {
   type SpectralPresetId,
@@ -111,11 +108,13 @@ type SnapshotListener = (snapshot: AudioEngineSnapshot) => void
 
 type ExpectedResponseType = Exclude<WorkletToMainMessage['type'], 'error'>
 
+type TimerHandle = ReturnType<typeof globalThis.setTimeout>
+
 interface PendingRequest {
   readonly expectedType: ExpectedResponseType
   readonly resolve: (message: WorkletToMainMessage) => void
   readonly reject: (error: Error) => void
-  readonly timeoutId: number
+  readonly timeoutId: TimerHandle
 }
 
 class AudioEngineFailure extends Error {
@@ -142,7 +141,9 @@ function initialCapability(runtime: AudioEngineRuntime): AudioCapability {
   return 'supported'
 }
 
-function capabilityError(capability: AudioCapability): AudioEngineErrorInfo | null {
+function capabilityError(
+  capability: AudioCapability,
+): AudioEngineErrorInfo | null {
   switch (capability) {
     case 'supported':
       return null
@@ -156,7 +157,8 @@ function capabilityError(capability: AudioCapability): AudioEngineErrorInfo | nu
     case 'audio-context-unavailable':
       return {
         code: capability,
-        message: 'This browser does not expose the Web Audio API required by Greygen.',
+        message:
+          'This browser does not expose the Web Audio API required by Greygen.',
         recoverable: false,
       }
     case 'audio-worklet-node-unavailable':
@@ -242,7 +244,10 @@ export class AudioEngine {
       return
     }
 
-    await this.cleanupResources()
+    if (this.hasOwnedResources()) {
+      await this.cleanupResources()
+    }
+
     this.setSnapshot({
       status: 'starting',
       capability: 'supported',
@@ -473,6 +478,15 @@ export class AudioEngine {
     return response
   }
 
+  private hasOwnedResources(): boolean {
+    return (
+      this.context !== null ||
+      this.node !== null ||
+      this.gain !== null ||
+      this.pendingRequests.size > 0
+    )
+  }
+
   private setSnapshot(snapshot: AudioEngineSnapshot): void {
     this.snapshotValue = Object.freeze(snapshot)
     for (const listener of this.listeners) {
@@ -534,7 +548,9 @@ export class AudioEngine {
     })
   }
 
-  private readonly handlePortMessage = (event: { readonly data: unknown }): void => {
+  private readonly handlePortMessage = (event: {
+    readonly data: unknown
+  }): void => {
     const message = parseWorkletToMainMessage(event.data)
     if (!message) {
       void this.fail(
@@ -596,7 +612,11 @@ export class AudioEngine {
     }
 
     if (this.context.state === 'running' && this.node) {
-      this.setSnapshot({ ...this.snapshotValue, status: 'running', error: null })
+      this.setSnapshot({
+        ...this.snapshotValue,
+        status: 'running',
+        error: null,
+      })
       return
     }
 
@@ -662,7 +682,9 @@ export class AudioEngine {
 
     for (const pending of this.pendingRequests.values()) {
       globalThis.clearTimeout(pending.timeoutId)
-      pending.reject(new Error('Audio engine was stopped before the request completed'))
+      pending.reject(
+        new Error('Audio engine was stopped before the request completed'),
+      )
     }
     this.pendingRequests.clear()
 
