@@ -79,12 +79,16 @@ The protocol deliberately does not add meters, stereo controls, calibration fiel
 
 ## Worklet hot path
 
-`greygen-processor.ts` holds one `GreygenDspEngine` instance. `process()`:
+`greygen-processor.ts` holds one `GreygenDspEngine` instance. A newly constructed processor remains alive but emits zeros until a valid `initialize` message has reset the engine to the requested seed and spectrum. This prevents constructor defaults from leaking into the destination during the node-to-handshake interval.
+
+Once initialized, `process()`:
 
 1. obtains the browser-provided mono output buffer;
 2. calls `engine.renderMono(output)`;
 3. increments a primitive rendered-frame counter;
-4. returns.
+4. returns `true`.
+
+After an acknowledged `stop`, the processor zeros any final supplied output buffer and returns `false` so the browser may retire the processor. Before initialization it zeros the supplied buffer but returns `true`, allowing the handshake to complete.
 
 No logging, DOM/network access, Promise work, `MessagePort` traffic, object/array creation, or main-thread processing occurs per sample. Control messages are handled outside the sample loop.
 
