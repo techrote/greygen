@@ -1,28 +1,37 @@
 import { describe, expect, it } from 'vitest'
 import {
   AUDIO_PROTOCOL_VERSION,
+  deserializeGainStageState,
   deserializeSpectrumState,
   parseMainToWorkletMessage,
   parseWorkletToMainMessage,
+  serializeGainStageState,
   serializeSpectrumState,
 } from '../../src/audio/protocol'
+import { createGainStageState } from '../../src/audio/dsp/gainSafety'
 import { createSpectrumState } from '../../src/audio/dsp/spectra'
 
 describe('AudioWorklet protocol', () => {
-  it('serializes spectrum state through a JSON-safe representation', () => {
+  it('serializes spectrum and gain state through JSON-safe representations', () => {
     const offsets = new Float64Array(10)
     offsets[2] = 3.5
     offsets[7] = -4.25
     const source = createSpectrumState('pink', offsets)
+    const gainStage = createGainStageState(-18, offsets, offsets)
 
-    const serialized = serializeSpectrumState(source)
-    const jsonRoundTrip = JSON.parse(JSON.stringify(serialized)) as unknown
+    const serializedSpectrum = JSON.parse(
+      JSON.stringify(serializeSpectrumState(source)),
+    ) as unknown
+    const serializedGain = JSON.parse(
+      JSON.stringify(serializeGainStageState(gainStage)),
+    ) as unknown
     const parsed = parseMainToWorkletMessage({
       version: AUDIO_PROTOCOL_VERSION,
       type: 'initialize',
       requestId: 1,
       seed: 1234,
-      spectrum: jsonRoundTrip,
+      spectrum: serializedSpectrum,
+      gainStage: serializedGain,
     })
 
     expect(parsed?.type).toBe('initialize')
@@ -30,12 +39,13 @@ describe('AudioWorklet protocol', () => {
       throw new Error('Expected initialize message')
     }
     expect(deserializeSpectrumState(parsed.spectrum)).toEqual(source)
+    expect(deserializeGainStageState(parsed.gainStage)).toEqual(gainStage)
   })
 
-  it('rejects incompatible versions, invalid seeds, and malformed spectra', () => {
+  it('rejects incompatible versions, invalid seeds, malformed spectra, and invalid gain state', () => {
     expect(
       parseMainToWorkletMessage({
-        version: 99,
+        version: 1,
         type: 'request-status',
         requestId: 1,
       }),
@@ -59,9 +69,22 @@ describe('AudioWorklet protocol', () => {
         },
       }),
     ).toBeNull()
+    expect(
+      parseMainToWorkletMessage({
+        version: AUDIO_PROTOCOL_VERSION,
+        type: 'set-gain-stage',
+        requestId: 4,
+        gainStage: {
+          schemaVersion: 1,
+          masterGainDb: 12,
+          animationBandOffsetsDb: Array(10).fill(0),
+          calibrationBandOffsetsDb: Array(10).fill(0),
+        },
+      }),
+    ).toBeNull()
   })
 
-  it('validates ready/status messages from the processor', () => {
+  it('validates ready/status and bounded telemetry messages from the processor', () => {
     expect(
       parseWorkletToMainMessage({
         version: AUDIO_PROTOCOL_VERSION,
@@ -79,6 +102,26 @@ describe('AudioWorklet protocol', () => {
       targetId: 'grey',
       highBandMode: 'degraded-high-shelf',
     })
+
+    const telemetry = {
+      version: AUDIO_PROTOCOL_VERSION,
+      type: 'telemetry',
+      sequence: 3,
+      frameCount: 4800,
+      peakDbfs: -8.5,
+      rmsDbfs: -21.2,
+      safetyPreGainDb: -1,
+      safetyPreGainTargetDb: -1,
+      masterGainDb: -26.02,
+      guardInterventions: 0,
+    }
+    expect(parseWorkletToMainMessage(telemetry)).toEqual(telemetry)
+    expect(
+      parseWorkletToMainMessage({ ...telemetry, sequence: 0 }),
+    ).toBeNull()
+    expect(
+      parseWorkletToMainMessage({ ...telemetry, peakDbfs: Number.NaN }),
+    ).toBeNull()
 
     expect(
       parseWorkletToMainMessage({
