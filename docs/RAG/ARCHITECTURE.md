@@ -50,7 +50,7 @@ src/
       numbers.ts
       rng.ts
       statistics.ts
-      biquad.ts
+      onePole.ts
       filterBank.ts
       spectra.ts
       smoothing.ts
@@ -122,22 +122,50 @@ Changing the PRNG, seed expansion, stream mapping, integer-to-float mapping, or 
 
 ## Ten-band filter bank
 
-Initial nominal centers:
+Nominal centers are:
 
 `31.25, 62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000 Hz`.
 
-The implementation should use a stable IIR topology suitable for real-time noise shaping. Candidate MVP topology: cascaded biquads/band partitioning with coefficients generated from runtime sample rate.
+The MVP filter bank in `src/audio/dsp/filterBank.ts` uses a **sequential complementary first-order bilinear crossover bank**. It was selected by deterministic response/impulse characterization rather than by assuming ten parallel peaking filters would reconstruct a useful neutral state.
 
-Requirements:
+For each exposed boundary, the crossover frequency is the geometric midpoint between adjacent octave-spaced centers, equivalently `center[i] * sqrt(2)`. A crossover low-pass uses the bilinear one-pole form in `onePole.ts`:
 
-- finite coefficients for all supported states;
-- no center/Q request at or beyond safe Nyquist margin;
-- explicit treatment of first/last bands (low/high shelves or bounded edge bands are acceptable if validated);
-- reconstruction/normalization behavior measured, not assumed;
-- no allocation in the inner sample loop after initialization;
-- parameter changes smoothed or coefficients crossfaded/interpolated safely.
+```text
+k = tan(pi * fc / sampleRate)
+norm = 1 / (1 + k)
+b0 = b1 = k * norm
+a1 = (k - 1) * norm
 
-The exact filter topology is an implementation issue and should be selected by measured reconstruction/spectral results, not aesthetic preference.
+low[n] = b0 * x[n] + state
+state = b1 * x[n] - a1 * low[n]
+high[n] = x[n] - low[n]
+```
+
+The next crossover processes the previous stage's `high` residual. Consequently every stage is an algebraic partition of its input. With all exposed band gains at unity, the ten exposed components plus any intentionally hidden ultrasonic residual reconstruct the original sample to floating-point precision. This is the neutral-state contract; no parallel-filter normalization or frequency-dependent correction is required.
+
+The basis components intentionally overlap. Their amplitude at the printed center frequency is therefore not defined as 0 dB; the user band value is a multiplier on a complementary spectral component, not the gain of an isolated constant-Q bell. Deterministic response tests verify that interior component peaks remain close to their nominal spectral regions.
+
+### Edge bands and Nyquist policy
+
+- The 31.25 Hz component is an intentional low shelf below the first crossover at approximately 44.19 Hz.
+- The lower edge of the 16 kHz component is approximately 11.314 kHz.
+- Its nominal upper edge is `16000 * sqrt(2)`, approximately 22.627 kHz.
+- A one-pole crossover may only be instantiated when its cutoff is at or below **90% of Nyquist**. This leaves an explicit numerical/spectral safety margin rather than constructing an edge filter merely to preserve a label.
+- At 44.1 and 48 kHz the nominal 22.627 kHz upper crossover is unavailable, so `highBandMode` is `degraded-high-shelf`: the 16 kHz control owns the residual above approximately 11.314 kHz.
+- At 96 kHz the upper crossover is safe, so `highBandMode` is `bounded-bandpass`: the exposed 16 kHz component is bounded above at approximately 22.627 kHz and the ultrasonic residual above that boundary passes at unity outside the ten user-controlled bands.
+
+`highBandMode`, `highBandDegraded`, and `highBandUpperEdgeHz` make this policy explicit for later UI/accessibility work. A runtime sample-rate change is a bank/audio-context lifecycle event; coefficients are not continuously retuned in the sample loop.
+
+### Topology selection notes
+
+Two simple alternatives were rejected during issue #3 characterization:
+
+- a matched-z/exponential one-pole partition preserved algebraic reconstruction but its complementary high branch did not approach unity at Nyquist, making the top-band behavior unnecessarily attenuated;
+- a second-order Butterworth low-pass with `high = input - low` also reconstructed neutrally, but the resulting complementary band components showed larger resonant peaks and less faithful nominal-region placement.
+
+The selected bilinear first-order partition gives exact neutral reconstruction, monotonic low/high edge behavior, stable finite one-state sections, and no per-sample allocation. The production inner path stores all section state, gains, and scratch components up front.
+
+Band gains are currently accepted in linear range `[0, 16]`; later gain-staging/safety logic may impose more user-facing constraints and pre-gain. Gain changes must use the reusable smoothing layer before they reach the real-time signal path. The fixed crossover coefficients themselves do not need to change for ordinary band-gain updates.
 
 ## Preset semantics
 
@@ -173,7 +201,7 @@ User controls and automation must not write discontinuous gain changes directly 
 - `OnePoleSmoother`: an exponential target follower with coefficient `exp(-1 / (tau * sampleRate))`, so a positive time constant has the same meaning at different runtime sample rates; `tau = 0` deliberately snaps to the target;
 - `LinearRamp`: a bounded linear transition that arrives exactly on the target after a specified integer sample count, plus a seconds-to-samples convenience path using the runtime sample rate.
 
-Both validate numeric inputs before state mutation and perform no heap allocation in `next()`. Filter coefficient transition strategy remains part of the filter-bank issue because it depends on the selected topology.
+Both validate numeric inputs before state mutation and perform no heap allocation in `next()`. Filter-bank crossover coefficients are fixed for a bank's runtime sample rate; ordinary spectral-control transitions therefore smooth band gains rather than retuning IIR coefficients in place.
 
 Manual controls can use roughly tens-to-low-hundreds of milliseconds; animation generally moves much slower. Exact defaults are tuned subjectively but covered by discontinuity tests.
 
@@ -235,7 +263,7 @@ Version each persisted schema. Migrations are explicit and tested.
 
 ## Future continuous spectral engine
 
-Do not block the MVP on it, but keep a compatibility boundary: ten-band state should be representable as a sampled target curve. A future engine may use denser IIR/FIR/FFT-based shaping. The UI should talk in terms of a target spectrum model rather than reaching directly into biquad objects.
+Do not block the MVP on it, but keep a compatibility boundary: ten-band state should be representable as a sampled target curve. A future engine may use denser IIR/FIR/FFT-based shaping. The UI should talk in terms of a target spectrum model rather than reaching directly into filter-section objects.
 
 ## Performance constraints
 
