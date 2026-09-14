@@ -102,19 +102,49 @@ h1 {
   box-shadow: 0 0 0 0.35rem rgba(158, 170, 146, 0.12);
 }
 
+.status-dot[data-status="running"] {
+  background: #b8d39a;
+  box-shadow: 0 0 0 0.35rem rgba(184, 211, 154, 0.12);
+}
+
+.status-dot[data-status="suspended"] {
+  background: #d8be82;
+}
+
+.status-dot[data-status="error"],
+.status-dot[data-status="unsupported"] {
+  background: #d69a8f;
+}
+
+.transport-actions {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1.5rem;
+}
+
 button {
   width: 100%;
-  margin-top: 1.5rem;
+  margin: 0;
   padding: 0.85rem 1rem;
   border: 1px solid #62695e;
   border-radius: 0.7rem;
-  color: #9fa49d;
+  color: #f3f1ea;
+  background: #303630;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: #3a4239;
+}
+
+button.secondary-action {
+  color: #d7d9d2;
   background: #242825;
 }
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.7;
+  opacity: 0.55;
 }
 
 .scaffold-note {
