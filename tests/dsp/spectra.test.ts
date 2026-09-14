@@ -95,7 +95,9 @@ describe('spectral target model', () => {
       const configuration = resolveSpectrumState(
         createSpectrumState(presetId, offsets),
       )
-      expect(configuration.realizationVersion).toBe(SPECTRAL_REALIZATION_VERSION)
+      expect(configuration.realizationVersion).toBe(
+        SPECTRAL_REALIZATION_VERSION,
+      )
       for (const gain of configuration.bandGainsLinear) {
         expect(Number.isFinite(gain)).toBe(true)
         expect(gain).toBeGreaterThanOrEqual(0)
