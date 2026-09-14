@@ -2,7 +2,7 @@
 
 A browser-based calibrated spectral-noise generator and psychoacoustic playground.
 
-Greygen is a clean-room implementation inspired by the *class* of tools exemplified by myNoise's Grey Noise generator, not a source/assets clone. The project will synthesize noise locally, expose a simple ten-band interface, and progressively add deterministic DSP, safe headroom management, stereo decorrelation, spectral animation, user calibration profiles, and an advanced continuous-spectrum editor.
+Greygen is a clean-room implementation inspired by the *class* of tools exemplified by myNoise's Grey Noise generator, not a source/assets clone. The project synthesizes noise locally, exposes a simple ten-band model, and progressively adds deterministic DSP, safe headroom management, stereo decorrelation, spectral animation, user calibration profiles, and an advanced continuous-spectrum editor.
 
 ## Core principles
 
@@ -17,8 +17,8 @@ Greygen is a clean-room implementation inspired by the *class* of tools exemplif
 
 - TypeScript + Vite
 - React for UI/state composition
-- Web Audio API + `AudioWorklet` for real-time DSP in later milestones
-- Pure TypeScript DSP core shared with unit/offline tests
+- Web Audio API + `AudioWorklet` for real-time DSP
+- Pure TypeScript DSP core shared by the AudioWorklet and unit/offline tests
 - Vitest for deterministic DSP/unit tests
 - Playwright for browser/integration smoke tests
 - Biome for linting and formatting
@@ -33,7 +33,7 @@ npm ci
 npm run dev
 ```
 
-The development server prints the local URL. The initial scaffold deliberately does not generate audio yet.
+The development server prints the local URL. Audio never starts on page load: choose **Start audio** explicitly to create/resume the browser audio context and initialize the worklet. Issue #5 uses a deliberately conservative temporary output attenuation; full gain-safety staging and metering arrive in issue #6.
 
 ### Verification commands
 
@@ -55,7 +55,7 @@ npm run test:watch
 npm run preview
 ```
 
-`npm run test:e2e` starts the production preview server automatically through Playwright configuration. CI installs only Chromium for the initial smoke test; the cross-browser matrix is a later roadmap milestone.
+`npm run test:e2e` starts the production preview server automatically through Playwright configuration. CI installs Chromium for the current worklet/browser lifecycle gate; the broader cross-browser matrix is a later roadmap milestone.
 
 ## RAG / development ground truth
 
@@ -66,9 +66,10 @@ Start with:
 3. `docs/RAG/ARCHITECTURE.md`
 4. `docs/RAG/DSP_VALIDATION.md`
 5. `docs/RAG/SPECTRAL_TARGETS.md`
-6. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
-7. `docs/RAG/UX_STATE.md`
-8. `docs/RAG/AGENT_PLAYBOOK.md`
-9. `docs/RAG/ROADMAP.md`
+6. `docs/RAG/AUDIO_LIFECYCLE.md`
+7. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
+8. `docs/RAG/UX_STATE.md`
+9. `docs/RAG/AGENT_PLAYBOOK.md`
+10. `docs/RAG/ROADMAP.md`
 
 The GitHub issues are executable work packets. Each issue must be completed end-to-end: implementation, tests, documentation updates, PR, automated checks, review of failures, and merge only after required checks pass.
