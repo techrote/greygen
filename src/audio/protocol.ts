@@ -1,17 +1,29 @@
 import type { HighBandMode } from './dsp/filterBank'
 import {
+  GAIN_STAGE_SCHEMA_VERSION,
+  type GainStageState,
+  createGainStageState,
+} from './dsp/gainSafety'
+import {
   SPECTRAL_PRESET_IDS,
   type SpectralPresetId,
   type SpectrumState,
   createSpectrumState,
 } from './dsp/spectra'
 
-export const AUDIO_PROTOCOL_VERSION = 1 as const
-export const GREYGEN_PROCESSOR_NAME = 'greygen-processor-v1'
+export const AUDIO_PROTOCOL_VERSION = 2 as const
+export const GREYGEN_PROCESSOR_NAME = 'greygen-processor-v2'
 
 export interface SerializedSpectrumState {
   readonly targetId: SpectralPresetId
   readonly userBandOffsetsDb: readonly number[]
+}
+
+export interface SerializedGainStageState {
+  readonly schemaVersion: typeof GAIN_STAGE_SCHEMA_VERSION
+  readonly masterGainDb: number
+  readonly animationBandOffsetsDb: readonly number[]
+  readonly calibrationBandOffsetsDb: readonly number[]
 }
 
 interface ProtocolEnvelope {
@@ -23,11 +35,17 @@ export interface InitializeMessage extends ProtocolEnvelope {
   readonly type: 'initialize'
   readonly seed: number
   readonly spectrum: SerializedSpectrumState
+  readonly gainStage: SerializedGainStageState
 }
 
 export interface SetSpectrumMessage extends ProtocolEnvelope {
   readonly type: 'set-spectrum'
   readonly spectrum: SerializedSpectrumState
+}
+
+export interface SetGainStageMessage extends ProtocolEnvelope {
+  readonly type: 'set-gain-stage'
+  readonly gainStage: SerializedGainStageState
 }
 
 export interface ResetSeedMessage extends ProtocolEnvelope {
@@ -46,6 +64,7 @@ export interface StopMessage extends ProtocolEnvelope {
 export type MainToWorkletMessage =
   | InitializeMessage
   | SetSpectrumMessage
+  | SetGainStageMessage
   | ResetSeedMessage
   | RequestStatusMessage
   | StopMessage
@@ -59,7 +78,7 @@ export interface ReadyMessage extends ProtocolEnvelope {
 
 export interface AckMessage extends ProtocolEnvelope {
   readonly type: 'ack'
-  readonly command: 'set-spectrum' | 'reset-seed'
+  readonly command: 'set-spectrum' | 'set-gain-stage' | 'reset-seed'
 }
 
 export interface StatusMessage extends ProtocolEnvelope {
@@ -68,6 +87,19 @@ export interface StatusMessage extends ProtocolEnvelope {
   readonly targetId: SpectralPresetId
   readonly highBandMode: HighBandMode
   readonly renderedFrames: number
+}
+
+export interface TelemetryMessage {
+  readonly version: typeof AUDIO_PROTOCOL_VERSION
+  readonly type: 'telemetry'
+  readonly sequence: number
+  readonly frameCount: number
+  readonly peakDbfs: number
+  readonly rmsDbfs: number
+  readonly safetyPreGainDb: number
+  readonly safetyPreGainTargetDb: number
+  readonly masterGainDb: number
+  readonly guardInterventions: number
 }
 
 export interface StoppedMessage extends ProtocolEnvelope {
@@ -86,6 +118,7 @@ export type WorkletToMainMessage =
   | ReadyMessage
   | AckMessage
   | StatusMessage
+  | TelemetryMessage
   | StoppedMessage
   | WorkletErrorMessage
 
@@ -95,6 +128,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isRequestId(value: unknown): value is number {
   return Number.isSafeInteger(value) && typeof value === 'number' && value > 0
+}
+
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isSafeInteger(value) &&
+    value >= 0
+  )
+}
+
+function isPositiveSafeInteger(value: unknown): value is number {
+  return isNonNegativeSafeInteger(value) && value > 0
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
 export function isAudioSeed(value: unknown): value is number {
@@ -134,6 +183,30 @@ function parseSpectrumState(value: unknown): SerializedSpectrumState | null {
   }
 }
 
+function parseGainStageState(value: unknown): SerializedGainStageState | null {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== GAIN_STAGE_SCHEMA_VERSION ||
+    !isFiniteNumber(value.masterGainDb) ||
+    !Array.isArray(value.animationBandOffsetsDb) ||
+    !Array.isArray(value.calibrationBandOffsetsDb)
+  ) {
+    return null
+  }
+
+  try {
+    return serializeGainStageState(
+      createGainStageState(
+        value.masterGainDb,
+        value.animationBandOffsetsDb,
+        value.calibrationBandOffsetsDb,
+      ),
+    )
+  } catch {
+    return null
+  }
+}
+
 export function serializeSpectrumState(
   state: SpectrumState,
 ): SerializedSpectrumState {
@@ -148,6 +221,32 @@ export function deserializeSpectrumState(
   state: SerializedSpectrumState,
 ): SpectrumState {
   return createSpectrumState(state.targetId, state.userBandOffsetsDb)
+}
+
+export function serializeGainStageState(
+  state: GainStageState,
+): SerializedGainStageState {
+  const canonical = createGainStageState(
+    state.masterGainDb,
+    state.animationBandOffsetsDb,
+    state.calibrationBandOffsetsDb,
+  )
+  return {
+    schemaVersion: GAIN_STAGE_SCHEMA_VERSION,
+    masterGainDb: canonical.masterGainDb,
+    animationBandOffsetsDb: Array.from(canonical.animationBandOffsetsDb),
+    calibrationBandOffsetsDb: Array.from(canonical.calibrationBandOffsetsDb),
+  }
+}
+
+export function deserializeGainStageState(
+  state: SerializedGainStageState,
+): GainStageState {
+  return createGainStageState(
+    state.masterGainDb,
+    state.animationBandOffsetsDb,
+    state.calibrationBandOffsetsDb,
+  )
 }
 
 export function parseMainToWorkletMessage(
@@ -165,7 +264,8 @@ export function parseMainToWorkletMessage(
   switch (value.type) {
     case 'initialize': {
       const spectrum = parseSpectrumState(value.spectrum)
-      if (!isAudioSeed(value.seed) || !spectrum) {
+      const gainStage = parseGainStageState(value.gainStage)
+      if (!isAudioSeed(value.seed) || !spectrum || !gainStage) {
         return null
       }
       return {
@@ -174,6 +274,7 @@ export function parseMainToWorkletMessage(
         requestId: value.requestId,
         seed: value.seed,
         spectrum,
+        gainStage,
       }
     }
     case 'set-spectrum': {
@@ -186,6 +287,18 @@ export function parseMainToWorkletMessage(
         type: 'set-spectrum',
         requestId: value.requestId,
         spectrum,
+      }
+    }
+    case 'set-gain-stage': {
+      const gainStage = parseGainStageState(value.gainStage)
+      if (!gainStage) {
+        return null
+      }
+      return {
+        version: AUDIO_PROTOCOL_VERSION,
+        type: 'set-gain-stage',
+        requestId: value.requestId,
+        gainStage,
       }
     }
     case 'reset-seed':
@@ -226,6 +339,33 @@ export function parseWorkletToMainMessage(
     return null
   }
 
+  if (value.type === 'telemetry') {
+    if (
+      !isPositiveSafeInteger(value.sequence) ||
+      !isNonNegativeSafeInteger(value.frameCount) ||
+      !isFiniteNumber(value.peakDbfs) ||
+      !isFiniteNumber(value.rmsDbfs) ||
+      !isFiniteNumber(value.safetyPreGainDb) ||
+      !isFiniteNumber(value.safetyPreGainTargetDb) ||
+      !isFiniteNumber(value.masterGainDb) ||
+      !isNonNegativeSafeInteger(value.guardInterventions)
+    ) {
+      return null
+    }
+    return {
+      version: AUDIO_PROTOCOL_VERSION,
+      type: 'telemetry',
+      sequence: value.sequence,
+      frameCount: value.frameCount,
+      peakDbfs: value.peakDbfs,
+      rmsDbfs: value.rmsDbfs,
+      safetyPreGainDb: value.safetyPreGainDb,
+      safetyPreGainTargetDb: value.safetyPreGainTargetDb,
+      masterGainDb: value.masterGainDb,
+      guardInterventions: value.guardInterventions,
+    }
+  }
+
   if (value.type === 'error') {
     if (
       (value.requestId !== undefined && !isRequestId(value.requestId)) ||
@@ -250,7 +390,7 @@ export function parseWorkletToMainMessage(
   switch (value.type) {
     case 'ready':
       if (
-        typeof value.sampleRate !== 'number' ||
+        !isFiniteNumber(value.sampleRate) ||
         !(value.sampleRate > 0) ||
         !isPresetId(value.targetId) ||
         !isHighBandMode(value.highBandMode)
@@ -266,7 +406,11 @@ export function parseWorkletToMainMessage(
         highBandMode: value.highBandMode,
       }
     case 'ack':
-      if (value.command !== 'set-spectrum' && value.command !== 'reset-seed') {
+      if (
+        value.command !== 'set-spectrum' &&
+        value.command !== 'set-gain-stage' &&
+        value.command !== 'reset-seed'
+      ) {
         return null
       }
       return {
@@ -277,13 +421,11 @@ export function parseWorkletToMainMessage(
       }
     case 'status':
       if (
-        typeof value.sampleRate !== 'number' ||
+        !isFiniteNumber(value.sampleRate) ||
         !(value.sampleRate > 0) ||
         !isPresetId(value.targetId) ||
         !isHighBandMode(value.highBandMode) ||
-        typeof value.renderedFrames !== 'number' ||
-        !Number.isSafeInteger(value.renderedFrames) ||
-        value.renderedFrames < 0
+        !isNonNegativeSafeInteger(value.renderedFrames)
       ) {
         return null
       }
