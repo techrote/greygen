@@ -62,7 +62,10 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
   private handleMessage(value: unknown): void {
     const message = parseMainToWorkletMessage(value)
     if (!message) {
-      this.postError('invalid-message', 'Rejected invalid AudioWorklet control message.')
+      this.postError(
+        'invalid-message',
+        'Rejected invalid AudioWorklet control message.',
+      )
       return
     }
 
