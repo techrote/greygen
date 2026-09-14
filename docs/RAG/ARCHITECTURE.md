@@ -47,7 +47,9 @@ src/
       greygen-processor.ts
       register.ts
     dsp/
+      numbers.ts
       rng.ts
+      statistics.ts
       biquad.ts
       filterBank.ts
       spectra.ts
@@ -76,7 +78,7 @@ e2e/
 docs/RAG/
 ```
 
-Exact names may evolve, but preserve the dependency direction: UI/browser adapters depend on pure DSP; pure DSP must not depend on React, DOM, `AudioContext`, or `AudioWorklet*` globals.
+Exact names may evolve, but preserve the dependency direction: UI/browser adapters depend on pure DSP; pure DSP must not depend on React, DOM, `AudioContext`, or `AudioWorklet*` globals. The small `dsp/statistics.ts` module contains browser-independent block measurements used by deterministic tests and later runtime telemetry; heavier FFT/spectral analysis belongs under `audio/analysis/`.
 
 ## DSP engine contract
 
@@ -100,15 +102,23 @@ No core algorithm may depend on `Math.random()`.
 
 ## Random generator
 
-Use a small, explicitly specified seeded PRNG with stable integer behavior in JavaScript/TypeScript (for example, an audited xoshiro/xorshift-family implementation). Document:
+The MVP deterministic source is **xoshiro128\*\***, using four unsigned 32-bit state words and JavaScript integer/bitwise operations. This choice follows the xoshiro family by David Blackman and Sebastiano Vigna; the seed mixer uses the standard MurmurHash3 `fmix32` avalanche constants associated with Austin Appleby. It is a simulation/audio PRNG, not a cryptographic generator.
 
-- seed width and expansion;
-- whether zero seed is legal;
-- generated numeric range;
-- exact state transition;
-- golden vectors.
+Canonical behavior implemented in `src/audio/dsp/rng.ts`:
 
-Do not change PRNG algorithm casually after release because it changes deterministic render identity. If changed, version the engine/state format.
+- external `seed` and `streamId` are unsigned 32-bit integers;
+- seed `0` is legal and has a locked golden sequence;
+- the `(seed, streamId)` pair expands deterministically to four state words by stepping with `0x9e3779b9` and applying the 32-bit avalanche mixer;
+- the all-zero xoshiro state is explicitly prevented, although normal expansion is not expected to produce it;
+- `nextUint32()` returns `[0, 2^32 - 1]` exactly;
+- unit-float mapping divides by `2^32`, producing `[0, 1)`;
+- bipolar audio mapping is `2 * uint32 / 2^32 - 1`, producing `[-1, 1)` with theoretical mean `0` and variance `1/3`;
+- stream identity is deterministic and intended for later independent left/right/feature streams;
+- exact seed expansion and output golden vectors live in `tests/dsp/rng.test.ts`.
+
+Reference algorithm descriptions are available at `https://prng.di.unimi.it/` for xoshiro and in the public MurmurHash3 reference implementation for `fmix32`. Greygen's concrete seed-expansion composition and stream mapping are project-defined and locked by tests.
+
+Changing the PRNG, seed expansion, stream mapping, integer-to-float mapping, or transition order changes deterministic render identity. After a released engine version, any such change requires an engine/state version change and migration decision rather than silently updating fixtures.
 
 ## Ten-band filter bank
 
@@ -158,13 +168,12 @@ Do not allow width changes to create obvious loudness jumps.
 
 ## Parameter smoothing
 
-User controls and automation must not write discontinuous gain changes directly into the sample path. Provide reusable smoothing primitives with explicit time constants and deterministic behavior at any sample rate.
+User controls and automation must not write discontinuous gain changes directly into the sample path. The foundational implementation in `src/audio/dsp/smoothing.ts` provides:
 
-Suggested classes:
+- `OnePoleSmoother`: an exponential target follower with coefficient `exp(-1 / (tau * sampleRate))`, so a positive time constant has the same meaning at different runtime sample rates; `tau = 0` deliberately snaps to the target;
+- `LinearRamp`: a bounded linear transition that arrives exactly on the target after a specified integer sample count, plus a seconds-to-samples convenience path using the runtime sample rate.
 
-- exponential one-pole target follower for continuous controls;
-- bounded linear ramp where exact arrival time matters;
-- coefficient transition strategy for filter changes.
+Both validate numeric inputs before state mutation and perform no heap allocation in `next()`. Filter coefficient transition strategy remains part of the filter-bank issue because it depends on the selected topology.
 
 Manual controls can use roughly tens-to-low-hundreds of milliseconds; animation generally moves much slower. Exact defaults are tuned subjectively but covered by discontinuity tests.
 
