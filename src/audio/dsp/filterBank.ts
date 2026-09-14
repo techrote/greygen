@@ -46,6 +46,7 @@ export class TenBandFilterBank {
   private readonly highBandUpperCrossover: BilinearOnePoleLowPass | null
   private readonly bandGains = new Float64Array(BAND_COUNT)
   private readonly scratchBands = new Float64Array(BAND_COUNT)
+  private ultrasonicResidualGain = 1
 
   constructor(sampleRate: number) {
     this.sampleRate = assertPositiveFiniteNumber(sampleRate, 'sampleRate')
@@ -84,6 +85,10 @@ export class TenBandFilterBank {
     return this.highBandMode === 'degraded-high-shelf'
   }
 
+  get ultrasonicResidualGainLinear(): number {
+    return this.ultrasonicResidualGain
+  }
+
   getBandGainLinear(index: number): number {
     return this.bandGains[assertBandIndex(index)]
   }
@@ -104,6 +109,10 @@ export class TenBandFilterBank {
     for (let index = 0; index < BAND_COUNT; index += 1) {
       this.bandGains[index] = gains[index]
     }
+  }
+
+  setUltrasonicResidualGainLinear(gain: number): void {
+    this.ultrasonicResidualGain = assertBandGain(gain)
   }
 
   reset(): void {
@@ -139,7 +148,9 @@ export class TenBandFilterBank {
   }
 
   processSample(input: number): number {
-    let output = this.processBandComponents(input, this.scratchBands)
+    let output =
+      this.processBandComponents(input, this.scratchBands) *
+      this.ultrasonicResidualGain
 
     for (let index = 0; index < BAND_COUNT; index += 1) {
       output += this.scratchBands[index] * this.bandGains[index]
