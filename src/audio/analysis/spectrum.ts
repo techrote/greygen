@@ -1,7 +1,4 @@
-import {
-  assertFiniteNumber,
-  assertPositiveFiniteNumber,
-} from '../dsp/numbers'
+import { assertFiniteNumber, assertPositiveFiniteNumber } from '../dsp/numbers'
 
 export interface WelchPsdResult {
   readonly sampleRate: number
@@ -19,7 +16,11 @@ export interface PsdSlopeFit {
 }
 
 function assertPowerOfTwo(value: number, label: string): number {
-  if (!Number.isSafeInteger(value) || value < 16 || (value & (value - 1)) !== 0) {
+  if (
+    !Number.isSafeInteger(value) ||
+    value < 16 ||
+    (value & (value - 1)) !== 0
+  ) {
     throw new RangeError(`${label} must be a power of two >= 16`)
   }
 
@@ -62,11 +63,9 @@ function fftInPlace(real: Float64Array, imaginary: Float64Array): void {
         const evenIndex = blockStart + offset
         const oddIndex = evenIndex + halfLength
         const oddReal =
-          real[oddIndex] * twiddleReal -
-          imaginary[oddIndex] * twiddleImaginary
+          real[oddIndex] * twiddleReal - imaginary[oddIndex] * twiddleImaginary
         const oddImaginary =
-          real[oddIndex] * twiddleImaginary +
-          imaginary[oddIndex] * twiddleReal
+          real[oddIndex] * twiddleImaginary + imaginary[oddIndex] * twiddleReal
         const evenReal = real[evenIndex]
         const evenImaginary = imaginary[evenIndex]
 
@@ -111,11 +110,7 @@ export function welchPsd(
   const imaginary = new Float64Array(length)
   let segmentCount = 0
 
-  for (
-    let start = 0;
-    start + length <= samples.length;
-    start += hopLength
-  ) {
+  for (let start = 0; start + length <= samples.length; start += hopLength) {
     for (let index = 0; index < length; index += 1) {
       const sample = assertFiniteNumber(samples[start + index], 'sample')
       real[index] = sample * window[index]
@@ -196,12 +191,16 @@ export function fitPsdSlopeDbPerOctave(
   }
 
   if (count < 2) {
-    throw new RangeError('frequency range must contain at least two finite PSD bins')
+    throw new RangeError(
+      'frequency range must contain at least two finite PSD bins',
+    )
   }
 
   const denominator = count * sumXX - sumX * sumX
   if (denominator === 0) {
-    throw new RangeError('PSD fit frequency range has zero log-frequency variance')
+    throw new RangeError(
+      'PSD fit frequency range has zero log-frequency variance',
+    )
   }
 
   const slope = (count * sumXY - sumX * sumY) / denominator
@@ -215,7 +214,9 @@ export function fitPsdSlopeDbPerOctave(
     2 * intercept * sumY +
     2 * slope * intercept * sumX
   const rSquared =
-    totalVariance > 0 ? Math.max(0, 1 - residualVariance / totalVariance) : 1
+    totalVariance > 0
+      ? Math.min(1, Math.max(0, 1 - residualVariance / totalVariance))
+      : 1
 
   return {
     slopeDbPerOctave: slope,
