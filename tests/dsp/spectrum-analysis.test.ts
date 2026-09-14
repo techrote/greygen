@@ -12,7 +12,9 @@ describe('spectral analysis', () => {
     const samples = new Float64Array(8192)
 
     for (let index = 0; index < samples.length; index += 1) {
-      samples[index] = Math.sin((2 * Math.PI * frequencyHz * index) / sampleRate)
+      samples[index] = Math.sin(
+        (2 * Math.PI * frequencyHz * index) / sampleRate,
+      )
     }
 
     const psd = welchPsd(samples, sampleRate, 2048)
@@ -39,8 +41,7 @@ describe('spectral analysis', () => {
 
     for (let bin = 1; bin < power.length; bin += 1) {
       const frequencyHz = bin * binWidthHz
-      power[bin] = 10 **
-        ((expectedSlope * Math.log2(frequencyHz / 1000)) / 10)
+      power[bin] = 10 ** ((expectedSlope * Math.log2(frequencyHz / 1000)) / 10)
     }
 
     const psd: WelchPsdResult = {
@@ -65,11 +66,7 @@ describe('spectral analysis', () => {
     )
 
     const psd = welchPsd(samples, 48_000, 2048)
-    expect(() => fitPsdSlopeDbPerOctave(psd, 1000, 1000)).toThrow(
-      RangeError,
-    )
-    expect(() => fitPsdSlopeDbPerOctave(psd, 1000, 30_000)).toThrow(
-      RangeError,
-    )
+    expect(() => fitPsdSlopeDbPerOctave(psd, 1000, 1000)).toThrow(RangeError)
+    expect(() => fitPsdSlopeDbPerOctave(psd, 1000, 30_000)).toThrow(RangeError)
   })
 })
