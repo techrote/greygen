@@ -13,7 +13,7 @@ Noise sounds forgiving while hiding implementation errors. A generator can appea
 Fast deterministic tests for:
 
 - PRNG golden vectors and statistical sanity;
-- biquad coefficient generation and finite-state behavior;
+- IIR coefficient generation and finite-state behavior;
 - dB/linear conversion;
 - smoothing trajectories;
 - correlation mixing math;
@@ -74,7 +74,9 @@ No test relies on `Math.random()`.
 
 ## Spectral measurement method
 
-Use a documented PSD estimator, preferably Welch averaging with a Hann window and overlapping segments. Tests should fit a line to log-frequency/log-power data only inside a safe interior range, excluding DC, filter transition extremes, and bins too near Nyquist.
+Use a documented PSD estimator, preferably Welch averaging with a Hann window and overlapping segments, for stochastic spectral-shape validation. Tests should fit a line to log-frequency/log-power data only inside a safe interior range, excluding DC, filter transition extremes, and bins too near Nyquist.
+
+For a simple known IIR topology, exact digital transfer-function evaluation is preferred for filter-response/reconstruction assertions because it removes FFT/window estimation error. Time-domain impulse/noise fixtures must still accompany analytic response checks so state-update defects cannot hide behind coefficient math.
 
 The validator must be deterministic. If an FFT library is added, pin/version it and isolate it to analysis/tests unless needed at runtime.
 
@@ -92,17 +94,31 @@ Brown/red output must additionally demonstrate bounded near-DC behavior and no u
 
 ## Filter bank validation
 
-For each supported sample rate:
+The MVP ten-band bank is the complementary bilinear one-pole partition documented in `ARCHITECTURE.md`. Validate it at 44.1, 48, and 96 kHz.
 
-- all coefficients finite;
-- impulse response finite;
-- long zero-input tail decays/bounds rather than grows;
-- each nominal band produces its intended response region;
-- summed nominal state has documented response ripple;
-- edge-band behavior is explicitly characterized;
-- a 16 kHz nominal band is never instantiated with invalid/unsafe parameters relative to Nyquist.
+Required for each supported sample rate:
 
-Initial reconstruction target for a neutral target spectrum should avoid narrow unexpected notches/peaks greater than roughly 1.5 dB across the validated interior range. This is a design target, not permission to ignore broader intended spectral tilt.
+- all designed coefficients are finite and every one-pole feedback coefficient has magnitude below 1;
+- dynamic impulse/component output remains finite;
+- after a 32,768-frame impulse fixture, the maximum exposed-component magnitude over the final 1,024 frames is below `1e-8`;
+- the neutral state reconstructs the input sample-for-sample to within `2e-12` maximum absolute error on a deterministic time-domain fixture;
+- exact transfer-function reconstruction deviates by less than `0.01 dB` over `20 Hz .. min(20 kHz, 0.45 * sampleRate)`;
+- interior band response peaks remain within `0.22 octaves` of the nominal center, while the deliberately shelving first/last edge cases are tested according to their documented semantics;
+- a non-neutral seeded render of at least `2^19` frames remains finite and bounded, with statistics recorded/asserted rather than assumed;
+- reset reproduces the same deterministic render from the same state/input.
+
+The previous broad design target of avoiding unexplained narrow ±1.5 dB reconstruction artifacts is retained as a general architectural warning, but the selected complementary implementation is held to the much tighter neutral thresholds above because measurement shows exact algebraic reconstruction is practical.
+
+### High-band/Nyquist rule
+
+The nominal 16 kHz component has a candidate upper crossover at approximately 22.627 kHz. A crossover is allowed only when its cutoff is at or below **90% of Nyquist**.
+
+Therefore:
+
+- at 44.1 and 48 kHz, the 16 kHz component is intentionally a degraded high shelf above approximately 11.314 kHz; its response at 16 kHz must remain above `-2 dB` and approach 0 dB toward Nyquist;
+- at 96 kHz, the upper crossover is valid, the 16 kHz component is a bounded band, its peak remains within the same `0.22 octave` nominal-region tolerance, and the ultrasonic residual above approximately 22.627 kHz remains outside the exposed ten-band gain controls while preserving neutral reconstruction.
+
+No implementation may instantiate the 22.627 kHz crossover merely to preserve the 16 kHz label when the 90%-of-Nyquist rule rejects it. The runtime mode must remain inspectable so the UI can disclose degradation later.
 
 ## Parameter-transition validation
 
