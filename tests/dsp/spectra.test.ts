@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   BAND_COUNT,
+  MAX_FILTER_BANK_GAIN_LINEAR,
   TenBandFilterBank,
 } from '../../src/audio/dsp/filterBank'
 import {
   BROWN_PSD_SLOPE_DB_PER_OCTAVE,
   PINK_PSD_SLOPE_DB_PER_OCTAVE,
   SPECTRAL_PRESET_IDS,
+  SPECTRAL_REALIZATION_VERSION,
   USER_BAND_OFFSET_MAX_DB,
+  type SpectralPresetId,
   applySpectrumStateToFilterBank,
   createSpectrumState,
   getSpectralTarget,
@@ -19,6 +22,7 @@ describe('spectral target model', () => {
     for (const presetId of SPECTRAL_PRESET_IDS) {
       const target = getSpectralTarget(presetId)
       expect(target.schemaVersion).toBe(1)
+      expect(target.revision).toBe(1)
       expect(target.targetDbByBand).toHaveLength(BAND_COUNT)
       expect(target.targetDbByBand.every(Number.isFinite)).toBe(true)
     }
@@ -28,9 +32,7 @@ describe('spectral target model', () => {
     const pink = getSpectralTarget('pink')
     const brown = getSpectralTarget('brown')
 
-    expect(pink.expectedPsdSlopeDbPerOctave).toBe(
-      PINK_PSD_SLOPE_DB_PER_OCTAVE,
-    )
+    expect(pink.expectedPsdSlopeDbPerOctave).toBe(PINK_PSD_SLOPE_DB_PER_OCTAVE)
     expect(brown.expectedPsdSlopeDbPerOctave).toBe(
       BROWN_PSD_SLOPE_DB_PER_OCTAVE,
     )
@@ -47,16 +49,9 @@ describe('spectral target model', () => {
   it('locks Grey Practical v1 provenance and target values', () => {
     const grey = getSpectralTarget('grey')
     const expected = [
-      -0.0009424031462170745,
-      -0.5999999999999996,
-      -1.6233657087297182,
-      -2.94211764020492,
-      -4.11470450020652,
-      -4.590517410026723,
-      -3.9647045002065204,
-      -2.6421176402049196,
-      -1.173365708729718,
-      0,
+      -0.0009424031462170745, -0.5999999999999996, -1.6233657087297182,
+      -2.94211764020492, -4.11470450020652, -4.590517410026723,
+      -3.9647045002065204, -2.6421176402049196, -1.173365708729718, 0,
     ]
 
     expect(grey.provenance).toContain('original Greygen')
@@ -80,16 +75,36 @@ describe('spectral target model', () => {
       baseline.bandGainsLinear[4] * 10 ** (6 / 20),
       12,
     )
-    expect(configuration.bandGainsLinear[3]).toBe(
-      baseline.bandGainsLinear[3],
-    )
+    expect(configuration.bandGainsLinear[3]).toBe(baseline.bandGainsLinear[3])
   })
 
-  it('validates user-offset shape and safety bounds', () => {
+  it('validates user-offset shape, preset ids, and safety bounds', () => {
     expect(() => createSpectrumState('white', [0, 1])).toThrow(RangeError)
     const offsets = new Float64Array(BAND_COUNT)
     offsets[0] = USER_BAND_OFFSET_MAX_DB + 0.01
     expect(() => createSpectrumState('white', offsets)).toThrow(RangeError)
+    expect(() => getSpectralTarget('invalid' as SpectralPresetId)).toThrow(
+      RangeError,
+    )
+  })
+
+  it('keeps maximum accepted user offsets inside filter-bank gain limits', () => {
+    const offsets = new Float64Array(BAND_COUNT).fill(USER_BAND_OFFSET_MAX_DB)
+
+    for (const presetId of SPECTRAL_PRESET_IDS) {
+      const configuration = resolveSpectrumState(
+        createSpectrumState(presetId, offsets),
+      )
+      expect(configuration.realizationVersion).toBe(SPECTRAL_REALIZATION_VERSION)
+      for (const gain of configuration.bandGainsLinear) {
+        expect(Number.isFinite(gain)).toBe(true)
+        expect(gain).toBeGreaterThanOrEqual(0)
+        expect(gain).toBeLessThanOrEqual(MAX_FILTER_BANK_GAIN_LINEAR)
+      }
+      expect(configuration.ultrasonicResidualGainLinear).toBeLessThanOrEqual(
+        MAX_FILTER_BANK_GAIN_LINEAR,
+      )
+    }
   })
 
   it('applies target state without exposing crossover internals to callers', () => {
