@@ -71,9 +71,7 @@ describe('gain safety model', () => {
     const state = createGainStageState(-12, animation, calibration)
     expect(state.schemaVersion).toBe(1)
     expect(state.masterGainDb).toBe(-12)
-    expect(state.animationBandOffsetsDb[2]).toBe(
-      ANIMATION_BAND_OFFSET_LIMIT_DB,
-    )
+    expect(state.animationBandOffsetsDb[2]).toBe(ANIMATION_BAND_OFFSET_LIMIT_DB)
     expect(state.calibrationBandOffsetsDb[7]).toBe(
       -CALIBRATION_BAND_OFFSET_LIMIT_DB,
     )

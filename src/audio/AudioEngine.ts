@@ -1,9 +1,6 @@
 import { DEFAULT_ENGINE_PRESET, DEFAULT_ENGINE_SEED } from './dsp/engine'
 import type { HighBandMode } from './dsp/filterBank'
-import {
-  type GainStageState,
-  createGainStageState,
-} from './dsp/gainSafety'
+import { type GainStageState, createGainStageState } from './dsp/gainSafety'
 import {
   type SpectralPresetId,
   type SpectrumState,

@@ -116,7 +116,9 @@ export class GreygenDspEngine {
       this.sampleRate,
       CONTROL_SMOOTHING_TIME_SECONDS,
     )
-    this.masterGainSmoother.setTarget(masterGainLinear(this.gainStageStateValue))
+    this.masterGainSmoother.setTarget(
+      masterGainLinear(this.gainStageStateValue),
+    )
   }
 
   get seed(): number {
@@ -262,9 +264,7 @@ export class GreygenDspEngine {
     for (let index = 0; index < BAND_COUNT; index += 1) {
       this.bandGainSmoothers[index].setTarget(targets.bandGainsLinear[index])
     }
-    this.residualGainSmoother.setTarget(
-      targets.ultrasonicResidualGainLinear,
-    )
+    this.residualGainSmoother.setTarget(targets.ultrasonicResidualGainLinear)
 
     this.safetyPreGainTargetValue = targets.safetyPreGainLinear
     this.safetyPreGainSmoother.setTimeConstantSeconds(
@@ -273,6 +273,8 @@ export class GreygenDspEngine {
         : SAFETY_RELEASE_TIME_SECONDS,
     )
     this.safetyPreGainSmoother.setTarget(targets.safetyPreGainLinear)
-    this.masterGainSmoother.setTarget(masterGainLinear(this.gainStageStateValue))
+    this.masterGainSmoother.setTarget(
+      masterGainLinear(this.gainStageStateValue),
+    )
   }
 }

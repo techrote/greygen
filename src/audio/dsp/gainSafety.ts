@@ -3,11 +3,7 @@ import {
   CROSSOVER_FREQUENCIES_HZ,
   HIGH_BAND_UPPER_CROSSOVER_HZ,
 } from './filterBank'
-import {
-  assertFiniteNumber,
-  decibelsToGain,
-  gainToDecibels,
-} from './numbers'
+import { assertFiniteNumber, decibelsToGain, gainToDecibels } from './numbers'
 import {
   designBilinearOnePoleLowPass,
   isOnePoleCutoffSupported,
@@ -103,10 +99,13 @@ export function resolveLayeredBandGains(
   const gains = new Float64Array(BAND_COUNT)
   for (let index = 0; index < BAND_COUNT; index += 1) {
     const layerDb =
-      state.animationBandOffsetsDb[index] + state.calibrationBandOffsetsDb[index]
+      state.animationBandOffsetsDb[index] +
+      state.calibrationBandOffsetsDb[index]
     const gain = spectral.bandGainsLinear[index] * decibelsToGain(layerDb)
     if (!Number.isFinite(gain) || gain < 0) {
-      throw new RangeError(`combined band gain ${index} must be finite and non-negative`)
+      throw new RangeError(
+        `combined band gain ${index} must be finite and non-negative`,
+      )
     }
     gains[index] = gain
   }
@@ -127,11 +126,9 @@ function evaluateLowPass(
     denominatorReal * denominatorReal + denominatorImag * denominatorImag
 
   return [
-    (numeratorReal * denominatorReal +
-      numeratorImag * denominatorImag) /
+    (numeratorReal * denominatorReal + numeratorImag * denominatorImag) /
       denominatorMagnitudeSquared,
-    (numeratorImag * denominatorReal -
-      numeratorReal * denominatorImag) /
+    (numeratorImag * denominatorReal - numeratorReal * denominatorImag) /
       denominatorMagnitudeSquared,
   ]
 }
@@ -185,10 +182,8 @@ export function estimateFilterBankPeakGain(
         cosine,
         sine,
       )
-      const componentReal =
-        residualReal * lowReal - residualImag * lowImag
-      const componentImag =
-        residualReal * lowImag + residualImag * lowReal
+      const componentReal = residualReal * lowReal - residualImag * lowImag
+      const componentImag = residualReal * lowImag + residualImag * lowReal
       const gain = assertFiniteNumber(
         bandGainsLinear[index],
         `bandGainsLinear[${index}]`,
@@ -201,8 +196,7 @@ export function estimateFilterBankPeakGain(
 
       const highReal = 1 - lowReal
       const highImag = -lowImag
-      const nextResidualReal =
-        residualReal * highReal - residualImag * highImag
+      const nextResidualReal = residualReal * highReal - residualImag * highImag
       residualImag = residualReal * highImag + residualImag * highReal
       residualReal = nextResidualReal
     }
@@ -224,17 +218,14 @@ export function estimateFilterBankPeakGain(
         cosine,
         sine,
       )
-      const componentReal =
-        residualReal * lowReal - residualImag * lowImag
-      const componentImag =
-        residualReal * lowImag + residualImag * lowReal
+      const componentReal = residualReal * lowReal - residualImag * lowImag
+      const componentImag = residualReal * lowImag + residualImag * lowReal
       outputReal += componentReal * topGain
       outputImag += componentImag * topGain
 
       const highReal = 1 - lowReal
       const highImag = -lowImag
-      const nextResidualReal =
-        residualReal * highReal - residualImag * highImag
+      const nextResidualReal = residualReal * highReal - residualImag * highImag
       residualImag = residualReal * highImag + residualImag * highReal
       residualReal = nextResidualReal
       outputReal += residualReal * residualGain

@@ -131,11 +131,7 @@ function isRequestId(value: unknown): value is number {
 }
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
-  return (
-    typeof value === 'number' &&
-    Number.isSafeInteger(value) &&
-    value >= 0
-  )
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
 function isPositiveSafeInteger(value: unknown): value is number {

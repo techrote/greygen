@@ -116,9 +116,7 @@ describe('AudioWorklet protocol', () => {
       guardInterventions: 0,
     }
     expect(parseWorkletToMainMessage(telemetry)).toEqual(telemetry)
-    expect(
-      parseWorkletToMainMessage({ ...telemetry, sequence: 0 }),
-    ).toBeNull()
+    expect(parseWorkletToMainMessage({ ...telemetry, sequence: 0 })).toBeNull()
     expect(
       parseWorkletToMainMessage({ ...telemetry, peakDbfs: Number.NaN }),
     ).toBeNull()
