@@ -2,6 +2,7 @@ import { BAND_COUNT, TenBandFilterBank, type HighBandMode } from './filterBank'
 import {
   CONTROL_SMOOTHING_TIME_SECONDS,
   type GainStageState,
+  SAFETY_ATTACK_TIME_SECONDS,
   SAFETY_RELEASE_TIME_SECONDS,
   applyFinalGuard,
   createGainStageState,
@@ -191,6 +192,9 @@ export class GreygenDspEngine {
     this.residualGainSmoother.reset(targets.ultrasonicResidualGainLinear)
     this.safetyPreGainTargetValue = targets.safetyPreGainLinear
     this.safetyPreGainSmoother.reset(targets.safetyPreGainLinear)
+    this.safetyPreGainSmoother.setTimeConstantSeconds(
+      SAFETY_RELEASE_TIME_SECONDS,
+    )
     this.masterGainSmoother.reset(0)
     this.masterGainSmoother.setTarget(masterGainLinear(nextGainStage))
   }
@@ -263,12 +267,12 @@ export class GreygenDspEngine {
     )
 
     this.safetyPreGainTargetValue = targets.safetyPreGainLinear
-    if (targets.safetyPreGainLinear < this.safetyPreGainSmoother.current) {
-      this.safetyPreGainSmoother.reset(targets.safetyPreGainLinear)
-    } else {
-      this.safetyPreGainSmoother.setTarget(targets.safetyPreGainLinear)
-    }
-
+    this.safetyPreGainSmoother.setTimeConstantSeconds(
+      targets.safetyPreGainLinear < this.safetyPreGainSmoother.current
+        ? SAFETY_ATTACK_TIME_SECONDS
+        : SAFETY_RELEASE_TIME_SECONDS,
+    )
+    this.safetyPreGainSmoother.setTarget(targets.safetyPreGainLinear)
     this.masterGainSmoother.setTarget(masterGainLinear(this.gainStageStateValue))
   }
 }
