@@ -1,37 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import {
   AudioEngine,
-  BOOTSTRAP_OUTPUT_GAIN_LINEAR,
   type AudioContextPort,
   type AudioEngineRuntime,
   type AudioWorkletNodePort,
-  type GainNodePort,
   type WorkletMessagePort,
 } from '../../src/audio/AudioEngine'
+import { createGainStageState } from '../../src/audio/dsp/gainSafety'
 import { createSpectrumState } from '../../src/audio/dsp/spectra'
 import {
   AUDIO_PROTOCOL_VERSION,
   type MainToWorkletMessage,
+  type TelemetryMessage,
   type WorkletToMainMessage,
 } from '../../src/audio/protocol'
-
-class MockGainNode implements GainNodePort {
-  readonly gain = { value: 1 }
-  disconnected = false
-
-  connect(_destination: unknown): unknown {
-    return _destination
-  }
-
-  disconnect(): void {
-    this.disconnected = true
-  }
-}
 
 class MockMessagePort implements WorkletMessagePort {
   onmessage: ((event: { readonly data: unknown }) => void) | null = null
   closed = false
   private targetId: 'white' | 'pink' | 'brown' | 'grey' = 'grey'
+  private masterGainDb = -26.020599913279625
 
   constructor(private readonly sampleRate: number) {}
 
@@ -40,6 +28,7 @@ class MockMessagePort implements WorkletMessagePort {
     switch (message.type) {
       case 'initialize':
         this.targetId = message.spectrum.targetId
+        this.masterGainDb = message.gainStage.masterGainDb
         response = {
           version: AUDIO_PROTOCOL_VERSION,
           type: 'ready',
@@ -56,6 +45,15 @@ class MockMessagePort implements WorkletMessagePort {
           type: 'ack',
           requestId: message.requestId,
           command: 'set-spectrum',
+        }
+        break
+      case 'set-gain-stage':
+        this.masterGainDb = message.gainStage.masterGainDb
+        response = {
+          version: AUDIO_PROTOCOL_VERSION,
+          type: 'ack',
+          requestId: message.requestId,
+          command: 'set-gain-stage',
         }
         break
       case 'reset-seed':
@@ -89,6 +87,22 @@ class MockMessagePort implements WorkletMessagePort {
     queueMicrotask(() => {
       this.onmessage?.({ data: response })
     })
+  }
+
+  emitTelemetry(sequence = 1): void {
+    const message: TelemetryMessage = {
+      version: AUDIO_PROTOCOL_VERSION,
+      type: 'telemetry',
+      sequence,
+      frameCount: 4800,
+      peakDbfs: -9.2,
+      rmsDbfs: -22.4,
+      safetyPreGainDb: -1,
+      safetyPreGainTargetDb: -1,
+      masterGainDb: this.masterGainDb,
+      guardInterventions: 0,
+    }
+    this.onmessage?.({ data: message })
   }
 
   close(): void {
@@ -131,7 +145,6 @@ class MockWorkletNode implements AudioWorkletNodePort {
 class MockAudioContext implements AudioContextPort {
   readonly sampleRate = 48_000
   readonly destination = {}
-  readonly gainNode = new MockGainNode()
   state = 'suspended'
   closed = false
   moduleUrl: string | null = null
@@ -157,10 +170,6 @@ class MockAudioContext implements AudioContextPort {
     this.state = 'closed'
     this.closed = true
     this.emitStateChange()
-  }
-
-  createGain(): GainNodePort {
-    return this.gainNode
   }
 
   addEventListener(_type: 'statechange', listener: () => void): void {
@@ -229,11 +238,9 @@ describe('AudioEngine lifecycle', () => {
       sampleRate: 48_000,
       targetId: 'grey',
       highBandMode: 'degraded-high-shelf',
+      telemetry: null,
     })
     expect(runtime.lastContext?.moduleUrl).toBe(runtime.workletModuleUrl)
-    expect(runtime.lastContext?.gainNode.gain.value).toBe(
-      BOOTSTRAP_OUTPUT_GAIN_LINEAR,
-    )
 
     await engine.stop()
     expect(engine.getSnapshot().status).toBe('stopped')
@@ -242,12 +249,13 @@ describe('AudioEngine lifecycle', () => {
     expect(runtime.lastNode?.port.closed).toBe(true)
   })
 
-  it('round-trips controls and status through the versioned port', async () => {
+  it('round-trips spectrum, gain controls, seed, and status through protocol v2', async () => {
     const runtime = new MockRuntime()
     const engine = new AudioEngine(runtime)
     await engine.startFromUserGesture()
 
     await engine.setSpectrumState(createSpectrumState('pink'))
+    await engine.setGainStageState(createGainStageState(-12))
     await engine.resetSeed(1234)
     const status = await engine.requestStatus()
 
@@ -256,7 +264,28 @@ describe('AudioEngine lifecycle', () => {
       targetId: 'pink',
       renderedFrames: 256,
     })
-    expect(engine.getSnapshot().targetId).toBe('pink')
+    expect(engine.getSnapshot()).toMatchObject({
+      targetId: 'pink',
+      masterGainDb: -12,
+    })
+  })
+
+  it('accepts bounded unsolicited dBFS telemetry without request bookkeeping', async () => {
+    const runtime = new MockRuntime()
+    const engine = new AudioEngine(runtime)
+    await engine.startFromUserGesture()
+    await engine.setMasterGainDb(-18)
+
+    runtime.lastNode?.port.emitTelemetry(7)
+
+    expect(engine.getSnapshot().telemetry).toMatchObject({
+      type: 'telemetry',
+      sequence: 7,
+      peakDbfs: -9.2,
+      rmsDbfs: -22.4,
+      masterGainDb: -18,
+      guardInterventions: 0,
+    })
   })
 
   it('maps browser interruption to suspended and resumes only on the resume path', async () => {

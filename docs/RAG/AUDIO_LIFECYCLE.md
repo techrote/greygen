@@ -1,6 +1,6 @@
 # Browser Audio Lifecycle and Worklet Protocol
 
-Status: canonical contract for issue #5 browser audio integration.
+Status: canonical contract for browser audio integration after issues #5–#6.
 
 ## Boundary
 
@@ -8,16 +8,16 @@ Greygen keeps browser lifecycle/adaptation separate from the pure DSP implementa
 
 ```text
 React UI
-  -> AudioEngine (main thread lifecycle/state)
+  -> AudioEngine (main-thread lifecycle/state)
     -> versioned MessagePort protocol
       -> AudioWorkletProcessor adapter
         -> GreygenDspEngine (pure TypeScript)
-          -> seeded PRNG + spectral target/filter bank
+          -> source + spectral shaping + gain safety + meters
 ```
 
-`src/audio/dsp/engine.ts` is the reusable render engine used by Node/Vitest fixtures and by the worklet processor. It has no DOM, `AudioContext`, or `AudioWorklet` dependency. The worklet adapter does not duplicate spectral or random-generation logic.
+`src/audio/dsp/engine.ts` is the reusable render engine used by Node/Vitest fixtures and by the worklet processor. It has no DOM, `AudioContext`, or `AudioWorklet` dependency. The worklet adapter does not duplicate DSP logic.
 
-The main thread never renders audio blocks.
+The main thread never renders audio blocks and no longer applies a separate output `GainNode`; issue #6 moved master/safety/guard semantics into the pure engine. See `GAIN_SAFETY.md`.
 
 ## Lifecycle states
 
@@ -53,16 +53,17 @@ Runtime failures distinguish at least:
 
 Errors are surfaced in `AudioEngineSnapshot.error`; they are not swallowed. The UI states what the user can do next rather than silently leaving a dead transport.
 
-## Protocol v1
+## Protocol v2
 
-`src/audio/protocol.ts` owns the shared structured-clone message contract. Every message carries `version: 1`; request/response traffic uses a positive integer `requestId`.
+`src/audio/protocol.ts` owns the shared structured-clone message contract. Issue #6 advances the version to `2`; request/response traffic uses a positive integer `requestId`.
 
 Main-thread commands:
 
-- `initialize` — seed + serialized spectral state;
+- `initialize` — seed + serialized spectral state + serialized gain-stage state;
 - `set-spectrum` — replace spectral target/user offsets;
+- `set-gain-stage` — replace master/animation-placeholder/calibration-placeholder gain state;
 - `reset-seed` — deterministically restart the source stream;
-- `request-status` — low-rate explicit status/telemetry request;
+- `request-status` — explicit low-rate runtime-status request;
 - `stop` — stop processor output and acknowledge cleanup.
 
 Processor responses:
@@ -70,43 +71,43 @@ Processor responses:
 - `ready` — initialization handshake including runtime sample rate and high-band mode;
 - `ack` — command acknowledgement;
 - `status` — sample rate, target id, high-band mode, and rendered-frame count;
+- `telemetry` — unsolicited bounded-rate digital peak/RMS/safety/master/guard data;
 - `stopped` — stop acknowledgement;
 - `error` — invalid-message or DSP-engine failure.
 
-Runtime parsers validate protocol version, request ids, uint32 seed bounds, preset ids, spectral offset shape/ranges, high-band mode, sample rate, and rendered-frame counters before data crosses the architectural boundary.
+Runtime parsers validate protocol version, request ids, uint32 seed bounds, spectral/gain-state shape and ranges, high-band mode, sample rate, frame counters, and all telemetry numbers before data crosses the architectural boundary.
 
-The protocol deliberately does not add meters, stereo controls, calibration fields, or animation fields before their owning issues. Those features extend the versioned union rather than inventing side-channel messages.
+Telemetry is intentionally not request-scoped and therefore does not consume request ids. Later features extend the typed union rather than inventing ad-hoc side channels.
 
 ## Worklet hot path
 
-`greygen-processor.ts` holds one `GreygenDspEngine` instance. A newly constructed processor remains alive but emits zeros until a valid `initialize` message has reset the engine to the requested seed and spectrum. This prevents constructor defaults from leaking into the destination during the node-to-handshake interval.
+`greygen-processor.ts` holds one `GreygenDspEngine` instance. A newly constructed processor remains alive but emits zeros until a valid `initialize` message has reset the engine to the requested seed, spectrum, and gain state. This prevents constructor defaults from leaking into the destination during the node-to-handshake interval.
 
 Once initialized, `process()`:
 
 1. obtains the browser-provided mono output buffer;
 2. calls `engine.renderMono(output)`;
-3. increments a primitive rendered-frame counter;
-4. returns `true`.
+3. increments primitive frame counters;
+4. emits telemetry only when the bounded interval is reached;
+5. returns `true`.
 
 After an acknowledged `stop`, the processor zeros any final supplied output buffer and returns `false` so the browser may retire the processor. Before initialization it zeros the supplied buffer but returns `true`, allowing the handshake to complete.
 
-No logging, DOM/network access, Promise work, `MessagePort` traffic, object/array creation, or main-thread processing occurs per sample. Control messages are handled outside the sample loop.
+No logging, DOM/network access, Promise work, or deliberate object/array creation occurs per sample. The only regular `MessagePort` emission is telemetry at nominally 10 Hz, not once per render quantum.
 
-Mono output is intentional in issue #5. Power-preserving stereo decorrelation belongs to issue #9.
+Mono output remains intentional. Power-preserving stereo decorrelation belongs to issue #9.
 
 ## Worklet asset loading
 
-The browser runtime imports the TypeScript processor with Vite's worker-URL transform (`?worker&url`) and passes the emitted URL to `audioWorklet.addModule()`. This makes both development and production builds resolve a compiled JavaScript worklet asset rather than attempting to load repository TypeScript directly.
+The browser runtime imports the TypeScript processor with Vite's worker-URL transform (`?worker&url`) and passes the emitted URL to `audioWorklet.addModule()`. Development and production therefore load compiled JavaScript rather than repository TypeScript.
 
-The processor name is versioned (`greygen-processor-v1`) alongside protocol v1.
+The processor name is versioned (`greygen-processor-v2`) alongside protocol v2.
 
-## Conservative bootstrap output level
+## Output-level ownership
 
-Issue #5 connects the worklet through a main-thread `GainNode` fixed at `0.05` linear (about -26 dB) before `AudioDestinationNode`.
+The temporary issue #5 main-thread `GainNode` has been removed. The default conservative `0.05` linear level survives as the issue #6 **master-gain default inside the pure DSP engine**, where it is smoothed and metered.
 
-This is a temporary conservative bootstrap attenuation so the first live-audio milestone does not emit near-full-scale stochastic noise by default. It is **not** the final gain-safety design, limiter, meter stage, or master-level model. Issue #6 replaces/extends this with the documented nominal/safety/master/guard stages and telemetry.
-
-No code should reinterpret this bootstrap gain as acoustic SPL or a universal safe listening level.
+Safety pre-gain, master gain, final guard, and dBFS meters are defined in `GAIN_SAFETY.md`. None of those values is an acoustic SPL measurement or a universal safe-listening guarantee.
 
 ## Suspend/interruption behavior
 
@@ -121,9 +122,9 @@ Stop, error cleanup, component unmount/HMR disposal, and failed startup all tear
 - reject/clear pending protocol requests;
 - detach processor/context event handlers;
 - close the MessagePort when available;
-- disconnect worklet and gain nodes;
+- disconnect the worklet node;
 - close the `AudioContext` when it is not already closed;
-- clear facade references.
+- clear facade references and stale telemetry.
 
 A missing stop acknowledgement does not block cleanup.
 
@@ -133,14 +134,15 @@ A missing stop acknowledgement does not block cleanup.
 
 - no context creation before explicit Start;
 - start/handshake/running transitions;
-- control/status round trips;
+- spectrum/gain/control/status round trips;
+- unsolicited telemetry propagation;
 - interruption and explicit resume;
 - capability failures;
 - module-load failures;
 - processor errors;
 - stop/disconnect/context-close cleanup.
 
-Playwright additionally exercises the production Vite worklet URL and real Chromium AudioWorklet path on localhost, plus a feature-override unsupported state.
+Playwright exercises the production Vite worklet URL and real Chromium AudioWorklet path on localhost, waits for actual dBFS telemetry, verifies clean Stop/close, and covers a feature-override unsupported state.
 
 ## Platform references
 

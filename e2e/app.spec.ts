@@ -18,9 +18,10 @@ test('loads Ready and remains silent until the explicit Start action', async ({
       exact: false,
     }),
   ).toBeVisible()
+  await expect(page.locator('.meter-strip')).toHaveCount(0)
 })
 
-test('starts the worklet through a user action and closes it cleanly', async ({
+test('starts the worklet, receives bounded digital meters, and closes cleanly', async ({
   page,
 }) => {
   const pageErrors: string[] = []
@@ -34,6 +35,15 @@ test('starts the worklet through a user action and closes it cleanly', async ({
     page.getByText('Audio engine active', { exact: false }),
   ).toBeVisible()
   await expect(page.locator('.status-dot[data-status="running"]')).toBeVisible()
+
+  const meters = page.locator('dl[aria-label="Digital output meters"]')
+  await expect(meters).toBeVisible()
+  await expect(meters.getByText('Peak', { exact: true })).toBeVisible()
+  await expect(meters.getByText('RMS', { exact: true })).toBeVisible()
+  await expect(
+    meters.getByText('Safety pre-gain', { exact: true }),
+  ).toBeVisible()
+  await expect(meters.getByText('dBFS', { exact: false }).first()).toBeVisible()
 
   await page.getByRole('button', { name: 'Stop audio' }).click()
   await expect(page.getByText('Stopped', { exact: true })).toBeVisible()

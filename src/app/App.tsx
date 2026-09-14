@@ -5,6 +5,7 @@ import type {
   AudioEngineStatus,
 } from '../audio/AudioEngine'
 import { createBrowserAudioEngine } from '../audio/browserAudioRuntime'
+import { DEFAULT_MASTER_GAIN_DB } from '../audio/dsp/gainSafety'
 
 const INITIAL_AUDIO_SNAPSHOT: AudioEngineSnapshot = {
   status: 'ready',
@@ -13,6 +14,8 @@ const INITIAL_AUDIO_SNAPSHOT: AudioEngineSnapshot = {
   sampleRate: null,
   targetId: 'grey',
   highBandMode: null,
+  masterGainDb: DEFAULT_MASTER_GAIN_DB,
+  telemetry: null,
 }
 
 function statusLabel(status: AudioEngineStatus): string {
@@ -56,7 +59,7 @@ function statusDetail(snapshot: AudioEngineSnapshot): string {
     case 'starting':
       return 'Creating the browser audio context and loading the processor.'
     case 'running':
-      return `Audio engine active${snapshot.sampleRate ? ` at ${snapshot.sampleRate.toLocaleString()} Hz` : ''}. Output is intentionally conservative until gain-safety work lands.`
+      return `Audio engine active${snapshot.sampleRate ? ` at ${snapshot.sampleRate.toLocaleString()} Hz` : ''}. Digital gain safety and post-guard meters are active.`
     case 'suspended':
       return 'Audio is paused by the browser or operating system. Resume requires another explicit action.'
     case 'error':
@@ -65,6 +68,14 @@ function statusDetail(snapshot: AudioEngineSnapshot): string {
     case 'stopped':
       return 'Audio context closed. Start creates a fresh context.'
   }
+}
+
+function formatDb(value: number): string {
+  return `${value.toFixed(1)} dB`
+}
+
+function formatDbfs(value: number): string {
+  return `${value.toFixed(1)} dBFS`
 }
 
 export default function App() {
@@ -114,6 +125,7 @@ export default function App() {
     !engineReady ||
     audioSnapshot.status === 'starting' ||
     audioSnapshot.status === 'unsupported'
+  const telemetry = audioSnapshot.telemetry
 
   return (
     <main className="app-shell">
@@ -166,6 +178,31 @@ export default function App() {
         <p className="scaffold-note" id="audio-status-note">
           {statusDetail(audioSnapshot)}
         </p>
+
+        {telemetry ? (
+          <dl className="meter-strip" aria-label="Digital output meters">
+            <div>
+              <dt>Peak</dt>
+              <dd>{formatDbfs(telemetry.peakDbfs)}</dd>
+            </div>
+            <div>
+              <dt>RMS</dt>
+              <dd>{formatDbfs(telemetry.rmsDbfs)}</dd>
+            </div>
+            <div>
+              <dt>Safety pre-gain</dt>
+              <dd>{formatDb(telemetry.safetyPreGainDb)}</dd>
+            </div>
+            <div>
+              <dt>Master</dt>
+              <dd>{formatDb(telemetry.masterGainDb)}</dd>
+            </div>
+            <div>
+              <dt>Guard</dt>
+              <dd>{telemetry.guardInterventions}</dd>
+            </div>
+          </dl>
+        ) : null}
       </section>
     </main>
   )

@@ -9,7 +9,7 @@ Greygen is a clean-room implementation inspired by the *class* of tools exemplif
 - **Local-first audio:** synthesis and calibration remain in the browser; no backend is required for the core product.
 - **Deterministic DSP:** seeded sources and pure DSP modules make behavior reproducible and testable.
 - **Perceptual, not medical:** calibration is relative to the listener + playback chain and must never be presented as a clinical audiogram or calibrated SPL measurement.
-- **Safe by construction:** bounded boosts, automatic pre-gain, metering, and a final safety limiter protect headroom; calibration must not encourage chasing inaudible frequencies with ever-higher gain.
+- **Safe by construction:** bounded boosts, deterministic safety pre-gain, metering, and a final overflow guard protect digital headroom; calibration must not encourage chasing inaudible frequencies with ever-higher gain.
 - **Clean-room implementation:** do not copy myNoise source, audio, artwork, branding, preset data, or copyrighted standards tables.
 - **Repository as ground truth:** architecture, decisions, validation contracts, and autonomous-agent instructions live under `docs/RAG/` and are updated with implementation changes.
 
@@ -33,7 +33,7 @@ npm ci
 npm run dev
 ```
 
-The development server prints the local URL. Audio never starts on page load: choose **Start audio** explicitly to create/resume the browser audio context and initialize the worklet. Issue #5 uses a deliberately conservative temporary output attenuation; full gain-safety staging and metering arrive in issue #6.
+The development server prints the local URL. Audio never starts on page load: choose **Start audio** explicitly to create/resume the browser audio context and initialize the worklet. The worklet owns smoothed master gain, deterministic safety pre-gain, a final digital overflow guard, and bounded-rate post-guard peak/RMS telemetry.
 
 ### Verification commands
 
@@ -67,9 +67,10 @@ Start with:
 4. `docs/RAG/DSP_VALIDATION.md`
 5. `docs/RAG/SPECTRAL_TARGETS.md`
 6. `docs/RAG/AUDIO_LIFECYCLE.md`
-7. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
-8. `docs/RAG/UX_STATE.md`
-9. `docs/RAG/AGENT_PLAYBOOK.md`
-10. `docs/RAG/ROADMAP.md`
+7. `docs/RAG/GAIN_SAFETY.md`
+8. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
+9. `docs/RAG/UX_STATE.md`
+10. `docs/RAG/AGENT_PLAYBOOK.md`
+11. `docs/RAG/ROADMAP.md`
 
 The GitHub issues are executable work packets. Each issue must be completed end-to-end: implementation, tests, documentation updates, PR, automated checks, review of failures, and merge only after required checks pass.
