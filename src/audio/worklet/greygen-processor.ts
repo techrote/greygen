@@ -32,7 +32,8 @@ function errorMessage(error: unknown): string {
 class GreygenAudioProcessor extends AudioWorkletProcessor {
   private readonly engine = new GreygenDspEngine({ sampleRate })
   private renderedFrames = 0
-  private active = true
+  private initialized = false
+  private stopped = false
 
   constructor() {
     super()
@@ -84,7 +85,8 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
           spectrumState: deserializeSpectrumState(message.spectrum),
         })
         this.renderedFrames = 0
-        this.active = true
+        this.initialized = true
+        this.stopped = false
         this.post({
           version: AUDIO_PROTOCOL_VERSION,
           type: 'ready',
@@ -125,7 +127,7 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
         })
         return
       case 'stop':
-        this.active = false
+        this.stopped = true
         this.post({
           version: AUDIO_PROTOCOL_VERSION,
           type: 'stopped',
@@ -141,17 +143,22 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
   ): boolean {
     const output = outputs[0]
     if (!output || output.length === 0) {
-      return this.active
+      return !this.stopped
     }
 
     const mono = output[0]
     if (!mono) {
-      return this.active
+      return !this.stopped
     }
 
-    if (!this.active) {
+    if (this.stopped) {
       mono.fill(0)
       return false
+    }
+
+    if (!this.initialized) {
+      mono.fill(0)
+      return true
     }
 
     this.engine.renderMono(mono)
