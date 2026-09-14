@@ -72,6 +72,10 @@ describe('TenBandFilterBank topology and state', () => {
         )
         expect(Number.isFinite(ultrasonicResidual)).toBe(true)
 
+        if (frame >= tailStart) {
+          tailPeak = Math.max(tailPeak, Math.abs(ultrasonicResidual))
+        }
+
         for (let band = 0; band < BAND_COUNT; band += 1) {
           expect(Number.isFinite(components[band])).toBe(true)
           if (frame >= tailStart) {
