@@ -13,15 +13,49 @@ Greygen is a clean-room implementation inspired by the *class* of tools exemplif
 - **Clean-room implementation:** do not copy myNoise source, audio, artwork, branding, preset data, or copyrighted standards tables.
 - **Repository as ground truth:** architecture, decisions, validation contracts, and autonomous-agent instructions live under `docs/RAG/` and are updated with implementation changes.
 
-## Planned stack
+## Stack
 
 - TypeScript + Vite
 - React for UI/state composition
-- Web Audio API + `AudioWorklet` for real-time DSP
+- Web Audio API + `AudioWorklet` for real-time DSP in later milestones
 - Pure TypeScript DSP core shared with unit/offline tests
 - Vitest for deterministic DSP/unit tests
 - Playwright for browser/integration smoke tests
-- GitHub Actions for typecheck, lint, tests, build, and browser smoke checks
+- Biome for linting and formatting
+- GitHub Actions for typecheck, lint/format verification, tests, build, and browser smoke checks
+
+## Development
+
+Greygen currently pins Node.js 24.21.0 through `.nvmrc`. Use the repository lockfile and `npm ci` for reproducible installs.
+
+```bash
+npm ci
+npm run dev
+```
+
+The development server prints the local URL. The initial scaffold deliberately does not generate audio yet.
+
+### Verification commands
+
+```bash
+npm run format:check
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npx playwright install chromium
+npm run test:e2e
+```
+
+Useful local commands:
+
+```bash
+npm run format
+npm run test:watch
+npm run preview
+```
+
+`npm run test:e2e` starts the production preview server automatically through Playwright configuration. CI installs only Chromium for the initial smoke test; the cross-browser matrix is a later roadmap milestone.
 
 ## RAG / development ground truth
 
