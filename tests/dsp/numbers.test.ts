@@ -21,10 +21,7 @@ describe('decibel conversion', () => {
   it.each([-120, -24, -6, 0, 12, 60, 120])(
     'round-trips %d dB through linear gain',
     (decibels) => {
-      expect(gainToDecibels(decibelsToGain(decibels))).toBeCloseTo(
-        decibels,
-        10,
-      )
+      expect(gainToDecibels(decibelsToGain(decibels))).toBeCloseTo(decibels, 10)
     },
   )
 

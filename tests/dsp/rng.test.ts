@@ -7,8 +7,8 @@ import {
 import { blockStatistics } from '../../src/audio/dsp/statistics'
 
 const SEED_ZERO_GOLDEN = [
-  0x4d0e_705b, 0x4c8e_c075, 0x7800_bf96, 0xdcc1_d59d, 0xdd2a_4e9f,
-  0x2cbf_bc45, 0xbf9d_e59b, 0x5227_0d4c, 0x48fa_2b0a, 0xc19b_e14f,
+  0x4d0e_705b, 0x4c8e_c075, 0x7800_bf96, 0xdcc1_d59d, 0xdd2a_4e9f, 0x2cbf_bc45,
+  0xbf9d_e59b, 0x5227_0d4c, 0x48fa_2b0a, 0xc19b_e14f,
 ]
 
 const SEEDED_STREAM_GOLDEN = [

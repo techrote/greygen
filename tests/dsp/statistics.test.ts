@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  blockStatistics,
-  isFiniteBlock,
-} from '../../src/audio/dsp/statistics'
+import { blockStatistics, isFiniteBlock } from '../../src/audio/dsp/statistics'
 
 describe('block statistics', () => {
   it('measures a known deterministic vector', () => {

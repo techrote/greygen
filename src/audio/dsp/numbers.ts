@@ -48,11 +48,7 @@ export function clampFinite(value: number, minimum: number, maximum: number) {
 }
 
 export function decibelsToGain(decibels: number): number {
-  const boundedDecibels = clampFinite(
-    decibels,
-    MIN_DECIBELS,
-    MAX_DECIBELS,
-  )
+  const boundedDecibels = clampFinite(decibels, MIN_DECIBELS, MAX_DECIBELS)
   return 10 ** (boundedDecibels / 20)
 }
 
@@ -61,11 +57,7 @@ export function gainToDecibels(
   floorDecibels = MIN_DECIBELS,
 ): number {
   assertFiniteNumber(gain, 'gain')
-  const boundedFloor = clampFinite(
-    floorDecibels,
-    MIN_DECIBELS,
-    MAX_DECIBELS,
-  )
+  const boundedFloor = clampFinite(floorDecibels, MIN_DECIBELS, MAX_DECIBELS)
 
   if (gain < 0) {
     throw new RangeError('gain must be non-negative')
@@ -75,9 +67,5 @@ export function gainToDecibels(
     return boundedFloor
   }
 
-  return clampFinite(
-    20 * Math.log10(gain),
-    boundedFloor,
-    MAX_DECIBELS,
-  )
+  return clampFinite(20 * Math.log10(gain), boundedFloor, MAX_DECIBELS)
 }
