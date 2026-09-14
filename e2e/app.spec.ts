@@ -40,7 +40,9 @@ test('starts the worklet, receives bounded digital meters, and closes cleanly', 
   await expect(meters).toBeVisible()
   await expect(meters.getByText('Peak', { exact: true })).toBeVisible()
   await expect(meters.getByText('RMS', { exact: true })).toBeVisible()
-  await expect(meters.getByText('Safety pre-gain', { exact: true })).toBeVisible()
+  await expect(
+    meters.getByText('Safety pre-gain', { exact: true }),
+  ).toBeVisible()
   await expect(meters.getByText('dBFS', { exact: false }).first()).toBeVisible()
 
   await page.getByRole('button', { name: 'Stop audio' }).click()
