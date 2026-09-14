@@ -2,7 +2,7 @@ import {
   BAND_COUNT,
   HIGH_BAND_UPPER_CROSSOVER_HZ,
   NOMINAL_BAND_CENTERS_HZ,
-  TenBandFilterBank,
+  type TenBandFilterBank,
 } from './filterBank'
 import { decibelsToGain } from './numbers'
 
