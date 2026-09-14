@@ -1,6 +1,10 @@
 import { DEFAULT_ENGINE_PRESET, DEFAULT_ENGINE_SEED } from './dsp/engine'
 import type { HighBandMode } from './dsp/filterBank'
 import {
+  type GainStageState,
+  createGainStageState,
+} from './dsp/gainSafety'
+import {
   type SpectralPresetId,
   type SpectrumState,
   createSpectrumState,
@@ -10,13 +14,14 @@ import {
   type MainToWorkletMessage,
   type SerializedSpectrumState,
   type StatusMessage,
+  type TelemetryMessage,
   type WorkletToMainMessage,
   isAudioSeed,
   parseWorkletToMainMessage,
+  serializeGainStageState,
   serializeSpectrumState,
 } from './protocol'
 
-export const BOOTSTRAP_OUTPUT_GAIN_LINEAR = 0.05
 export const DEFAULT_WORKLET_REQUEST_TIMEOUT_MS = 3000
 
 export type AudioEngineStatus =
@@ -58,6 +63,8 @@ export interface AudioEngineSnapshot {
   readonly sampleRate: number | null
   readonly targetId: SpectralPresetId
   readonly highBandMode: HighBandMode | null
+  readonly masterGainDb: number
+  readonly telemetry: TelemetryMessage | null
 }
 
 export interface WorkletMessagePort {
@@ -75,12 +82,6 @@ export interface AudioWorkletNodePort {
   removeEventListener(type: 'processorerror', listener: () => void): void
 }
 
-export interface GainNodePort {
-  readonly gain: { value: number }
-  connect(destination: unknown): unknown
-  disconnect(): void
-}
-
 export interface AudioContextPort {
   readonly sampleRate: number
   readonly destination: unknown
@@ -90,7 +91,6 @@ export interface AudioContextPort {
   readonly state: string
   resume(): Promise<void>
   close(): Promise<void>
-  createGain(): GainNodePort
   addEventListener(type: 'statechange', listener: () => void): void
   removeEventListener(type: 'statechange', listener: () => void): void
 }
@@ -106,7 +106,10 @@ export interface AudioEngineRuntime {
 
 type SnapshotListener = (snapshot: AudioEngineSnapshot) => void
 
-type ExpectedResponseType = Exclude<WorkletToMainMessage['type'], 'error'>
+type ExpectedResponseType = Exclude<
+  WorkletToMainMessage['type'],
+  'error' | 'telemetry'
+>
 
 type TimerHandle = ReturnType<typeof globalThis.setTimeout>
 
@@ -187,23 +190,32 @@ function canonicalSpectrum(state: SpectrumState): SerializedSpectrumState {
   )
 }
 
+function canonicalGainStage(state: GainStageState): GainStageState {
+  return createGainStageState(
+    state.masterGainDb,
+    state.animationBandOffsetsDb,
+    state.calibrationBandOffsetsDb,
+  )
+}
+
 export class AudioEngine {
   private snapshotValue: AudioEngineSnapshot
   private readonly listeners = new Set<SnapshotListener>()
   private readonly pendingRequests = new Map<number, PendingRequest>()
   private context: AudioContextPort | null = null
   private node: AudioWorkletNodePort | null = null
-  private gain: GainNodePort | null = null
   private nextRequestId = 1
   private suppressContextState = false
   private seedValue: number
   private spectrumValue: SerializedSpectrumState
+  private gainStageValue: GainStageState
 
   constructor(
     private readonly runtime: AudioEngineRuntime,
     private readonly requestTimeoutMs = DEFAULT_WORKLET_REQUEST_TIMEOUT_MS,
     seed = DEFAULT_ENGINE_SEED,
     spectrumState: SpectrumState = createSpectrumState(DEFAULT_ENGINE_PRESET),
+    gainStageState: GainStageState = createGainStageState(),
   ) {
     if (!isAudioSeed(seed)) {
       throw new RangeError('seed must be an unsigned 32-bit integer')
@@ -211,6 +223,7 @@ export class AudioEngine {
 
     this.seedValue = seed
     this.spectrumValue = canonicalSpectrum(spectrumState)
+    this.gainStageValue = canonicalGainStage(gainStageState)
     const capability = initialCapability(runtime)
     this.snapshotValue = Object.freeze({
       status: capability === 'supported' ? 'ready' : 'unsupported',
@@ -219,6 +232,8 @@ export class AudioEngine {
       sampleRate: null,
       targetId: this.spectrumValue.targetId,
       highBandMode: null,
+      masterGainDb: this.gainStageValue.masterGainDb,
+      telemetry: null,
     })
   }
 
@@ -255,6 +270,8 @@ export class AudioEngine {
       sampleRate: null,
       targetId: this.spectrumValue.targetId,
       highBandMode: null,
+      masterGainDb: this.gainStageValue.masterGainDb,
+      telemetry: null,
     })
 
     try {
@@ -308,12 +325,7 @@ export class AudioEngine {
       node.addEventListener('processorerror', this.handleProcessorError)
       node.port.onmessage = this.handlePortMessage
       node.port.start?.()
-
-      const gain = context.createGain()
-      gain.gain.value = BOOTSTRAP_OUTPUT_GAIN_LINEAR
-      this.gain = gain
-      node.connect(gain)
-      gain.connect(context.destination)
+      node.connect(context.destination)
 
       const response = await this.request(
         {
@@ -322,6 +334,7 @@ export class AudioEngine {
           requestId: this.allocateRequestId(),
           seed: this.seedValue,
           spectrum: this.spectrumValue,
+          gainStage: serializeGainStageState(this.gainStageValue),
         },
         'ready',
       )
@@ -341,6 +354,8 @@ export class AudioEngine {
         sampleRate: response.sampleRate,
         targetId: response.targetId,
         highBandMode: response.highBandMode,
+        masterGainDb: this.gainStageValue.masterGainDb,
+        telemetry: null,
       })
     } catch (error) {
       await this.fail(error)
@@ -405,6 +420,8 @@ export class AudioEngine {
       sampleRate: null,
       targetId: this.spectrumValue.targetId,
       highBandMode: null,
+      masterGainDb: this.gainStageValue.masterGainDb,
+      telemetry: null,
     })
   }
 
@@ -434,6 +451,46 @@ export class AudioEngine {
       throw new Error('Unexpected set-spectrum acknowledgement')
     }
     this.setSnapshot({ ...this.snapshotValue, targetId: serialized.targetId })
+  }
+
+  async setGainStageState(state: GainStageState): Promise<void> {
+    const canonical = canonicalGainStage(state)
+    this.gainStageValue = canonical
+
+    if (!this.node) {
+      this.setSnapshot({
+        ...this.snapshotValue,
+        masterGainDb: canonical.masterGainDb,
+      })
+      return
+    }
+
+    const response = await this.request(
+      {
+        version: AUDIO_PROTOCOL_VERSION,
+        type: 'set-gain-stage',
+        requestId: this.allocateRequestId(),
+        gainStage: serializeGainStageState(canonical),
+      },
+      'ack',
+    )
+    if (response.type !== 'ack' || response.command !== 'set-gain-stage') {
+      throw new Error('Unexpected set-gain-stage acknowledgement')
+    }
+    this.setSnapshot({
+      ...this.snapshotValue,
+      masterGainDb: canonical.masterGainDb,
+    })
+  }
+
+  async setMasterGainDb(masterGainDb: number): Promise<void> {
+    await this.setGainStageState(
+      createGainStageState(
+        masterGainDb,
+        this.gainStageValue.animationBandOffsetsDb,
+        this.gainStageValue.calibrationBandOffsetsDb,
+      ),
+    )
   }
 
   async resetSeed(seed: number): Promise<void> {
@@ -482,7 +539,6 @@ export class AudioEngine {
     return (
       this.context !== null ||
       this.node !== null ||
-      this.gain !== null ||
       this.pendingRequests.size > 0
     )
   }
@@ -563,6 +619,11 @@ export class AudioEngine {
       return
     }
 
+    if (message.type === 'telemetry') {
+      this.setSnapshot({ ...this.snapshotValue, telemetry: message })
+      return
+    }
+
     if (message.type === 'error') {
       if (message.requestId !== undefined) {
         const pending = this.pendingRequests.get(message.requestId)
@@ -635,6 +696,7 @@ export class AudioEngine {
         status: 'stopped',
         sampleRate: null,
         highBandMode: null,
+        telemetry: null,
       })
     }
   }
@@ -674,6 +736,8 @@ export class AudioEngine {
       sampleRate: null,
       targetId: this.spectrumValue.targetId,
       highBandMode: null,
+      masterGainDb: this.gainStageValue.masterGainDb,
+      telemetry: null,
     })
   }
 
@@ -699,14 +763,6 @@ export class AudioEngine {
       }
     }
 
-    if (this.gain) {
-      try {
-        this.gain.disconnect()
-      } catch {
-        // Disconnect may throw if the browser already tore the graph down.
-      }
-    }
-
     const context = this.context
     if (context) {
       context.removeEventListener('statechange', this.handleContextStateChange)
@@ -720,7 +776,6 @@ export class AudioEngine {
     }
 
     this.node = null
-    this.gain = null
     this.context = null
     this.suppressContextState = false
   }
