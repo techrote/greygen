@@ -7,11 +7,12 @@ import {
 import { decibelsToGain } from './numbers'
 
 export const SPECTRAL_TARGET_SCHEMA_VERSION = 1 as const
+export const SPECTRAL_REALIZATION_VERSION = 1 as const
 export const WHITE_PSD_SLOPE_DB_PER_OCTAVE = 0
 export const PINK_PSD_SLOPE_DB_PER_OCTAVE = -3.0103
 export const BROWN_PSD_SLOPE_DB_PER_OCTAVE = -6.0206
-export const PINK_REALIZATION_BASIS_SLOPE_DB_PER_OCTAVE = -3.85
-export const BROWN_REALIZATION_BASIS_SLOPE_DB_PER_OCTAVE = -20
+export const PRESET_PSD_FIT_MINIMUM_HZ = 125
+export const PRESET_PSD_FIT_MAXIMUM_HZ = 8000
 export const USER_BAND_OFFSET_MIN_DB = -24
 export const USER_BAND_OFFSET_MAX_DB = 24
 
@@ -19,6 +20,7 @@ export type SpectralPresetId = 'white' | 'pink' | 'brown' | 'grey'
 
 export interface SpectralTarget {
   readonly schemaVersion: typeof SPECTRAL_TARGET_SCHEMA_VERSION
+  readonly revision: number
   readonly id: SpectralPresetId
   readonly label: string
   readonly targetDbByBand: readonly number[]
@@ -32,6 +34,7 @@ export interface SpectrumState {
 }
 
 export interface FilterBankSpectralConfiguration {
+  readonly realizationVersion: typeof SPECTRAL_REALIZATION_VERSION
   readonly bandGainsLinear: Float64Array
   readonly ultrasonicResidualGainLinear: number
 }
@@ -44,6 +47,20 @@ interface PresetDefinition {
 
 const LOWEST_CENTER_HZ = NOMINAL_BAND_CENTERS_HZ[0]
 
+// The complementary first-order bank's components overlap substantially. A
+// mathematical target slope therefore cannot be copied directly into component
+// gains. These implementation tilts were selected by deterministic response /
+// Welch characterization over PRESET_PSD_FIT_MINIMUM_HZ..MAXIMUM_HZ.
+//
+// Pink needs a slightly steeper component tilt than its requested PSD slope to
+// compensate for overlap. Brown is deliberately much steeper: suppressing the
+// upper components lets the bounded first low-shelf tail provide the desired
+// ~-6 dB/octave interior PSD without a free-running integrator or DC walk.
+// -20 dB/octave also keeps the top-band request above the global -240 dB numeric
+// conversion floor (9 octaves * -20 = -180 dB).
+const PINK_COMPONENT_TILT_DB_PER_OCTAVE = -3.85
+const BROWN_COMPONENT_TILT_DB_PER_OCTAVE = -20
+
 function powerLawTargetDb(slopeDbPerOctave: number): readonly number[] {
   return Object.freeze(
     NOMINAL_BAND_CENTERS_HZ.map(
@@ -53,21 +70,19 @@ function powerLawTargetDb(slopeDbPerOctave: number): readonly number[] {
   )
 }
 
-function powerLawRealizationGains(
-  basisSlopeDbPerOctave: number,
-): readonly number[] {
+function componentTiltGains(tiltDbPerOctave: number): readonly number[] {
   return Object.freeze(
     NOMINAL_BAND_CENTERS_HZ.map((frequencyHz) =>
       decibelsToGain(
-        basisSlopeDbPerOctave * Math.log2(frequencyHz / LOWEST_CENTER_HZ),
+        tiltDbPerOctave * Math.log2(frequencyHz / LOWEST_CENTER_HZ),
       ),
     ),
   )
 }
 
-function powerLawResidualGain(basisSlopeDbPerOctave: number): number {
+function componentTiltResidualGain(tiltDbPerOctave: number): number {
   return decibelsToGain(
-    basisSlopeDbPerOctave *
+    tiltDbPerOctave *
       Math.log2(HIGH_BAND_UPPER_CROSSOVER_HZ / LOWEST_CENTER_HZ),
   )
 }
@@ -100,6 +115,7 @@ const PRESET_DEFINITIONS: Readonly<Record<SpectralPresetId, PresetDefinition>> =
     white: {
       target: freezeTarget({
         schemaVersion: SPECTRAL_TARGET_SCHEMA_VERSION,
+        revision: 1,
         id: 'white',
         label: 'White',
         targetDbByBand: whiteTargetDb,
@@ -113,23 +129,25 @@ const PRESET_DEFINITIONS: Readonly<Record<SpectralPresetId, PresetDefinition>> =
     pink: {
       target: freezeTarget({
         schemaVersion: SPECTRAL_TARGET_SCHEMA_VERSION,
+        revision: 1,
         id: 'pink',
         label: 'Pink',
         targetDbByBand: pinkTargetDb,
         expectedPsdSlopeDbPerOctave: PINK_PSD_SLOPE_DB_PER_OCTAVE,
         provenance:
-          'Mathematical pink-noise target: -3.0103 dB/octave PSD. The internal filter-bank realization is independently characterized against rendered PSD.',
+          'Mathematical pink-noise target: -3.0103 dB/octave PSD. Filter-component realization is independently characterized against rendered PSD.',
       }),
-      realizationBandGainsLinear: powerLawRealizationGains(
-        PINK_REALIZATION_BASIS_SLOPE_DB_PER_OCTAVE,
+      realizationBandGainsLinear: componentTiltGains(
+        PINK_COMPONENT_TILT_DB_PER_OCTAVE,
       ),
-      realizationUltrasonicResidualGainLinear: powerLawResidualGain(
-        PINK_REALIZATION_BASIS_SLOPE_DB_PER_OCTAVE,
+      realizationUltrasonicResidualGainLinear: componentTiltResidualGain(
+        PINK_COMPONENT_TILT_DB_PER_OCTAVE,
       ),
     },
     brown: {
       target: freezeTarget({
         schemaVersion: SPECTRAL_TARGET_SCHEMA_VERSION,
+        revision: 1,
         id: 'brown',
         label: 'Brown / Red',
         targetDbByBand: brownTargetDb,
@@ -137,16 +155,17 @@ const PRESET_DEFINITIONS: Readonly<Record<SpectralPresetId, PresetDefinition>> =
         provenance:
           'Mathematical brown/red target: -6.0206 dB/octave PSD above the bounded low-frequency corner. Greygen does not use a free-running integrator.',
       }),
-      realizationBandGainsLinear: powerLawRealizationGains(
-        BROWN_REALIZATION_BASIS_SLOPE_DB_PER_OCTAVE,
+      realizationBandGainsLinear: componentTiltGains(
+        BROWN_COMPONENT_TILT_DB_PER_OCTAVE,
       ),
-      realizationUltrasonicResidualGainLinear: powerLawResidualGain(
-        BROWN_REALIZATION_BASIS_SLOPE_DB_PER_OCTAVE,
+      realizationUltrasonicResidualGainLinear: componentTiltResidualGain(
+        BROWN_COMPONENT_TILT_DB_PER_OCTAVE,
       ),
     },
     grey: {
       target: freezeTarget({
         schemaVersion: SPECTRAL_TARGET_SCHEMA_VERSION,
+        revision: 1,
         id: 'grey',
         label: 'Grey (Practical)',
         targetDbByBand: greyTargetDb,
@@ -168,8 +187,16 @@ export const SPECTRAL_PRESET_IDS: readonly SpectralPresetId[] = Object.freeze([
   'grey',
 ])
 
+function getPresetDefinition(id: SpectralPresetId): PresetDefinition {
+  const definition = PRESET_DEFINITIONS[id]
+  if (!definition) {
+    throw new RangeError(`unknown spectral target: ${id}`)
+  }
+  return definition
+}
+
 export function getSpectralTarget(id: SpectralPresetId): SpectralTarget {
-  return PRESET_DEFINITIONS[id].target
+  return getPresetDefinition(id).target
 }
 
 function assertUserBandOffsets(offsetsDb: ArrayLike<number>): void {
@@ -195,6 +222,7 @@ export function createSpectrumState(
   targetId: SpectralPresetId,
   userBandOffsetsDb: ArrayLike<number> = new Float64Array(BAND_COUNT),
 ): SpectrumState {
+  getPresetDefinition(targetId)
   assertUserBandOffsets(userBandOffsetsDb)
   return Object.freeze({
     targetId,
@@ -206,10 +234,7 @@ export function resolveSpectrumState(
   state: SpectrumState,
 ): FilterBankSpectralConfiguration {
   assertUserBandOffsets(state.userBandOffsetsDb)
-  const definition = PRESET_DEFINITIONS[state.targetId]
-  if (!definition) {
-    throw new RangeError(`unknown spectral target: ${state.targetId}`)
-  }
+  const definition = getPresetDefinition(state.targetId)
 
   const bandGainsLinear = new Float64Array(BAND_COUNT)
   for (let index = 0; index < BAND_COUNT; index += 1) {
@@ -219,6 +244,7 @@ export function resolveSpectrumState(
   }
 
   return {
+    realizationVersion: SPECTRAL_REALIZATION_VERSION,
     bandGainsLinear,
     ultrasonicResidualGainLinear:
       definition.realizationUltrasonicResidualGainLinear,
