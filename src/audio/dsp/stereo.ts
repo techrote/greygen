@@ -38,7 +38,14 @@ export function stereoWidthToMixAngle(width: number): number {
 }
 
 export function stereoWidthToCorrelation(width: number): number {
-  return Math.cos(validateWidth(width) * (Math.PI / 2))
+  const value = validateWidth(width)
+  if (value === STEREO_WIDTH_MIN) {
+    return 1
+  }
+  if (value === STEREO_WIDTH_MAX) {
+    return 0
+  }
+  return Math.cos(value * (Math.PI / 2))
 }
 
 export function stereoWidthLabel(width: number): StereoWidthLabel {
