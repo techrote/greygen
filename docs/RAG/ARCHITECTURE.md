@@ -55,6 +55,7 @@ src/
       spectra.ts
       smoothing.ts
       stereo.ts
+      animation.ts
       gainSafety.ts
       meters.ts
       engine.ts
@@ -84,21 +85,21 @@ Exact names may evolve, but preserve the dependency direction: UI/browser adapte
 
 The pure engine operates on blocks of Float32-compatible samples and explicit state.
 
-Inputs should conceptually include:
+Inputs conceptually include:
 
 - sample rate;
 - block/frame count;
-- left/right PRNG seeds or a deterministic master seed expanded into streams;
+- deterministic source seed/stream ids;
 - nominal spectral/band gains;
 - stereo correlation/width target;
+- deterministic animation state and animation seed;
 - smoothing state;
 - safety/pre-gain state;
-- optional animation offsets;
-- calibration correction values.
+- optional calibration correction values.
 
 Outputs include stereo sample blocks and telemetry sufficient for peak/RMS/headroom displays.
 
-No core algorithm may depend on `Math.random()`.
+No core algorithm may depend on `Math.random()` or wall-clock time.
 
 ## Random generator
 
@@ -165,8 +166,6 @@ Two simple alternatives were rejected during issue #3 characterization:
 
 The selected bilinear first-order partition gives exact neutral reconstruction, monotonic low/high edge behavior, stable finite one-state sections, and no per-sample allocation. The production inner path stores all section state, gains, and scratch components up front.
 
-Band gains are currently accepted in linear range `[0, 16]`; later gain-staging/safety logic may impose more user-facing constraints and pre-gain. Gain changes must use the reusable smoothing layer before they reach the real-time signal path. The fixed crossover coefficients themselves do not need to change for ordinary band-gain updates.
-
 ## Preset semantics
 
 White, pink, and brown/red are spectral targets:
@@ -177,7 +176,7 @@ White, pink, and brown/red are spectral targets:
 
 Because edge bands, finite filters, and sample-rate limits affect the realized spectrum, acceptance uses measured tolerances defined in `DSP_VALIDATION.md` rather than exact per-slider numbers.
 
-Generic grey is an original practical target shaped for broadly flatter perceived spectral presence at a defined nominal listening context. It is not claimed to reproduce ISO 226 numerical data. Store its provenance/rationale in code/docs when introduced.
+Generic grey is an original practical target shaped for broadly flatter perceived spectral presence at a defined nominal listening context. It is not claimed to reproduce ISO 226 numerical data.
 
 ## Stereo width/correlation
 
@@ -194,31 +193,38 @@ L = c * A + s * B
 R = c * A - s * B
 ```
 
-For independent equal-variance streams this gives:
+For independent equal-variance streams this gives `Var(L)=Var(R)` and `Corr(L,R)=cos(w*pi/2)`. The exposed range is non-negative correlation only: Mono at `w=0`, Normal at `0.5`, fully decorrelated Wide at `1`.
+
+Stream A uses `(seed,0)` and B uses `(seed,1)`. Both receive the same spectral gain vector per audio frame, including any active animation, so spectral movement does not redefine the requested stereo correlation model.
+
+Detailed stereo semantics are canonicalized in `STEREO_WIDTH.md`.
+
+## Spectral animation
+
+Issue #10 adds a separate deterministic modulation stage between the static/layered spectral target and final safety/master output. It does not mutate persisted user band offsets.
+
+Animation is evaluated from the audio sample clock. Mode phase/frequency parameters are derived from a dedicated animation seed and bounded analytic oscillators; there is no wall-clock dependency or integrated random walk. Shipped modes are Off, Drift, Breathe, Wander, and Orbit.
+
+The runtime composition is conceptually:
 
 ```text
-Var(L) = Var(R) = Var(A) = Var(B)
-Corr(L,R) = c^2 - s^2 = cos(w * pi / 2)
+static band gain
+  * smoothed dynamic animation gain
+  -> spectral sum
+  -> deterministic safety pre-gain
+  -> master
+  -> final guard
 ```
 
-The user-facing range is intentionally non-negative correlation only: `w=0` is Mono (`rho=1`), `w=0.5` is the Normal default (`rho≈0.707`), and `w=1` is fully decorrelated Wide (`rho=0`). Issue #9 does not expose an anti-phase region.
+Depth/speed and per-band animation offsets are smoothed independently. Optional energy-preserving normalization removes instantaneous mean linear band-power gain before the dynamic offsets reach their output smoothers. Safety does not rely on that normalization: when animation is active the deterministic pre-gain reserves headroom for the configured maximum animation depth.
 
-Stream identity is deterministic: stream A uses `(seed, 0)` and stream B uses `(seed, 1)`. Stream A retains the pre-stereo mono source identity. Each stream owns independent filter-bank state so decorrelation is not faked with panning or shared-state channel gain.
-
-Width changes are smoothed in the pure engine before the matrix coefficients are applied. Stereo meters count frames rather than channel samples and use mean channel power for RMS. `SoundState` persists normalized width; pre-stereo saved states migrate to Mono to preserve their previous renderer semantics, while a clean first run defaults to Normal.
-
-The exact model, persistence rules, UI labels, and deterministic statistical acceptance thresholds are canonicalized in `STEREO_WIDTH.md`. Width changes must not create an obvious nominal loudness jump or depend on the final guard for ordinary headroom-safe operation.
+Exact mode equations, depth/speed ranges, smoothing constants, state/migration semantics, and acceptance tests are canonicalized in `SPECTRAL_ANIMATION.md`.
 
 ## Parameter smoothing
 
-User controls and automation must not write discontinuous gain changes directly into the sample path. The foundational implementation in `src/audio/dsp/smoothing.ts` provides:
+User controls and automation must not write discontinuous gain changes directly into the sample path. `OnePoleSmoother` is the reusable exponential target follower and `LinearRamp` provides exact finite-duration linear transitions. Filter-bank crossover coefficients remain fixed for an AudioContext sample rate; controls smooth gains rather than retuning IIR sections per sample.
 
-- `OnePoleSmoother`: an exponential target follower with coefficient `exp(-1 / (tau * sampleRate))`, so a positive time constant has the same meaning at different runtime sample rates; `tau = 0` deliberately snaps to the target;
-- `LinearRamp`: a bounded linear transition that arrives exactly on the target after a specified integer sample count, plus a seconds-to-samples convenience path using the runtime sample rate.
-
-Both validate numeric inputs before state mutation and perform no heap allocation in `next()`. Filter-bank crossover coefficients are fixed for a bank's runtime sample rate; ordinary spectral-control transitions therefore smooth band gains rather than retuning IIR coefficients in place.
-
-Manual controls can use roughly tens-to-low-hundreds of milliseconds; animation generally moves much slower. Exact defaults are tuned subjectively but covered by discontinuity tests.
+Animation uses dedicated parameter and per-band output smoothers defined in `SPECTRAL_ANIMATION.md`.
 
 ## Gain staging and safety
 
@@ -233,35 +239,31 @@ Separate these concepts:
 7. master gain;
 8. final safety limiter/clip guard.
 
-The engine must be able to report nominal requested gain separately from safety attenuation.
-
-Do not create a fast automatic-gain loop that audibly pumps in response to stochastic peaks. Prefer a deterministic/conservative pre-gain derived from target state plus margin, with peak monitoring and a rarely active final guard.
+The engine reports requested/applied safety attenuation separately from nominal sound state. Do not create a fast stochastic AGC; safety pre-gain is deterministic from accepted control state plus margin, with the final guard as a rarely active last resort.
 
 ## AudioWorklet protocol
 
-The worklet adapter receives structured control messages and/or `AudioParam`s. Keep message protocol versioned. Avoid high-frequency object churn across `MessagePort`.
+The worklet adapter uses a shared versioned typed protocol and avoids high-frequency message/object churn. Protocol v4 supports:
 
-Control messages should support at minimum:
+- initialize with seed, spectrum, gain, stereo width, and animation state;
+- set spectrum/preset state;
+- set gain/master state;
+- set stereo width;
+- set animation state;
+- reset audio seed;
+- request status/telemetry;
+- stop cleanly.
 
-- initialize/reset seed;
-- set band/preset state;
-- set stereo target;
-- set smoothing times;
-- set calibration/profile correction;
-- set master level;
-- request/report telemetry;
-- suspend/stop cleanly.
-
-Use an explicit protocol type shared between main thread and worklet.
+Animation can be preloaded before an AudioContext exists. Worklet control does not bypass the pure DSP engine.
 
 ## Browser lifecycle
 
 Audio creation must respect autoplay restrictions:
 
-- UI initially shows a deliberate Start action;
-- create/resume the audio context only in response to an accepted user gesture;
-- tolerate `suspended`/`interrupted` context states;
-- provide a visible recover/resume path;
+- UI initially shows an explicit Start action;
+- create/resume AudioContext only from accepted user gesture;
+- tolerate suspended/interrupted states;
+- provide visible resume/recover paths;
 - stop/disconnect nodes cleanly during hot reload/test teardown.
 
 `AudioWorklet` requires a secure context in normal browsers; localhost is acceptable for development. Production must use HTTPS.
@@ -270,9 +272,9 @@ Audio creation must respect autoplay restrictions:
 
 Keep three domains separate:
 
-- **Sound state:** shareable generator state: preset, bands, master, width, animation, seed, etc.
-- **Personal profile state:** calibration/device profiles, local names, correction metadata; private by default.
-- **UI state:** panel expansion, theme/view preferences; local only.
+- **Sound state:** shareable generator state: preset, bands, master, width, animation, audio seed, animation seed, etc.;
+- **Personal profile state:** calibration/device profiles, local names, correction metadata; private by default;
+- **UI state:** presentation preferences only.
 
 Version each persisted schema. Migrations are explicit and tested.
 

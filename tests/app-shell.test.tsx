@@ -5,6 +5,7 @@ import {
   INITIAL_AUDIO_SNAPSHOT,
   default as App,
 } from '../src/app/App'
+import { createAnimationState } from '../src/audio/dsp/animation'
 import { createSpectrumState } from '../src/audio/dsp/spectra'
 import { AUDIO_PROTOCOL_VERSION } from '../src/audio/protocol'
 
@@ -15,6 +16,7 @@ function surfaceProps() {
     audioSnapshot: INITIAL_AUDIO_SNAPSHOT,
     spectrumState: createSpectrumState('grey'),
     stereoWidth: 0.5,
+    animation: createAnimationState(),
     engineReady: true,
     controlError: null,
     storageNotice: null,
@@ -28,6 +30,10 @@ function surfaceProps() {
     onBandsReset: noop,
     onMasterChange: noop,
     onStereoWidthChange: noop,
+    onAnimationModeChange: noop,
+    onAnimationDepthChange: noop,
+    onAnimationSpeedChange: noop,
+    onAnimationEnergyChange: noop,
     onToggleFutureFeatures: noop,
     onResetSound: noop,
     onDeleteProfiles: noop,

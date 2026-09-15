@@ -1,159 +1,122 @@
 # Primary Generator UI Contract
 
-Status: canonical contract for the friendly ten-band generator surface, reconciled through issue #9 stereo width.
+Status: canonical contract for the friendly ten-band generator surface, reconciled through issue #10 deterministic spectral animation.
 
 ## Purpose
 
-The primary Greygen screen is the usable product core, not a DSP-debug panel. It must make the current audio lifecycle, spectral shape, digital output level, spatial width, and immediate stop path obvious without exposing implementation details such as crossover coefficients or render quanta.
+The primary Greygen screen is the usable product core, not a DSP-debug panel. It exposes lifecycle, spectral shape, digital level, spatial width, deterministic movement, and an immediate Stop path without leaking filter/worklet internals.
 
-The UI depends on `AudioEngine` and typed sound-state APIs. It does not import or manipulate filter-bank instances or browser audio nodes.
+All sound changes go through typed `AudioEngine` / SoundState APIs. UI code does not own browser audio nodes or generate DSP trajectories.
 
 ## Primary surface
 
 The default screen contains:
 
-- explicit Start / Stop / Resume / Retry transport derived from `AudioEngine` lifecycle state;
-- White, Pink, Brown / Red, and Grey (Practical) named preset selection;
-- ten user band-offset controls labelled `31`, `62`, `125`, `250`, `500`, `1k`, `2k`, `4k`, `8k`, `16k`;
-- numeric dB readout and per-band neutral reset for every band;
-- master digital-level control;
-- active power-preserving stereo-width control with Mono/Narrow/Normal/Wide text, percent, and target correlation;
-- compact Peak, RMS, safety pre-gain, and master meters/readouts;
-- emergency guard indicator only when interventions are non-zero;
-- explicit runtime high-band mode disclosure when the nominal 16 kHz region degrades to the documented high shelf;
-- disabled deterministic-animation placeholder until issue #10 implements that engine;
-- disabled playback-calibration/profile entry point with non-medical wording until the calibration issues own that workflow;
-- a local-state surface that distinguishes sound reset from private-profile deletion.
+- explicit Start / Stop / Resume / Retry transport;
+- White, Pink, Brown / Red, and Grey (Practical) target selection;
+- ten bounded user band-offset controls with visible numeric dB readouts and neutral reset;
+- master digital level;
+- active power-preserving stereo width with Mono/Narrow/Normal/Wide, percentage, and target correlation;
+- active deterministic spectral animation with mode, depth, speed, and mean-band-power normalization controls;
+- Peak/RMS/safety/master telemetry and guard indication;
+- explicit runtime high-band degradation disclosure;
+- disabled playback-calibration/profile entry point with non-medical wording;
+- local-state controls that distinguish sound reset from private-profile deletion.
 
-Audio still never starts from page load, preset selection, band edits, master edits, width edits, reload, persistence restore, or future-state import.
+Audio never starts from page load, preset/band/master/width/animation edits, reload, persistence restore, or migration. Start remains explicit.
 
 ## Spectrum and preset ownership
 
-The named colour presets own the base `SpectralPresetId`. Selecting a named preset also returns user band offsets to neutral `0 dB`, producing an untouched named-preset state.
+Named colour presets own the base `SpectralPresetId`. Selecting a preset clears only user band offsets to neutral. Preset selection does **not** reset master, stereo width, animation, lifecycle, or future profile domains.
 
-A user band offset is a bounded adjustment relative to the current named target. The accepted range remains the spectral contract's `[-24, +24] dB` per band. Any non-zero user band offset makes the visible preset state `Modified`.
-
-Resetting one band to `0 dB` removes that band's modification. Resetting all band offsets returns the current target to an untouched named-preset state.
-
-Preset changes do **not** reset master level, stereo width, lifecycle state, safety state, or later animation/profile domains. The worklet's smoothing remains authoritative for audible transitions.
+Any non-zero user band offset makes the visible preset state Modified. The accepted per-band range remains `[-24,+24] dB`.
 
 ## Master level
 
-The primary master control exposes the gain-safety contract's `[-60, 0] dB` range and current value. It calls `AudioEngine.setMasterGainDb()`; the UI does not create an independent downstream gain node.
-
-The screen explicitly describes this as digital level. It does not claim the value is acoustic dB SPL or listening exposure.
+The master control exposes `[-60,0] dB` and calls `AudioEngine.setMasterGainDb()`. It is explicitly digital level, never acoustic SPL.
 
 ## Stereo width
 
-The primary stereo control exposes normalized width `[0,1]` as a native range with a 0.01 user step. Detailed DSP semantics live in `STEREO_WIDTH.md`.
+Stereo width remains the native `[0,1]` range defined by `STEREO_WIDTH.md`, including friendly labels, target correlation, and applied correlation telemetry while Running. It is not a pan control and has no user-facing anti-phase range.
 
-The friendly presentation includes:
+## Spectral animation
 
-- **Mono** at width `0`;
-- **Narrow** below one third;
-- **Normal** from one third through below two thirds;
-- **Wide** from two thirds through width `1`;
-- percentage readout;
-- target Pearson-correlation value `rho` derived from the deterministic model.
+Animation semantics are defined by `SPECTRAL_ANIMATION.md`. The primary surface exposes native semantic controls:
 
-When audio is Running, the surface may additionally show currently applied correlation from smoothed worklet telemetry. This makes control smoothing observable without changing the requested persisted value.
+- Mode select: **Off, Drift, Breathe, Wander, Orbit**;
+- Depth range: `0 .. 12 dB`, UI step `0.5 dB`;
+- Speed range: `0.25 .. 4.0×`, UI step `0.25×`;
+- checkbox: **Preserve mean band power**.
 
-The control is not a pan slider and does not expose negative-correlation/anti-phase modes in issue #9. Its explanatory copy states that widening changes statistical correlation while preserving expected per-channel power.
+Mode/depth/speed/normalization changes are generic SoundState, persist across reload, and can be changed before or during playback. Editing them while Ready must not create an AudioContext.
+
+The UI describes animation as seeded and bounded. It does not imply a random walk or claim exact perceived-loudness constancy. Energy normalization is visible/optional rather than a hidden AGC.
+
+Selecting Off preserves configured seed/depth/speed for later reuse while making the requested animation target neutral. The DSP smoothing path controls audible return to the base spectrum.
 
 ## Runtime 16 kHz semantics
 
-Before audio starts, runtime sample rate and high-band mode are unknown and the UI makes no unsupported claim.
-
-After worklet initialization:
-
-- `bounded-bandpass` requires no warning;
-- `degraded-high-shelf` keeps the 16k control enabled because it remains a stable supported control, but marks it textually as `High shelf` and explains that it owns the residual above approximately 11.3 kHz rather than a bounded 16 kHz band.
-
-Degradation is not communicated by colour alone.
+Before Start, runtime sample rate/high-band mode are unknown. After worklet initialization, `degraded-high-shelf` marks the 16k control textually as a stable high shelf above approximately 11.3 kHz; `bounded-bandpass` needs no warning.
 
 ## Metering
 
-The meter strip is always structurally present so the output-status location does not jump when audio starts. Before telemetry it displays unavailable placeholders.
+Peak/RMS are final post-master/post-guard digital telemetry. Stereo RMS represents average channel power and Peak the larger channel peak. Safety pre-gain and guard interventions remain visible independently from requested spectrum/animation so users can distinguish desired sound from protective attenuation.
 
-When telemetry arrives it shows the final post-master/post-guard digital stage defined by `GAIN_SAFETY.md`:
-
-- Peak in dBFS;
-- RMS in dBFS;
-- applied safety pre-gain in dB;
-- current master in dB;
-- guard activity only when intervention count is greater than zero.
-
-For stereo, RMS represents average channel power and Peak represents the larger channel peak for each frame as specified by `STEREO_WIDTH.md`. No meter uses SPL, phon, sone, or medical/hearing-threshold units.
+No meter uses SPL, phon, sone, or medical/hearing-threshold units.
 
 ## Accessibility and input
 
-Primary controls use native semantic form controls and buttons.
+Primary controls are native HTML inputs/selects/buttons with explicit labels, visible values, keyboard operation, and focus indication.
 
-Every band provides a visible frequency label, native keyboard adjustment, an accessible name including frequency/current dB offset, `aria-valuetext`, visible numeric dB readout, and a keyboard-operable neutral reset button.
-
-Master and stereo width follow the same keyboard/readout principles. Width `aria-valuetext` includes the friendly width label, percentage, and target correlation. Focus indication is explicit. State is communicated with text as well as decorative colour/status dots.
-
-The ten-band bank keeps comfortable control dimensions. On moderately narrow screens it may scroll horizontally rather than shrinking sliders and hit targets to microscopic sizes.
+Animation depth/speed provide `aria-valuetext` matching visible numeric outputs. Mode uses a labelled native select. Energy normalization is a labelled native checkbox. State is not communicated by colour alone.
 
 ## Lifecycle and errors
 
 Lifecycle presentation remains derived from `AudioEngine`:
 
-- Ready -> `Start audio`;
-- Starting -> disabled `Starting…`;
-- Running -> prominent `Stop audio`;
-- Suspended/interrupted -> `Resume audio` plus an independent `Stop audio` escape path;
-- recoverable Error -> `Retry audio` plus the engine's actionable message;
-- Unsupported -> capability explanation and disabled start.
+- Ready -> Start audio;
+- Starting -> disabled Starting…;
+- Running -> Stop audio;
+- Suspended/interrupted -> Resume + independent Stop;
+- recoverable Error -> Retry + actionable message;
+- Unsupported -> capability explanation + disabled Start.
 
-Control-message failures are surfaced as visible UI errors rather than becoming unhandled rejected promises. Persistence recovery/storage failures are surfaced separately as local-state notices. A storage failure does not change the audio lifecycle state or stop the current session.
+Control-message failures and persistence failures are visible and separate. Neither silently changes lifecycle state.
 
-## Future-feature placeholders
+## Future-feature area
 
-Stereo width is implemented and therefore no longer appears as a disabled roadmap placeholder.
+Stereo width and spectral animation are implemented and no longer placeholders. Playback calibration remains disabled until its owning issues implement real behaviour.
 
-Deterministic spectral animation remains disabled and states that issue #10 owns it. Playback calibration remains disabled and explicitly describes future output as relative listener + playback-chain correction, not a medical hearing test.
-
-The presentation-only `futureFeaturesVisible` preference collapses/expands only this remaining roadmap placeholder area. It has no audio meaning and is stored only in `UiState`.
+The `futureFeaturesVisible` UI preference still collapses/expands the movement/calibration area. It has no audio meaning.
 
 ## Persistence boundary
 
 The primary generator restores:
 
-- seed;
-- named target;
-- ten user band offsets;
-- master digital level;
+- audio seed;
+- named target and ten user offsets;
+- master;
 - stereo width;
+- animation mode/seed/depth/speed/normalization;
 - presentation-only roadmap-panel visibility.
 
-Modified state is derived from restored band offsets. Audio lifecycle is intentionally not persisted; a reload after Running returns Ready and silent.
+Sound schema v3 migration is defined by `STATE_PERSISTENCE.md`. Pre-animation saved sounds migrate to animation Off. Reload after Running always returns Ready and silent.
 
-Sound, private profile, and UI state use separate schemas and localStorage documents defined by `STATE_PERSISTENCE.md`. Sound schema v2 adds stereo width. Pre-stereo sound schemas migrate to Mono so an existing saved sound does not change spatial meaning merely because the application was upgraded.
-
-The sound-reset action resets only sound fields, including width to the current first-run Normal default. Personal profile deletion is an explicit separate action and cannot be triggered by reset sound.
-
-All restored/edited sound values still reach audio only through the typed `AudioEngine` facade. Persistence never writes directly into filter/worklet internals.
+Sound reset returns generic sound fields, including animation, to first-run defaults. Private profiles survive sound reset and require their own explicit deletion action.
 
 ## Validation
 
-Primary-generator automated coverage includes:
+Automated UI/browser coverage includes:
 
-- Ready + no autoplay, including reload;
-- named preset selection;
-- keyboard band adjustment and Modified transition;
-- per-band reset and named-preset reset behavior;
-- keyboard master adjustment;
-- keyboard and pointer/range stereo-width adjustment;
-- width labels, percentage, and correlation presentation;
-- stereo-width persistence across reload without autoplay;
-- real two-channel worklet Start, meter/correlation telemetry, high-band degradation disclosure, and clean Stop;
-- deterministic presentation fixture for Peak/RMS/safety/master/stereo values;
-- suspended -> explicit Resume UI and immediate Stop path;
-- recoverable processor failure -> actionable Error/Retry UI;
-- unsupported AudioWorklet capability;
-- presence of all ten labelled controls plus the active stereo control and honest animation/calibration placeholders;
-- malformed local sound storage recovering to usable Ready defaults;
-- visually/textually distinct sound reset and private-profile deletion controls.
+- Ready/no autoplay, including reload;
+- preset/band/master/stereo behaviour retained;
+- native animation mode selection;
+- keyboard depth/speed adjustment and pointer/range updates;
+- normalization toggle;
+- animation persistence across reload without autoplay;
+- real worklet animation changes while Running with meters/lifecycle intact;
+- malformed persisted sound recovery;
+- suspend/resume/error/unsupported paths;
+- semantic controls and visible numeric state.
 
-The dedicated accessibility/responsive audit remains issue #18, but obvious semantic, keyboard, focus, and hit-target requirements are not deferred to it.
+The dedicated accessibility/responsive audit remains issue #18; obvious semantic, keyboard, focus, and hit-target requirements are not deferred.

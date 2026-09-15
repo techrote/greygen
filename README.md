@@ -33,7 +33,7 @@ npm ci
 npm run dev
 ```
 
-The development server prints the local URL. The primary generator exposes White/Pink/Brown/Grey selection, ten keyboard-operable band offsets, master digital level, **power-preserving stereo width/correlation**, lifecycle transport, digital Peak/RMS/headroom telemetry, and explicit runtime 16 kHz degradation state. Stereo width uses two deterministic identically shaped streams and a symmetric statistical mix; its normalized range runs from Mono (`rho=1`) through Normal to fully decorrelated Wide (`rho=0`) without entering anti-phase modes. Sound and UI preferences are versioned and restored from localStorage; personal playback/calibration profiles occupy a separate private local document. Reload restores requested sound state, including width, but never restores Running: choose **Start audio** explicitly to create/resume the browser audio context and initialize the worklet. Deterministic animation and playback calibration remain visibly disabled until their owning roadmap issues implement real behavior.
+The development server prints the local URL. The primary generator exposes White/Pink/Brown/Grey selection, ten keyboard-operable band offsets, master digital level, **power-preserving stereo width/correlation**, and deterministic **Drift/Breathe/Wander/Orbit spectral animation**, plus lifecycle transport, digital Peak/RMS/headroom telemetry, and explicit runtime 16 kHz degradation state. Animation has bounded depth/speed controls and optional mean-band-power normalization; it is seeded and sample-clocked rather than driven by wall time or random walks. Sound and UI preferences are versioned and restored from localStorage; personal playback/calibration profiles occupy a separate private local document. Reload restores requested sound state, including width and animation settings, but never restores Running: choose **Start audio** explicitly to create/resume the browser audio context and initialize the worklet. Playback calibration remains visibly disabled until its owning roadmap issues implement real behavior.
 
 ### Verification commands
 
@@ -69,11 +69,12 @@ Start with:
 6. `docs/RAG/AUDIO_LIFECYCLE.md`
 7. `docs/RAG/GAIN_SAFETY.md`
 8. `docs/RAG/STEREO_WIDTH.md`
-9. `docs/RAG/GENERATOR_UI.md`
-10. `docs/RAG/STATE_PERSISTENCE.md`
-11. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
-12. `docs/RAG/UX_STATE.md`
-13. `docs/RAG/AGENT_PLAYBOOK.md`
-14. `docs/RAG/ROADMAP.md`
+9. `docs/RAG/SPECTRAL_ANIMATION.md`
+10. `docs/RAG/GENERATOR_UI.md`
+11. `docs/RAG/STATE_PERSISTENCE.md`
+12. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
+13. `docs/RAG/UX_STATE.md`
+14. `docs/RAG/AGENT_PLAYBOOK.md`
+15. `docs/RAG/ROADMAP.md`
 
 The GitHub issues are executable work packets. Each issue must be completed end-to-end: implementation, tests, documentation updates, PR, automated checks, review of failures, and merge only after required checks pass.
