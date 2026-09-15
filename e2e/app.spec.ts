@@ -61,6 +61,61 @@ test('preset, keyboard band, reset, and master controls update without starting 
   await expect(page.getByText('Ready', { exact: true })).toBeVisible()
 })
 
+test('persists sound and UI state across reload without persisting Running as autoplay intent', async ({
+  page,
+}) => {
+  await page.goto('/')
+
+  await page.locator('#spectral-preset').selectOption('pink')
+  const band = page.locator('#band-2')
+  await band.focus()
+  await page.keyboard.press('ArrowUp')
+  await expect(band).toHaveValue('1')
+  await expect(page.locator('.preset-state span')).toHaveText('Modified')
+
+  const master = page.locator('#master-gain')
+  await master.focus()
+  await page.keyboard.press('ArrowUp')
+  const persistedMaster = await master.inputValue()
+
+  await page.getByRole('button', { name: 'Hide roadmap controls' }).click()
+  await expect(page.getByText('Mono for now', { exact: false })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Start audio' }).click()
+  await expect(page.getByText('Running', { exact: true })).toBeVisible()
+
+  await page.reload()
+
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Start audio' })).toBeEnabled()
+  await expect(page.locator('#spectral-preset')).toHaveValue('pink')
+  await expect(page.locator('#band-2')).toHaveValue('1')
+  await expect(page.locator('.preset-state span')).toHaveText('Modified')
+  await expect(page.locator('#master-gain')).toHaveValue(persistedMaster)
+  await expect(
+    page.getByRole('button', { name: 'Show roadmap controls' }),
+  ).toBeVisible()
+  await expect(page.getByText('Mono for now', { exact: false })).toHaveCount(0)
+})
+
+test('malformed persisted sound recovers to safe Ready defaults instead of crashing', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await page.evaluate(() => {
+    localStorage.setItem('greygen.sound-state', '{broken json')
+  })
+  await page.reload()
+
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible()
+  await expect(page.locator('#spectral-preset')).toHaveValue('grey')
+  await expect(page.locator('#band-2')).toHaveValue('0')
+  await expect(page.getByRole('button', { name: 'Start audio' })).toBeEnabled()
+  await expect(
+    page.getByText('Sound state JSON was malformed', { exact: false }),
+  ).toBeVisible()
+})
+
 test('starts real worklet audio, receives meters, discloses high-band mode, and stops cleanly', async ({
   page,
 }) => {

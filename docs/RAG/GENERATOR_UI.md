@@ -1,6 +1,6 @@
 # Primary Generator UI Contract
 
-Status: canonical contract for issue #7 friendly ten-band generator surface.
+Status: canonical contract for issue #7 friendly ten-band generator surface, reconciled through issue #8 persistence.
 
 ## Purpose
 
@@ -21,9 +21,10 @@ The default screen contains:
 - emergency guard indicator only when interventions are non-zero;
 - explicit runtime high-band mode disclosure when the nominal 16 kHz region degrades to the documented high shelf;
 - disabled, honestly labelled placeholders for stereo width and deterministic animation until issues #9 and #10 implement those engines;
-- disabled playback-calibration/profile entry point with non-medical wording until the calibration issues own that workflow.
+- disabled playback-calibration/profile entry point with non-medical wording until the calibration issues own that workflow;
+- a local-state surface that distinguishes sound reset from private-profile deletion.
 
-Audio still never starts from page load, preset selection, band edits, master edits, reload, or future-state import.
+Audio still never starts from page load, preset selection, band edits, master edits, reload, persistence restore, or future-state import.
 
 ## Spectrum and preset ownership
 
@@ -96,6 +97,8 @@ Lifecycle presentation remains derived from `AudioEngine`:
 
 Control-message failures are surfaced as visible UI errors rather than becoming unhandled rejected promises.
 
+Persistence recovery/storage failures are surfaced separately as local-state notices. A storage failure does not change the audio lifecycle state or stop the current session.
+
 ## Future-feature placeholders
 
 Issue #7 intentionally does not simulate stereo width, animation, or calibration.
@@ -104,15 +107,29 @@ The width and animation controls are disabled and state what later issue owns th
 
 This prevents UI affordances from implying audio behavior that does not yet exist.
 
+Issue #8 adds a presentation-only preference that lets the user collapse/expand this roadmap placeholder area. That preference has no audio meaning and is stored only in `UiState`.
+
 ## Persistence boundary
 
-Issue #7 does not introduce persistence. Reload returns to default sound/UI state and remains silent. Versioned SoundState/ProfileState/UiState persistence and migration belong to issue #8.
+Issue #8 replaces the issue-7 local React-only holder with versioned application state while preserving the same DSP ownership.
 
-The local React spectrum state is the acknowledged/requested UI sound state for this milestone; all audio mutations still pass through the typed `AudioEngine` facade. Issue #8 may replace this local holder with the versioned application-state layer without changing DSP ownership.
+The primary generator now restores:
+
+- seed;
+- named target;
+- ten user band offsets;
+- master digital level;
+- presentation-only roadmap-panel visibility.
+
+Modified state is derived from restored band offsets. Audio lifecycle is intentionally not persisted; a reload after Running returns Ready and silent.
+
+Sound, private profile, and UI state use separate schemas and localStorage documents defined by `STATE_PERSISTENCE.md`. The sound-reset action resets only sound fields. Personal profile deletion is an explicit separate action and cannot be triggered by reset sound.
+
+All restored/edited sound values still reach audio only through the typed `AudioEngine` facade. Persistence never writes directly into filter/worklet internals.
 
 ## Validation
 
-Issue #7 automated coverage must include:
+Primary-generator automated coverage includes:
 
 - Ready + no autoplay, including reload;
 - named preset selection;
@@ -124,6 +141,9 @@ Issue #7 automated coverage must include:
 - suspended -> explicit Resume UI and immediate Stop path;
 - recoverable processor failure -> actionable Error/Retry UI;
 - unsupported AudioWorklet capability;
-- presence of all ten labelled controls plus disabled width/animation/calibration placeholders.
+- presence of all ten labelled controls plus disabled width/animation/calibration placeholders;
+- sound/UI persistence across reload without autoplay;
+- malformed local sound storage recovering to usable Ready defaults;
+- visually/textually distinct sound reset and private-profile deletion controls.
 
 The dedicated accessibility/responsive audit remains issue #18, but obvious semantic, keyboard, focus, and hit-target requirements are not deferred to it.

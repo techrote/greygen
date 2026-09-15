@@ -108,7 +108,8 @@ h3 {
 .transport-card,
 .generator-card,
 .output-card,
-.future-card {
+.future-card,
+.state-card {
   margin-top: 1rem;
   padding: clamp(1rem, 3vw, 1.5rem);
   border: 1px solid #3f463d;
@@ -446,6 +447,44 @@ input:disabled {
   margin-top: 0.7rem;
 }
 
+.panel-toggle {
+  width: auto;
+}
+
+.profile-count {
+  color: #aeb8a6;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.storage-notice {
+  margin: 0.8rem 0 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(216, 190, 130, 0.32);
+  border-radius: 0.6rem;
+  color: #d8cfb7;
+  background: rgba(90, 76, 42, 0.18);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+button.danger-action {
+  border-color: rgba(214, 154, 143, 0.45);
+  color: #f0c3bb;
+  background: rgba(92, 46, 41, 0.28);
+}
+
+button.danger-action:hover:not(:disabled) {
+  background: rgba(112, 54, 48, 0.42);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -503,8 +542,14 @@ input:disabled {
     grid-template-columns: 1fr;
   }
 
-  .reset-all {
+  .reset-all,
+  .panel-toggle {
     width: 100%;
+  }
+
+  .state-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .band-bank {
