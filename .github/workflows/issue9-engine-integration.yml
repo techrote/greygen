@@ -1,0 +1,139 @@
+name: Issue 9 engine integration
+
+on:
+  push:
+    branches:
+      - issue-9-stereo-width
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: issue-9-stereo-width
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Integrate stereo state through AudioEngine
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/audio/AudioEngine.ts')
+          source = path.read_text()
+
+          source = source.replace(
+              "import {\n  type SpectralPresetId,\n  type SpectrumState,\n  createSpectrumState,\n} from './dsp/spectra'\n",
+              "import {\n  type SpectralPresetId,\n  type SpectrumState,\n  createSpectrumState,\n} from './dsp/spectra'\nimport {\n  DEFAULT_STEREO_WIDTH,\n  type StereoWidthState,\n  createStereoWidthState,\n  stereoWidthToCorrelation,\n} from './dsp/stereo'\n",
+              1,
+          )
+          source = source.replace(
+              "  serializeGainStageState,\n  serializeSpectrumState,\n",
+              "  serializeGainStageState,\n  serializeSpectrumState,\n  serializeStereoWidthState,\n",
+              1,
+          )
+          source = source.replace(
+              "  readonly masterGainDb: number\n  readonly telemetry: TelemetryMessage | null\n",
+              "  readonly masterGainDb: number\n  readonly stereoWidth: number\n  readonly stereoCorrelation: number\n  readonly telemetry: TelemetryMessage | null\n",
+              1,
+          )
+          source = source.replace(
+              "function canonicalGainStage(state: GainStageState): GainStageState {\n  return createGainStageState(\n    state.masterGainDb,\n    state.animationBandOffsetsDb,\n    state.calibrationBandOffsetsDb,\n  )\n}\n",
+              "function canonicalGainStage(state: GainStageState): GainStageState {\n  return createGainStageState(\n    state.masterGainDb,\n    state.animationBandOffsetsDb,\n    state.calibrationBandOffsetsDb,\n  )\n}\n\nfunction canonicalStereoWidth(state: StereoWidthState): StereoWidthState {\n  return createStereoWidthState(state.width)\n}\n",
+              1,
+          )
+          source = source.replace(
+              "  private gainStageValue: GainStageState\n",
+              "  private gainStageValue: GainStageState\n  private stereoWidthValue: StereoWidthState\n",
+              1,
+          )
+          source = source.replace(
+              "    gainStageState: GainStageState = createGainStageState(),\n  ) {",
+              "    gainStageState: GainStageState = createGainStageState(),\n    stereoWidthState: StereoWidthState = createStereoWidthState(\n      DEFAULT_STEREO_WIDTH,\n    ),\n  ) {",
+              1,
+          )
+          source = source.replace(
+              "    this.gainStageValue = canonicalGainStage(gainStageState)\n    const capability",
+              "    this.gainStageValue = canonicalGainStage(gainStageState)\n    this.stereoWidthValue = canonicalStereoWidth(stereoWidthState)\n    const capability",
+              1,
+          )
+          source = source.replace(
+              "      masterGainDb: this.gainStageValue.masterGainDb,\n      telemetry: null,\n",
+              "      masterGainDb: this.gainStageValue.masterGainDb,\n      stereoWidth: this.stereoWidthValue.width,\n      stereoCorrelation: stereoWidthToCorrelation(this.stereoWidthValue.width),\n      telemetry: null,\n",
+          )
+          source = source.replace(
+              "          gainStage: serializeGainStageState(this.gainStageValue),\n",
+              "          gainStage: serializeGainStageState(this.gainStageValue),\n          stereoWidth: serializeStereoWidthState(this.stereoWidthValue),\n",
+              1,
+          )
+          source = source.replace(
+              "        masterGainDb: this.gainStageValue.masterGainDb,\n        telemetry: null,\n      })\n    } catch (error)",
+              "        masterGainDb: this.gainStageValue.masterGainDb,\n        stereoWidth: response.stereoWidth,\n        stereoCorrelation: stereoWidthToCorrelation(response.stereoWidth),\n        telemetry: null,\n      })\n    } catch (error)",
+              1,
+          )
+          anchor = "  async resetSeed(seed: number): Promise<void> {"
+          method = """  async setStereoWidthState(state: StereoWidthState): Promise<void> {
+    const canonical = canonicalStereoWidth(state)
+    this.stereoWidthValue = canonical
+
+    if (!this.node) {
+      this.setSnapshot({
+        ...this.snapshotValue,
+        stereoWidth: canonical.width,
+        stereoCorrelation: stereoWidthToCorrelation(canonical.width),
+      })
+      return
+    }
+
+    const response = await this.request(
+      {
+        version: AUDIO_PROTOCOL_VERSION,
+        type: 'set-stereo-width',
+        requestId: this.allocateRequestId(),
+        stereoWidth: serializeStereoWidthState(canonical),
+      },
+      'ack',
+    )
+    if (response.type !== 'ack' || response.command !== 'set-stereo-width') {
+      throw new Error('Unexpected set-stereo-width acknowledgement')
+    }
+    this.setSnapshot({
+      ...this.snapshotValue,
+      stereoWidth: canonical.width,
+      stereoCorrelation: stereoWidthToCorrelation(canonical.width),
+    })
+  }
+
+  async setStereoWidth(width: number): Promise<void> {
+    await this.setStereoWidthState(createStereoWidthState(width))
+  }
+
+"""
+          if anchor not in source:
+              raise SystemExit('resetSeed anchor missing')
+          source = source.replace(anchor, method + anchor, 1)
+
+          if "serializeStereoWidthState" not in source or "set-stereo-width" not in source:
+              raise SystemExit('stereo integration incomplete')
+          path.write_text(source)
+          PY
+          npm run format
+          npm run lint
+          npm run typecheck
+      - name: Commit engine integration
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/audio/AudioEngine.ts
+          git commit -m "feat: wire stereo width through AudioEngine"
+          git push origin HEAD:issue-9-stereo-width
