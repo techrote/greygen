@@ -319,6 +319,8 @@ input:disabled {
 }
 
 .band-scroll {
+  min-width: 0;
+  border: 0;
   overflow-x: auto;
   margin-top: 1.2rem;
   padding: 0.3rem 0 0.7rem;

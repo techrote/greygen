@@ -283,11 +283,8 @@ export function GeneratorSurface({
           </button>
         </div>
 
-        <div
-          className="band-scroll"
-          tabIndex={0}
-          aria-label="Ten frequency bands"
-        >
+        <fieldset className="band-scroll">
+          <legend className="sr-only">Ten frequency bands</legend>
           <div className="band-bank">
             {GENERATOR_BANDS.map((band) => {
               const valueDb = spectrumState.userBandOffsetsDb[band.index]
@@ -338,7 +335,7 @@ export function GeneratorSurface({
               )
             })}
           </div>
-        </div>
+        </fieldset>
 
         {highBandDegraded ? (
           <p className="runtime-note" role="status">
