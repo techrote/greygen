@@ -1,29 +1,36 @@
 import { describe, expect, it } from 'vitest'
+import { createGainStageState } from '../../src/audio/dsp/gainSafety'
+import { createSpectrumState } from '../../src/audio/dsp/spectra'
+import { createStereoWidthState } from '../../src/audio/dsp/stereo'
 import {
   AUDIO_PROTOCOL_VERSION,
   deserializeGainStageState,
   deserializeSpectrumState,
+  deserializeStereoWidthState,
   parseMainToWorkletMessage,
   parseWorkletToMainMessage,
   serializeGainStageState,
   serializeSpectrumState,
+  serializeStereoWidthState,
 } from '../../src/audio/protocol'
-import { createGainStageState } from '../../src/audio/dsp/gainSafety'
-import { createSpectrumState } from '../../src/audio/dsp/spectra'
 
 describe('AudioWorklet protocol', () => {
-  it('serializes spectrum and gain state through JSON-safe representations', () => {
+  it('serializes spectrum, gain, and stereo state through JSON-safe representations', () => {
     const offsets = new Float64Array(10)
     offsets[2] = 3.5
     offsets[7] = -4.25
     const source = createSpectrumState('pink', offsets)
     const gainStage = createGainStageState(-18, offsets, offsets)
+    const stereoWidth = createStereoWidthState(0.73)
 
     const serializedSpectrum = JSON.parse(
       JSON.stringify(serializeSpectrumState(source)),
     ) as unknown
     const serializedGain = JSON.parse(
       JSON.stringify(serializeGainStageState(gainStage)),
+    ) as unknown
+    const serializedStereo = JSON.parse(
+      JSON.stringify(serializeStereoWidthState(stereoWidth)),
     ) as unknown
     const parsed = parseMainToWorkletMessage({
       version: AUDIO_PROTOCOL_VERSION,
@@ -32,6 +39,7 @@ describe('AudioWorklet protocol', () => {
       seed: 1234,
       spectrum: serializedSpectrum,
       gainStage: serializedGain,
+      stereoWidth: serializedStereo,
     })
 
     expect(parsed?.type).toBe('initialize')
@@ -40,9 +48,10 @@ describe('AudioWorklet protocol', () => {
     }
     expect(deserializeSpectrumState(parsed.spectrum)).toEqual(source)
     expect(deserializeGainStageState(parsed.gainStage)).toEqual(gainStage)
+    expect(deserializeStereoWidthState(parsed.stereoWidth)).toEqual(stereoWidth)
   })
 
-  it('rejects incompatible versions, invalid seeds, malformed spectra, and invalid gain state', () => {
+  it('rejects incompatible versions, invalid seeds, malformed spectra, gain state, and stereo width', () => {
     expect(
       parseMainToWorkletMessage({
         version: 1,
@@ -82,9 +91,33 @@ describe('AudioWorklet protocol', () => {
         },
       }),
     ).toBeNull()
+    expect(
+      parseMainToWorkletMessage({
+        version: AUDIO_PROTOCOL_VERSION,
+        type: 'set-stereo-width',
+        requestId: 5,
+        stereoWidth: { schemaVersion: 1, width: 1.01 },
+      }),
+    ).toBeNull()
   })
 
-  it('validates ready/status and bounded telemetry messages from the processor', () => {
+  it('accepts a bounded stereo-width control message', () => {
+    expect(
+      parseMainToWorkletMessage({
+        version: AUDIO_PROTOCOL_VERSION,
+        type: 'set-stereo-width',
+        requestId: 6,
+        stereoWidth: { schemaVersion: 1, width: 0.42 },
+      }),
+    ).toEqual({
+      version: AUDIO_PROTOCOL_VERSION,
+      type: 'set-stereo-width',
+      requestId: 6,
+      stereoWidth: { schemaVersion: 1, width: 0.42 },
+    })
+  })
+
+  it('validates ready/status and bounded stereo telemetry messages from the processor', () => {
     expect(
       parseWorkletToMainMessage({
         version: AUDIO_PROTOCOL_VERSION,
@@ -93,6 +126,7 @@ describe('AudioWorklet protocol', () => {
         sampleRate: 48_000,
         targetId: 'grey',
         highBandMode: 'degraded-high-shelf',
+        stereoWidth: 0.5,
       }),
     ).toEqual({
       version: AUDIO_PROTOCOL_VERSION,
@@ -101,6 +135,7 @@ describe('AudioWorklet protocol', () => {
       sampleRate: 48_000,
       targetId: 'grey',
       highBandMode: 'degraded-high-shelf',
+      stereoWidth: 0.5,
     })
 
     const telemetry = {
@@ -114,11 +149,16 @@ describe('AudioWorklet protocol', () => {
       safetyPreGainTargetDb: -1,
       masterGainDb: -26.02,
       guardInterventions: 0,
+      stereoWidth: 0.5,
+      stereoCorrelation: Math.SQRT1_2,
     }
     expect(parseWorkletToMainMessage(telemetry)).toEqual(telemetry)
     expect(parseWorkletToMainMessage({ ...telemetry, sequence: 0 })).toBeNull()
     expect(
       parseWorkletToMainMessage({ ...telemetry, peakDbfs: Number.NaN }),
+    ).toBeNull()
+    expect(
+      parseWorkletToMainMessage({ ...telemetry, stereoCorrelation: -0.1 }),
     ).toBeNull()
 
     expect(
@@ -129,6 +169,7 @@ describe('AudioWorklet protocol', () => {
         sampleRate: 48_000,
         targetId: 'grey',
         highBandMode: 'invalid-mode',
+        stereoWidth: 0.5,
         renderedFrames: 128,
       }),
     ).toBeNull()

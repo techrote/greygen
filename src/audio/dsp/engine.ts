@@ -15,6 +15,14 @@ import { gainToDecibels } from './numbers'
 import { Xoshiro128StarStar } from './rng'
 import { OnePoleSmoother } from './smoothing'
 import {
+  DEFAULT_STEREO_WIDTH,
+  STEREO_WIDTH_SMOOTHING_TIME_SECONDS,
+  type StereoWidthState,
+  createStereoWidthState,
+  stereoWidthToCorrelation,
+  stereoWidthToMixAngle,
+} from './stereo'
+import {
   type SpectralPresetId,
   type SpectrumState,
   createSpectrumState,
@@ -30,12 +38,14 @@ export interface GreygenDspEngineOptions {
   readonly seed?: number
   readonly spectrumState?: SpectrumState
   readonly gainStageState?: GainStageState
+  readonly stereoWidthState?: StereoWidthState
 }
 
 export interface GreygenDspResetOptions {
   readonly seed?: number
   readonly spectrumState?: SpectrumState
   readonly gainStageState?: GainStageState
+  readonly stereoWidthState?: StereoWidthState
 }
 
 export interface EngineTelemetry extends MeterSnapshot {
@@ -46,6 +56,8 @@ export interface EngineTelemetry extends MeterSnapshot {
   readonly masterGainLinear: number
   readonly masterGainDb: number
   readonly guardInterventions: number
+  readonly stereoWidth: number
+  readonly stereoCorrelation: number
 }
 
 function canonicalSpectrumState(state: SpectrumState): SpectrumState {
@@ -60,35 +72,49 @@ function canonicalGainStageState(state: GainStageState): GainStageState {
   )
 }
 
+function canonicalStereoWidthState(state: StereoWidthState): StereoWidthState {
+  return createStereoWidthState(state.width)
+}
+
 export class GreygenDspEngine {
   readonly sampleRate: number
 
-  private readonly filterBank: TenBandFilterBank
-  private readonly scratchBands = new Float64Array(BAND_COUNT)
+  private readonly filterBankA: TenBandFilterBank
+  private readonly filterBankB: TenBandFilterBank
+  private readonly scratchBandsA = new Float64Array(BAND_COUNT)
+  private readonly scratchBandsB = new Float64Array(BAND_COUNT)
   private readonly currentBandGains = new Float64Array(BAND_COUNT)
   private readonly bandGainSmoothers: OnePoleSmoother[]
   private readonly residualGainSmoother: OnePoleSmoother
   private readonly safetyPreGainSmoother: OnePoleSmoother
   private readonly masterGainSmoother: OnePoleSmoother
+  private readonly stereoWidthSmoother: OnePoleSmoother
   private readonly meter = new MeterAccumulator()
-  private generator: Xoshiro128StarStar
+  private generatorA: Xoshiro128StarStar
+  private generatorB: Xoshiro128StarStar
   private seedValue: number
   private spectrumStateValue: SpectrumState
   private gainStageStateValue: GainStageState
+  private stereoWidthStateValue: StereoWidthState
   private safetyPreGainTargetValue: number
   private guardInterventionsValue = 0
 
   constructor(options: GreygenDspEngineOptions) {
     this.sampleRate = options.sampleRate
-    this.filterBank = new TenBandFilterBank(options.sampleRate)
+    this.filterBankA = new TenBandFilterBank(options.sampleRate)
+    this.filterBankB = new TenBandFilterBank(options.sampleRate)
     this.seedValue = options.seed ?? DEFAULT_ENGINE_SEED
-    this.generator = new Xoshiro128StarStar(this.seedValue)
+    this.generatorA = new Xoshiro128StarStar(this.seedValue, 0)
+    this.generatorB = new Xoshiro128StarStar(this.seedValue, 1)
     this.spectrumStateValue = options.spectrumState
       ? canonicalSpectrumState(options.spectrumState)
       : createSpectrumState(DEFAULT_ENGINE_PRESET)
     this.gainStageStateValue = options.gainStageState
       ? canonicalGainStageState(options.gainStageState)
       : createGainStageState()
+    this.stereoWidthStateValue = options.stereoWidthState
+      ? canonicalStereoWidthState(options.stereoWidthState)
+      : createStereoWidthState(DEFAULT_STEREO_WIDTH)
 
     const targets = this.resolveTargets()
     this.bandGainSmoothers = Array.from(
@@ -119,6 +145,11 @@ export class GreygenDspEngine {
     this.masterGainSmoother.setTarget(
       masterGainLinear(this.gainStageStateValue),
     )
+    this.stereoWidthSmoother = new OnePoleSmoother(
+      this.stereoWidthStateValue.width,
+      this.sampleRate,
+      STEREO_WIDTH_SMOOTHING_TIME_SECONDS,
+    )
   }
 
   get seed(): number {
@@ -133,12 +164,16 @@ export class GreygenDspEngine {
     return this.gainStageStateValue
   }
 
+  get stereoWidthState(): StereoWidthState {
+    return this.stereoWidthStateValue
+  }
+
   get targetId(): SpectralPresetId {
     return this.spectrumStateValue.targetId
   }
 
   get highBandMode(): HighBandMode {
-    return this.filterBank.highBandMode
+    return this.filterBankA.highBandMode
   }
 
   get safetyPreGainTargetLinear(): number {
@@ -153,10 +188,20 @@ export class GreygenDspEngine {
     return this.masterGainSmoother.current
   }
 
+  get appliedStereoWidth(): number {
+    return this.stereoWidthSmoother.current
+  }
+
+  get targetStereoCorrelation(): number {
+    return stereoWidthToCorrelation(this.stereoWidthStateValue.width)
+  }
+
   setSeed(seed: number): void {
-    const nextGenerator = new Xoshiro128StarStar(seed)
+    const nextGeneratorA = new Xoshiro128StarStar(seed, 0)
+    const nextGeneratorB = new Xoshiro128StarStar(seed, 1)
     this.seedValue = seed
-    this.generator = nextGenerator
+    this.generatorA = nextGeneratorA
+    this.generatorB = nextGeneratorB
   }
 
   setSpectrumState(state: SpectrumState): void {
@@ -169,21 +214,33 @@ export class GreygenDspEngine {
     this.updateGainTargets()
   }
 
+  setStereoWidthState(state: StereoWidthState): void {
+    this.stereoWidthStateValue = canonicalStereoWidthState(state)
+    this.stereoWidthSmoother.setTarget(this.stereoWidthStateValue.width)
+  }
+
   reset(options: GreygenDspResetOptions = {}): void {
     const nextSeed = options.seed ?? this.seedValue
-    const nextGenerator = new Xoshiro128StarStar(nextSeed)
+    const nextGeneratorA = new Xoshiro128StarStar(nextSeed, 0)
+    const nextGeneratorB = new Xoshiro128StarStar(nextSeed, 1)
     const nextSpectrum = options.spectrumState
       ? canonicalSpectrumState(options.spectrumState)
       : this.spectrumStateValue
     const nextGainStage = options.gainStageState
       ? canonicalGainStageState(options.gainStageState)
       : this.gainStageStateValue
+    const nextStereoWidth = options.stereoWidthState
+      ? canonicalStereoWidthState(options.stereoWidthState)
+      : this.stereoWidthStateValue
 
     this.seedValue = nextSeed
-    this.generator = nextGenerator
+    this.generatorA = nextGeneratorA
+    this.generatorB = nextGeneratorB
     this.spectrumStateValue = nextSpectrum
     this.gainStageStateValue = nextGainStage
-    this.filterBank.reset()
+    this.stereoWidthStateValue = nextStereoWidth
+    this.filterBankA.reset()
+    this.filterBankB.reset()
     this.meter.reset()
     this.guardInterventionsValue = 0
 
@@ -199,6 +256,7 @@ export class GreygenDspEngine {
     )
     this.masterGainSmoother.reset(0)
     this.masterGainSmoother.setTarget(masterGainLinear(nextGainStage))
+    this.stereoWidthSmoother.reset(nextStereoWidth.width)
   }
 
   renderMono(output: Float32Array): void {
@@ -207,17 +265,12 @@ export class GreygenDspEngine {
         this.currentBandGains[band] = this.bandGainSmoothers[band].next()
       }
       const residualGain = this.residualGainSmoother.next()
-      const source =
-        this.generator.nextBipolar() * SOURCE_NORMALIZATION_GAIN_LINEAR
-      const residual = this.filterBank.processBandComponents(
-        source,
-        this.scratchBands,
+      const shaped = this.nextShapedSample(
+        this.generatorA,
+        this.filterBankA,
+        this.scratchBandsA,
+        residualGain,
       )
-
-      let shaped = residual * residualGain
-      for (let band = 0; band < BAND_COUNT; band += 1) {
-        shaped += this.scratchBands[band] * this.currentBandGains[band]
-      }
 
       const safetyGain = this.safetyPreGainSmoother.next()
       const masterGain = this.masterGainSmoother.next()
@@ -232,10 +285,62 @@ export class GreygenDspEngine {
     }
   }
 
+  renderStereo(left: Float32Array, right: Float32Array): void {
+    if (left.length !== right.length) {
+      throw new RangeError(
+        'left and right stereo buffers must have equal length',
+      )
+    }
+
+    for (let frame = 0; frame < left.length; frame += 1) {
+      for (let band = 0; band < BAND_COUNT; band += 1) {
+        this.currentBandGains[band] = this.bandGainSmoothers[band].next()
+      }
+      const residualGain = this.residualGainSmoother.next()
+      const shapedA = this.nextShapedSample(
+        this.generatorA,
+        this.filterBankA,
+        this.scratchBandsA,
+        residualGain,
+      )
+      const shapedB = this.nextShapedSample(
+        this.generatorB,
+        this.filterBankB,
+        this.scratchBandsB,
+        residualGain,
+      )
+
+      const width = this.stereoWidthSmoother.next()
+      const angle = stereoWidthToMixAngle(width)
+      const common = Math.cos(angle)
+      const difference = Math.sin(angle)
+      const mixedLeft = common * shapedA + difference * shapedB
+      const mixedRight = common * shapedA - difference * shapedB
+
+      const safetyGain = this.safetyPreGainSmoother.next()
+      const masterGain = this.masterGainSmoother.next()
+      const leftPreGuard = mixedLeft * safetyGain * masterGain
+      const rightPreGuard = mixedRight * safetyGain * masterGain
+      const guardedLeft = applyFinalGuard(leftPreGuard)
+      const guardedRight = applyFinalGuard(rightPreGuard)
+      if (guardedLeft !== leftPreGuard) {
+        this.guardInterventionsValue += 1
+      }
+      if (guardedRight !== rightPreGuard) {
+        this.guardInterventionsValue += 1
+      }
+
+      left[frame] = guardedLeft
+      right[frame] = guardedRight
+      this.meter.addStereoFrame(guardedLeft, guardedRight)
+    }
+  }
+
   consumeTelemetry(): EngineTelemetry {
     const meters = this.meter.consume()
     const safetyLinear = this.safetyPreGainSmoother.current
     const masterLinear = this.masterGainSmoother.current
+    const stereoWidth = this.stereoWidthSmoother.current
     const result: EngineTelemetry = {
       ...meters,
       safetyPreGainLinear: safetyLinear,
@@ -245,9 +350,26 @@ export class GreygenDspEngine {
       masterGainLinear: masterLinear,
       masterGainDb: gainToDecibels(masterLinear),
       guardInterventions: this.guardInterventionsValue,
+      stereoWidth,
+      stereoCorrelation: stereoWidthToCorrelation(stereoWidth),
     }
     this.guardInterventionsValue = 0
     return result
+  }
+
+  private nextShapedSample(
+    generator: Xoshiro128StarStar,
+    filterBank: TenBandFilterBank,
+    scratchBands: Float64Array,
+    residualGain: number,
+  ): number {
+    const source = generator.nextBipolar() * SOURCE_NORMALIZATION_GAIN_LINEAR
+    const residual = filterBank.processBandComponents(source, scratchBands)
+    let shaped = residual * residualGain
+    for (let band = 0; band < BAND_COUNT; band += 1) {
+      shaped += scratchBands[band] * this.currentBandGains[band]
+    }
+    return shaped
   }
 
   private resolveTargets() {

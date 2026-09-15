@@ -26,6 +26,15 @@ export class MeterAccumulator {
     this.frameCountValue += 1
   }
 
+  addStereoFrame(left: number, right: number): void {
+    const peak = Math.max(Math.abs(left), Math.abs(right))
+    if (peak > this.peakAbsoluteValue) {
+      this.peakAbsoluteValue = peak
+    }
+    this.sumSquaresValue += (left * left + right * right) * 0.5
+    this.frameCountValue += 1
+  }
+
   snapshot(): MeterSnapshot {
     const rmsLinear =
       this.frameCountValue > 0

@@ -7,6 +7,12 @@ import {
   createSpectrumState,
 } from './dsp/spectra'
 import {
+  DEFAULT_STEREO_WIDTH,
+  type StereoWidthState,
+  createStereoWidthState,
+  stereoWidthToCorrelation,
+} from './dsp/stereo'
+import {
   AUDIO_PROTOCOL_VERSION,
   type MainToWorkletMessage,
   type SerializedSpectrumState,
@@ -17,6 +23,7 @@ import {
   parseWorkletToMainMessage,
   serializeGainStageState,
   serializeSpectrumState,
+  serializeStereoWidthState,
 } from './protocol'
 
 export const DEFAULT_WORKLET_REQUEST_TIMEOUT_MS = 3000
@@ -61,6 +68,8 @@ export interface AudioEngineSnapshot {
   readonly targetId: SpectralPresetId
   readonly highBandMode: HighBandMode | null
   readonly masterGainDb: number
+  readonly stereoWidth: number
+  readonly stereoCorrelation: number
   readonly telemetry: TelemetryMessage | null
 }
 
@@ -195,6 +204,10 @@ function canonicalGainStage(state: GainStageState): GainStageState {
   )
 }
 
+function canonicalStereoWidth(state: StereoWidthState): StereoWidthState {
+  return createStereoWidthState(state.width)
+}
+
 export class AudioEngine {
   private snapshotValue: AudioEngineSnapshot
   private readonly listeners = new Set<SnapshotListener>()
@@ -206,6 +219,7 @@ export class AudioEngine {
   private seedValue: number
   private spectrumValue: SerializedSpectrumState
   private gainStageValue: GainStageState
+  private stereoWidthValue: StereoWidthState
 
   constructor(
     private readonly runtime: AudioEngineRuntime,
@@ -213,6 +227,9 @@ export class AudioEngine {
     seed = DEFAULT_ENGINE_SEED,
     spectrumState: SpectrumState = createSpectrumState(DEFAULT_ENGINE_PRESET),
     gainStageState: GainStageState = createGainStageState(),
+    stereoWidthState: StereoWidthState = createStereoWidthState(
+      DEFAULT_STEREO_WIDTH,
+    ),
   ) {
     if (!isAudioSeed(seed)) {
       throw new RangeError('seed must be an unsigned 32-bit integer')
@@ -221,6 +238,7 @@ export class AudioEngine {
     this.seedValue = seed
     this.spectrumValue = canonicalSpectrum(spectrumState)
     this.gainStageValue = canonicalGainStage(gainStageState)
+    this.stereoWidthValue = canonicalStereoWidth(stereoWidthState)
     const capability = initialCapability(runtime)
     this.snapshotValue = Object.freeze({
       status: capability === 'supported' ? 'ready' : 'unsupported',
@@ -230,6 +248,8 @@ export class AudioEngine {
       targetId: this.spectrumValue.targetId,
       highBandMode: null,
       masterGainDb: this.gainStageValue.masterGainDb,
+      stereoWidth: this.stereoWidthValue.width,
+      stereoCorrelation: stereoWidthToCorrelation(this.stereoWidthValue.width),
       telemetry: null,
     })
   }
@@ -268,6 +288,8 @@ export class AudioEngine {
       targetId: this.spectrumValue.targetId,
       highBandMode: null,
       masterGainDb: this.gainStageValue.masterGainDb,
+      stereoWidth: this.stereoWidthValue.width,
+      stereoCorrelation: stereoWidthToCorrelation(this.stereoWidthValue.width),
       telemetry: null,
     })
 
@@ -332,6 +354,7 @@ export class AudioEngine {
           seed: this.seedValue,
           spectrum: this.spectrumValue,
           gainStage: serializeGainStageState(this.gainStageValue),
+          stereoWidth: serializeStereoWidthState(this.stereoWidthValue),
         },
         'ready',
       )
@@ -352,6 +375,8 @@ export class AudioEngine {
         targetId: response.targetId,
         highBandMode: response.highBandMode,
         masterGainDb: this.gainStageValue.masterGainDb,
+        stereoWidth: response.stereoWidth,
+        stereoCorrelation: stereoWidthToCorrelation(response.stereoWidth),
         telemetry: null,
       })
     } catch (error) {
@@ -418,6 +443,8 @@ export class AudioEngine {
       targetId: this.spectrumValue.targetId,
       highBandMode: null,
       masterGainDb: this.gainStageValue.masterGainDb,
+      stereoWidth: this.stereoWidthValue.width,
+      stereoCorrelation: stereoWidthToCorrelation(this.stereoWidthValue.width),
       telemetry: null,
     })
   }
@@ -488,6 +515,42 @@ export class AudioEngine {
         this.gainStageValue.calibrationBandOffsetsDb,
       ),
     )
+  }
+
+  async setStereoWidthState(state: StereoWidthState): Promise<void> {
+    const canonical = canonicalStereoWidth(state)
+    this.stereoWidthValue = canonical
+
+    if (!this.node) {
+      this.setSnapshot({
+        ...this.snapshotValue,
+        stereoWidth: canonical.width,
+        stereoCorrelation: stereoWidthToCorrelation(canonical.width),
+      })
+      return
+    }
+
+    const response = await this.request(
+      {
+        version: AUDIO_PROTOCOL_VERSION,
+        type: 'set-stereo-width',
+        requestId: this.allocateRequestId(),
+        stereoWidth: serializeStereoWidthState(canonical),
+      },
+      'ack',
+    )
+    if (response.type !== 'ack' || response.command !== 'set-stereo-width') {
+      throw new Error('Unexpected set-stereo-width acknowledgement')
+    }
+    this.setSnapshot({
+      ...this.snapshotValue,
+      stereoWidth: canonical.width,
+      stereoCorrelation: stereoWidthToCorrelation(canonical.width),
+    })
+  }
+
+  async setStereoWidth(width: number): Promise<void> {
+    await this.setStereoWidthState(createStereoWidthState(width))
   }
 
   async resetSeed(seed: number): Promise<void> {
@@ -617,7 +680,12 @@ export class AudioEngine {
     }
 
     if (message.type === 'telemetry') {
-      this.setSnapshot({ ...this.snapshotValue, telemetry: message })
+      this.setSnapshot({
+        ...this.snapshotValue,
+        stereoWidth: message.stereoWidth,
+        stereoCorrelation: message.stereoCorrelation,
+        telemetry: message,
+      })
       return
     }
 
@@ -734,6 +802,8 @@ export class AudioEngine {
       targetId: this.spectrumValue.targetId,
       highBandMode: null,
       masterGainDb: this.gainStageValue.masterGainDb,
+      stereoWidth: this.stereoWidthValue.width,
+      stereoCorrelation: stereoWidthToCorrelation(this.stereoWidthValue.width),
       telemetry: null,
     })
   }

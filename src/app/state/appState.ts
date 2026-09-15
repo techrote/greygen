@@ -16,9 +16,15 @@ import {
   type SpectrumState,
   createSpectrumState,
 } from '../../audio/dsp/spectra'
+import {
+  DEFAULT_STEREO_WIDTH,
+  STEREO_WIDTH_MAX,
+  STEREO_WIDTH_MIN,
+  createStereoWidthState,
+} from '../../audio/dsp/stereo'
 
 export const APP_STORAGE_VERSION = 1 as const
-export const SOUND_STATE_SCHEMA_VERSION = 1 as const
+export const SOUND_STATE_SCHEMA_VERSION = 2 as const
 export const PROFILE_STATE_SCHEMA_VERSION = 1 as const
 export const UI_STATE_SCHEMA_VERSION = 1 as const
 export const PROFILE_RECORD_SCHEMA_VERSION = 1 as const
@@ -33,6 +39,7 @@ export interface SoundState {
   readonly targetId: SpectralPresetId
   readonly userBandOffsetsDb: readonly number[]
   readonly masterGainDb: number
+  readonly stereoWidth: number
 }
 
 export type ProfileKind = 'calibration' | 'playback'
@@ -85,6 +92,14 @@ interface LegacySoundStateV0 {
   readonly masterDb?: unknown
 }
 
+interface LegacySoundStateV1 {
+  readonly schemaVersion: 1
+  readonly seed?: unknown
+  readonly targetId?: unknown
+  readonly userBandOffsetsDb?: unknown
+  readonly masterGainDb?: unknown
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -118,6 +133,7 @@ function canonicalSoundState(
   targetId: SpectralPresetId,
   userBandOffsetsDb: ArrayLike<number>,
   masterGainDb: number,
+  stereoWidth: number,
 ): SoundState {
   const spectrum = createSpectrumState(targetId, userBandOffsetsDb)
   if (
@@ -132,6 +148,7 @@ function canonicalSoundState(
   if (!isAudioSeed(seed)) {
     throw new RangeError('seed must be an unsigned 32-bit integer')
   }
+  const stereo = createStereoWidthState(stereoWidth)
 
   return Object.freeze({
     schemaVersion: SOUND_STATE_SCHEMA_VERSION,
@@ -139,6 +156,7 @@ function canonicalSoundState(
     targetId: spectrum.targetId,
     userBandOffsetsDb: freezeNumbers(spectrum.userBandOffsetsDb),
     masterGainDb,
+    stereoWidth: stereo.width,
   })
 }
 
@@ -148,6 +166,7 @@ export function createDefaultSoundState(): SoundState {
     DEFAULT_ENGINE_PRESET,
     new Float64Array(BAND_COUNT),
     DEFAULT_MASTER_GAIN_DB,
+    DEFAULT_STEREO_WIDTH,
   )
 }
 
@@ -156,12 +175,14 @@ export function createSoundState(input: {
   readonly targetId: SpectralPresetId
   readonly userBandOffsetsDb: ArrayLike<number>
   readonly masterGainDb: number
+  readonly stereoWidth?: number
 }): SoundState {
   return canonicalSoundState(
     input.seed,
     input.targetId,
     input.userBandOffsetsDb,
     input.masterGainDb,
+    input.stereoWidth ?? DEFAULT_STEREO_WIDTH,
   )
 }
 
@@ -246,29 +267,69 @@ function normalizeSoundRecord(
     )
   }
 
+  let stereoWidth = defaults.stereoWidth
+  if (
+    typeof value.stereoWidth === 'number' &&
+    Number.isFinite(value.stereoWidth)
+  ) {
+    stereoWidth = clamp(value.stereoWidth, STEREO_WIDTH_MIN, STEREO_WIDTH_MAX)
+    if (stereoWidth !== value.stereoWidth) {
+      messages.push('Stereo width was clamped to the supported range.')
+    }
+  } else if (value.stereoWidth !== undefined) {
+    messages.push('Invalid stereo width was replaced with the Normal default.')
+  }
+
   return {
-    state: canonicalSoundState(seed, targetId, offsets, masterGainDb),
+    state: canonicalSoundState(
+      seed,
+      targetId,
+      offsets,
+      masterGainDb,
+      stereoWidth,
+    ),
     code: messages.length === 0 ? 'ok' : 'recovered',
     messages: Object.freeze(messages),
+  }
+}
+
+export function migrateSoundStateV1(
+  legacy: LegacySoundStateV1,
+): StateParseResult<SoundState> {
+  const normalized = normalizeSoundRecord({
+    schemaVersion: SOUND_STATE_SCHEMA_VERSION,
+    seed: legacy.seed,
+    targetId: legacy.targetId,
+    userBandOffsetsDb: legacy.userBandOffsetsDb,
+    masterGainDb: legacy.masterGainDb,
+    stereoWidth: 0,
+  })
+  return {
+    state: normalized.state,
+    code: 'migrated',
+    messages: Object.freeze([
+      'Sound state schema v1 was migrated to v2 with Mono width to preserve the previous renderer.',
+      ...normalized.messages,
+    ]),
   }
 }
 
 export function migrateSoundStateV0(
   legacy: LegacySoundStateV0,
 ): StateParseResult<SoundState> {
-  const migratedRecord: Record<string, unknown> = {
+  const normalized = normalizeSoundRecord({
     schemaVersion: SOUND_STATE_SCHEMA_VERSION,
     seed: legacy.seed,
     targetId: legacy.preset,
     userBandOffsetsDb: legacy.bandsDb,
     masterGainDb: legacy.masterDb,
-  }
-  const normalized = normalizeSoundRecord(migratedRecord)
+    stereoWidth: 0,
+  })
   return {
     state: normalized.state,
     code: 'migrated',
     messages: Object.freeze([
-      'Sound state schema v0 was migrated to schema v1.',
+      'Sound state schema v0 was migrated to v2 with Mono width to preserve the previous renderer.',
       ...normalized.messages,
     ]),
   }
@@ -308,6 +369,9 @@ export function parseSoundState(raw: string): StateParseResult<SoundState> {
 
   if (value.schemaVersion === 0) {
     return migrateSoundStateV0(value as unknown as LegacySoundStateV0)
+  }
+  if (value.schemaVersion === 1) {
+    return migrateSoundStateV1(value as unknown as LegacySoundStateV1)
   }
   if (value.schemaVersion > SOUND_STATE_SCHEMA_VERSION) {
     return {
