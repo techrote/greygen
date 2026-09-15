@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  ANIMATION_MODES,
+  type ANIMATION_MODES,
   ANIMATION_DEPTH_MAX_DB,
   ANIMATION_SPEED_MAX,
   SpectralAnimation,
