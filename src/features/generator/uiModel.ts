@@ -25,15 +25,16 @@ function formatFrequency(frequencyHz: number): string {
   return `${Math.round(frequencyHz)}`
 }
 
-export const GENERATOR_BANDS: readonly GeneratorBandDefinition[] = Object.freeze(
-  NOMINAL_BAND_CENTERS_HZ.map((frequencyHz, index) =>
-    Object.freeze({
-      index,
-      frequencyHz,
-      label: formatFrequency(frequencyHz),
-    }),
-  ),
-)
+export const GENERATOR_BANDS: readonly GeneratorBandDefinition[] =
+  Object.freeze(
+    NOMINAL_BAND_CENTERS_HZ.map((frequencyHz, index) =>
+      Object.freeze({
+        index,
+        frequencyHz,
+        label: formatFrequency(frequencyHz),
+      }),
+    ),
+  )
 
 if (GENERATOR_BANDS.length !== BAND_COUNT) {
   throw new Error('generator band model must match DSP band count')

@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
 
-test('loads the primary generator Ready and never auto-starts', async ({ page }) => {
+test('loads the primary generator Ready and never auto-starts', async ({
+  page,
+}) => {
   await page.goto('/')
 
   await expect(page).toHaveTitle('Greygen')
@@ -96,13 +98,19 @@ test('starts real worklet audio, receives meters, discloses high-band mode, and 
   expect(pageErrors).toEqual([])
 })
 
-test('browser suspension exposes Stop and explicit Resume', async ({ page }) => {
+test('browser suspension exposes Stop and explicit Resume', async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     const OriginalAudioContext = globalThis.AudioContext
     const capturedContexts: AudioContext[] = []
     const WrappedAudioContext = new Proxy(OriginalAudioContext, {
       construct(target, args, newTarget) {
-        const context = Reflect.construct(target, args, newTarget) as AudioContext
+        const context = Reflect.construct(
+          target,
+          args,
+          newTarget,
+        ) as AudioContext
         capturedContexts.push(context)
         return context
       },
@@ -136,7 +144,9 @@ test('browser suspension exposes Stop and explicit Resume', async ({ page }) => 
   await expect(page.getByText('Running', { exact: true })).toBeVisible()
 })
 
-test('processor construction failure is visible and offers Retry', async ({ page }) => {
+test('processor construction failure is visible and offers Retry', async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     class BrokenAudioWorkletNode {
       constructor() {

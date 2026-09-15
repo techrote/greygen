@@ -148,8 +148,7 @@ export function GeneratorSurface({
     audioSnapshot.status === 'starting' ||
     audioSnapshot.status === 'unsupported'
   const controlsDisabled = !engineReady
-  const highBandDegraded =
-    audioSnapshot.highBandMode === 'degraded-high-shelf'
+  const highBandDegraded = audioSnapshot.highBandMode === 'degraded-high-shelf'
 
   const handlePresetChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     if (isPresetId(event.currentTarget.value)) {
@@ -170,7 +169,10 @@ export function GeneratorSurface({
         </p>
       </header>
 
-      <section className="transport-card" aria-labelledby="audio-status-heading">
+      <section
+        className="transport-card"
+        aria-labelledby="audio-status-heading"
+      >
         <div className="status-row">
           <div>
             <p className="label" id="audio-status-heading">
@@ -281,7 +283,11 @@ export function GeneratorSurface({
           </button>
         </div>
 
-        <div className="band-scroll" tabIndex={0} aria-label="Ten frequency bands">
+        <div
+          className="band-scroll"
+          tabIndex={0}
+          aria-label="Ten frequency bands"
+        >
           <div className="band-bank">
             {GENERATOR_BANDS.map((band) => {
               const valueDb = spectrumState.userBandOffsetsDb[band.index]
@@ -289,7 +295,9 @@ export function GeneratorSurface({
               return (
                 <div
                   className="band-control"
-                  data-degraded={isHighBand && highBandDegraded ? 'true' : 'false'}
+                  data-degraded={
+                    isHighBand && highBandDegraded ? 'true' : 'false'
+                  }
                   key={band.frequencyHz}
                 >
                   <label htmlFor={`band-${band.index}`}>{band.label}</label>
@@ -305,7 +313,10 @@ export function GeneratorSurface({
                     aria-label={bandAccessibleName(band, valueDb)}
                     aria-valuetext={formatSignedDb(valueDb)}
                     onChange={(event) =>
-                      onBandChange(band.index, Number(event.currentTarget.value))
+                      onBandChange(
+                        band.index,
+                        Number(event.currentTarget.value),
+                      )
                     }
                   />
                   <output htmlFor={`band-${band.index}`}>
@@ -362,7 +373,9 @@ export function GeneratorSurface({
           disabled={controlsDisabled}
           aria-label={`Master digital level, ${formatSignedDb(audioSnapshot.masterGainDb)}`}
           aria-valuetext={formatSignedDb(audioSnapshot.masterGainDb)}
-          onChange={(event) => onMasterChange(Number(event.currentTarget.value))}
+          onChange={(event) =>
+            onMasterChange(Number(event.currentTarget.value))
+          }
         />
         <div className="range-scale" aria-hidden="true">
           <span>-60 dB</span>
@@ -401,7 +414,9 @@ export function GeneratorSurface({
             >
               <option value="off">Off — coming in issue #10</option>
             </select>
-            <p>No fake motion: deterministic bounded animation is not active yet.</p>
+            <p>
+              No fake motion: deterministic bounded animation is not active yet.
+            </p>
           </fieldset>
           <div className="calibration-placeholder">
             <h3>Playback calibration</h3>
