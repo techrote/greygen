@@ -33,7 +33,7 @@ npm ci
 npm run dev
 ```
 
-The development server prints the local URL. Audio never starts on page load: choose **Start audio** explicitly to create/resume the browser audio context and initialize the worklet. The worklet owns smoothed master gain, deterministic safety pre-gain, a final digital overflow guard, and bounded-rate post-guard peak/RMS telemetry.
+The development server prints the local URL. The primary generator now exposes White/Pink/Brown/Grey selection, ten keyboard-operable band offsets, master digital level, lifecycle transport, digital Peak/RMS/headroom telemetry, and explicit runtime 16 kHz degradation state. Audio never starts on page load: choose **Start audio** explicitly to create/resume the browser audio context and initialize the worklet. Stereo width, deterministic animation, and playback calibration remain visibly disabled until their owning roadmap issues implement real behavior.
 
 ### Verification commands
 
@@ -68,9 +68,10 @@ Start with:
 5. `docs/RAG/SPECTRAL_TARGETS.md`
 6. `docs/RAG/AUDIO_LIFECYCLE.md`
 7. `docs/RAG/GAIN_SAFETY.md`
-8. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
-9. `docs/RAG/UX_STATE.md`
-10. `docs/RAG/AGENT_PLAYBOOK.md`
-11. `docs/RAG/ROADMAP.md`
+8. `docs/RAG/GENERATOR_UI.md`
+9. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
+10. `docs/RAG/UX_STATE.md`
+11. `docs/RAG/AGENT_PLAYBOOK.md`
+12. `docs/RAG/ROADMAP.md`
 
 The GitHub issues are executable work packets. Each issue must be completed end-to-end: implementation, tests, documentation updates, PR, automated checks, review of failures, and merge only after required checks pass.
