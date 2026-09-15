@@ -28,6 +28,7 @@ export interface StoragePort {
 }
 
 export type StateDomain = 'manifest' | 'sound' | 'profiles' | 'ui' | 'storage'
+type PersistedDomain = Exclude<StateDomain, 'manifest' | 'storage'>
 
 export type StorageDiagnosticCode =
   | StateParseCode
@@ -140,7 +141,7 @@ function parseManifest(raw: string): ManifestParseResult {
 }
 
 function parseDiagnostics(
-  domain: Exclude<StateDomain, 'manifest' | 'storage'>,
+  domain: PersistedDomain,
   code: StateParseCode,
   messages: readonly string[],
 ): readonly StorageDiagnostic[] {
@@ -153,10 +154,16 @@ function parseDiagnostics(
 }
 
 export class AppStateRepository {
+  private readonly writeProtection = new Map<
+    PersistedDomain,
+    'future-version' | 'future-storage-version'
+  >()
+
   constructor(private readonly storage: StoragePort) {}
 
   load(): LoadedAppState {
     const diagnostics: StorageDiagnostic[] = []
+    this.writeProtection.clear()
 
     const manifestRead = this.read(STORAGE_MANIFEST_KEY, 'manifest')
     diagnostics.push(...manifestRead.diagnostics)
@@ -164,6 +171,7 @@ export class AppStateRepository {
       const manifest = parseManifest(manifestRead.value)
       diagnostics.push(...manifest.diagnostics)
       if (manifest.future) {
+        this.protectAllDomains('future-storage-version')
         return Object.freeze({
           sound: createDefaultSoundState(),
           profiles: createDefaultProfileState(),
@@ -203,6 +211,10 @@ export class AppStateRepository {
           code: 'ok' as const,
           messages: Object.freeze([]),
         }
+
+    this.protectFutureDomain('sound', sound.code)
+    this.protectFutureDomain('profiles', profiles.code)
+    this.protectFutureDomain('ui', ui.code)
 
     diagnostics.push(
       ...parseDiagnostics('sound', sound.code, sound.messages),
@@ -246,6 +258,23 @@ export class AppStateRepository {
     return this.saveProfiles(createDefaultProfileState())
   }
 
+  private protectAllDomains(
+    code: 'future-version' | 'future-storage-version',
+  ): void {
+    this.writeProtection.set('sound', code)
+    this.writeProtection.set('profiles', code)
+    this.writeProtection.set('ui', code)
+  }
+
+  private protectFutureDomain(
+    domain: PersistedDomain,
+    code: StateParseCode,
+  ): void {
+    if (code === 'future-version') {
+      this.writeProtection.set(domain, 'future-version')
+    }
+  }
+
   private read(
     key: string,
     domain: StateDomain,
@@ -275,8 +304,24 @@ export class AppStateRepository {
   private writeDomain(
     key: string,
     value: string,
-    domain: Exclude<StateDomain, 'manifest' | 'storage'>,
+    domain: PersistedDomain,
   ): PersistenceResult {
+    const protection = this.writeProtection.get(domain)
+    if (protection) {
+      const scope =
+        protection === 'future-storage-version'
+          ? 'storage format'
+          : `${domain} state schema`
+      return Object.freeze({
+        ok: false,
+        diagnostic: diagnostic(
+          domain,
+          protection,
+          `The stored ${scope} is newer than this Greygen build and was not overwritten.`,
+        ),
+      })
+    }
+
     try {
       this.storage.setItem(key, value)
       this.storage.setItem(STORAGE_MANIFEST_KEY, serializeStorageManifest())
