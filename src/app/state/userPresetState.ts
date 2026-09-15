@@ -32,10 +32,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function safePresetNameCharacter(character: string): string {
+  const code = character.charCodeAt(0)
+  if (code < 32 || code === 127 || character === '<' || character === '>') {
+    return ' '
+  }
+  return character
+}
+
 export function sanitizeUserPresetName(input: string): string {
-  return input
-    .normalize('NFKC')
-    .replace(/[\u0000-\u001f\u007f<>]/g, ' ')
+  return Array.from(input.normalize('NFKC'), safePresetNameCharacter)
+    .join('')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, USER_PRESET_NAME_MAX_LENGTH)
