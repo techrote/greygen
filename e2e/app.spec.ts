@@ -13,6 +13,8 @@ test('loads the primary generator Ready and never auto-starts', async ({
   await expect(page.getByRole('button', { name: 'Start audio' })).toBeEnabled()
   await expect(page.locator('#spectral-preset')).toHaveValue('grey')
   await expect(page.locator('.band-control')).toHaveCount(10)
+  await expect(page.locator('#stereo-width')).toHaveValue('0.5')
+  await expect(page.getByText('Normal', { exact: true })).toBeVisible()
   await expect(
     page.locator('dl[aria-label="Digital output meters"]'),
   ).toContainText('— dBFS')
@@ -22,7 +24,7 @@ test('loads the primary generator Ready and never auto-starts', async ({
   await expect(page.getByRole('button', { name: 'Start audio' })).toBeEnabled()
 })
 
-test('preset, keyboard band, reset, and master controls update without starting audio', async ({
+test('preset, keyboard band, master, and stereo controls update without starting audio', async ({
   page,
 }) => {
   await page.goto('/')
@@ -50,6 +52,15 @@ test('preset, keyboard band, reset, and master controls update without starting 
   const after = Number(await master.inputValue())
   expect(after).toBeGreaterThan(before)
 
+  const width = page.locator('#stereo-width')
+  await width.focus()
+  await page.keyboard.press('ArrowLeft')
+  await expect(width).toHaveValue('0.49')
+  await width.fill('1')
+  await expect(width).toHaveValue('1')
+  await expect(page.getByText('Wide', { exact: true })).toBeVisible()
+  await expect(page.getByText('100%', { exact: true })).toBeVisible()
+
   await band.focus()
   await page.keyboard.press('ArrowUp')
   await page.locator('#spectral-preset').selectOption('brown')
@@ -57,11 +68,12 @@ test('preset, keyboard band, reset, and master controls update without starting 
   await expect(band).toHaveValue('0')
   await expect(page.locator('.preset-state strong')).toHaveText('Brown / Red')
   await expect(page.locator('.preset-state span')).toHaveText('Preset')
+  await expect(width).toHaveValue('1')
 
   await expect(page.getByText('Ready', { exact: true })).toBeVisible()
 })
 
-test('persists sound and UI state across reload without persisting Running as autoplay intent', async ({
+test('persists sound, stereo width, and UI state across reload without persisting Running as autoplay intent', async ({
   page,
 }) => {
   await page.goto('/')
@@ -78,8 +90,15 @@ test('persists sound and UI state across reload without persisting Running as au
   await page.keyboard.press('ArrowUp')
   const persistedMaster = await master.inputValue()
 
+  const width = page.locator('#stereo-width')
+  await width.fill('0.82')
+  await expect(width).toHaveValue('0.82')
+  await expect(page.getByText('Wide', { exact: true })).toBeVisible()
+
   await page.getByRole('button', { name: 'Hide roadmap controls' }).click()
-  await expect(page.getByText('Mono for now', { exact: false })).toHaveCount(0)
+  await expect(page.getByText('Spectral animation', { exact: true })).toHaveCount(
+    0,
+  )
 
   await page.getByRole('button', { name: 'Start audio' }).click()
   await expect(page.getByText('Running', { exact: true })).toBeVisible()
@@ -92,10 +111,10 @@ test('persists sound and UI state across reload without persisting Running as au
   await expect(page.locator('#band-2')).toHaveValue('1')
   await expect(page.locator('.preset-state span')).toHaveText('Modified')
   await expect(page.locator('#master-gain')).toHaveValue(persistedMaster)
+  await expect(page.locator('#stereo-width')).toHaveValue('0.82')
   await expect(
     page.getByRole('button', { name: 'Show roadmap controls' }),
   ).toBeVisible()
-  await expect(page.getByText('Mono for now', { exact: false })).toHaveCount(0)
 })
 
 test('malformed persisted sound recovers to safe Ready defaults instead of crashing', async ({
@@ -110,13 +129,14 @@ test('malformed persisted sound recovers to safe Ready defaults instead of crash
   await expect(page.getByText('Ready', { exact: true })).toBeVisible()
   await expect(page.locator('#spectral-preset')).toHaveValue('grey')
   await expect(page.locator('#band-2')).toHaveValue('0')
+  await expect(page.locator('#stereo-width')).toHaveValue('0.5')
   await expect(page.getByRole('button', { name: 'Start audio' })).toBeEnabled()
   await expect(
     page.getByText('Sound state JSON was malformed', { exact: false }),
   ).toBeVisible()
 })
 
-test('starts real worklet audio, receives meters, discloses high-band mode, and stops cleanly', async ({
+test('starts real stereo worklet audio, receives meters and correlation telemetry, and stops cleanly', async ({
   page,
 }) => {
   const pageErrors: string[] = []
@@ -144,6 +164,9 @@ test('starts real worklet audio, receives meters, discloses high-band mode, and 
   await expect(
     page.getByText('16k control is a stable high shelf', { exact: false }),
   ).toBeVisible()
+
+  await page.locator('#stereo-width').fill('1')
+  await expect(page.getByText('Applied ρ 0.000', { exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: 'Stop audio' }).click()
   await expect(page.getByText('Stopped', { exact: true })).toBeVisible()
