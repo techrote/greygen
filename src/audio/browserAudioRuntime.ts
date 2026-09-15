@@ -41,8 +41,8 @@ export function createBrowserAudioRuntime(): AudioEngineRuntime {
         {
           numberOfInputs: 0,
           numberOfOutputs: 1,
-          outputChannelCount: [1],
-          channelCount: 1,
+          outputChannelCount: [2],
+          channelCount: 2,
           channelCountMode: 'explicit',
         },
       ) as unknown as AudioWorkletNodePort
