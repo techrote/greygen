@@ -33,7 +33,7 @@ npm ci
 npm run dev
 ```
 
-The development server prints the local URL. The primary generator now exposes White/Pink/Brown/Grey selection, ten keyboard-operable band offsets, master digital level, lifecycle transport, digital Peak/RMS/headroom telemetry, and explicit runtime 16 kHz degradation state. Audio never starts on page load: choose **Start audio** explicitly to create/resume the browser audio context and initialize the worklet. Stereo width, deterministic animation, and playback calibration remain visibly disabled until their owning roadmap issues implement real behavior.
+The development server prints the local URL. The primary generator exposes White/Pink/Brown/Grey selection, ten keyboard-operable band offsets, master digital level, lifecycle transport, digital Peak/RMS/headroom telemetry, and explicit runtime 16 kHz degradation state. Sound and UI preferences are versioned and restored from localStorage; personal playback/calibration profiles occupy a separate private local document. Reload restores requested sound state but never restores Running: choose **Start audio** explicitly to create/resume the browser audio context and initialize the worklet. Stereo width, deterministic animation, and playback calibration remain visibly disabled until their owning roadmap issues implement real behavior.
 
 ### Verification commands
 
@@ -69,9 +69,10 @@ Start with:
 6. `docs/RAG/AUDIO_LIFECYCLE.md`
 7. `docs/RAG/GAIN_SAFETY.md`
 8. `docs/RAG/GENERATOR_UI.md`
-9. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
-10. `docs/RAG/UX_STATE.md`
-11. `docs/RAG/AGENT_PLAYBOOK.md`
-12. `docs/RAG/ROADMAP.md`
+9. `docs/RAG/STATE_PERSISTENCE.md`
+10. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
+11. `docs/RAG/UX_STATE.md`
+12. `docs/RAG/AGENT_PLAYBOOK.md`
+13. `docs/RAG/ROADMAP.md`
 
 The GitHub issues are executable work packets. Each issue must be completed end-to-end: implementation, tests, documentation updates, PR, automated checks, review of failures, and merge only after required checks pass.
