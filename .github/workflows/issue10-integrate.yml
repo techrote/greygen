@@ -1,0 +1,35 @@
+name: Issue 10 integration
+
+on:
+  push:
+    branches:
+      - issue-10-spectral-animation
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: issue-10-spectral-animation
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: python scripts/issue10_patch.py
+      - run: npm run format
+      - run: npm run typecheck
+      - name: Commit integration output
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/audio/AudioEngine.ts src/app/state/appState.ts src/app/App.tsx
+          git commit -m "feat: integrate animation through app state and audio facade"
+          git push origin HEAD:issue-10-spectral-animation
