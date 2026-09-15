@@ -292,7 +292,11 @@ export function parseSoundState(raw: string): StateParseResult<SoundState> {
     }
   }
 
-  if (!isRecord(value) || !Number.isInteger(value.schemaVersion)) {
+  if (
+    !isRecord(value) ||
+    typeof value.schemaVersion !== 'number' ||
+    !Number.isInteger(value.schemaVersion)
+  ) {
     return {
       state: createDefaultSoundState(),
       code: 'recovered',
@@ -423,7 +427,11 @@ export function parseProfileState(raw: string): StateParseResult<ProfileState> {
     }
   }
 
-  if (!isRecord(value) || !Number.isInteger(value.schemaVersion)) {
+  if (
+    !isRecord(value) ||
+    typeof value.schemaVersion !== 'number' ||
+    !Number.isInteger(value.schemaVersion)
+  ) {
     return {
       state: createDefaultProfileState(),
       code: 'recovered',
@@ -497,7 +505,11 @@ export function parseUiState(raw: string): StateParseResult<UiState> {
     }
   }
 
-  if (!isRecord(value) || !Number.isInteger(value.schemaVersion)) {
+  if (
+    !isRecord(value) ||
+    typeof value.schemaVersion !== 'number' ||
+    !Number.isInteger(value.schemaVersion)
+  ) {
     return {
       state: createDefaultUiState(),
       code: 'recovered',

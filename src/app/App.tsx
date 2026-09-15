@@ -11,11 +11,7 @@ import {
   MASTER_GAIN_MAX_DB,
   MASTER_GAIN_MIN_DB,
 } from '../audio/dsp/gainSafety'
-import {
-  type SpectralPresetId,
-  type SpectrumState,
-  createSpectrumState,
-} from '../audio/dsp/spectra'
+import { type SpectralPresetId, type SpectrumState } from '../audio/dsp/spectra'
 import {
   BAND_STEP_DB,
   GENERATOR_BANDS,
