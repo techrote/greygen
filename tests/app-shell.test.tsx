@@ -10,6 +10,28 @@ import { AUDIO_PROTOCOL_VERSION } from '../src/audio/protocol'
 
 const noop = (): void => undefined
 
+function surfaceProps() {
+  return {
+    audioSnapshot: INITIAL_AUDIO_SNAPSHOT,
+    spectrumState: createSpectrumState('grey'),
+    engineReady: true,
+    controlError: null,
+    storageNotice: null,
+    futureFeaturesVisible: true,
+    profileCount: 0,
+    onPrimaryAction: noop,
+    onStop: noop,
+    onPresetChange: noop,
+    onBandChange: noop,
+    onBandReset: noop,
+    onBandsReset: noop,
+    onMasterChange: noop,
+    onToggleFutureFeatures: noop,
+    onResetSound: noop,
+    onDeleteProfiles: noop,
+  }
+}
+
 describe('Greygen primary generator surface', () => {
   it('renders the complete friendly control surface while remaining silent initially', () => {
     const markup = renderToStaticMarkup(<App />)
@@ -21,6 +43,7 @@ describe('Greygen primary generator surface', () => {
     expect(markup).toContain('Stereo width')
     expect(markup).toContain('Spectral animation')
     expect(markup).toContain('Playback calibration')
+    expect(markup).toContain('Persistence &amp; privacy')
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Start audio<\/button>/)
     expect(markup.match(/class="band-control"/g)).toHaveLength(10)
   })
@@ -30,6 +53,7 @@ describe('Greygen primary generator surface', () => {
     offsets[2] = 3
     const markup = renderToStaticMarkup(
       <GeneratorSurface
+        {...surfaceProps()}
         audioSnapshot={{
           ...INITIAL_AUDIO_SNAPSHOT,
           status: 'running',
@@ -51,15 +75,6 @@ describe('Greygen primary generator surface', () => {
           },
         }}
         spectrumState={createSpectrumState('pink', offsets)}
-        engineReady
-        controlError={null}
-        onPrimaryAction={noop}
-        onStop={noop}
-        onPresetChange={noop}
-        onBandChange={noop}
-        onBandReset={noop}
-        onBandsReset={noop}
-        onMasterChange={noop}
       />,
     )
 
@@ -77,17 +92,8 @@ describe('Greygen primary generator surface', () => {
   it('renders explicit suspended and actionable error states', () => {
     const suspended = renderToStaticMarkup(
       <GeneratorSurface
+        {...surfaceProps()}
         audioSnapshot={{ ...INITIAL_AUDIO_SNAPSHOT, status: 'suspended' }}
-        spectrumState={createSpectrumState('grey')}
-        engineReady
-        controlError={null}
-        onPrimaryAction={noop}
-        onStop={noop}
-        onPresetChange={noop}
-        onBandChange={noop}
-        onBandReset={noop}
-        onBandsReset={noop}
-        onMasterChange={noop}
       />,
     )
     expect(suspended).toContain('Resume audio')
@@ -95,6 +101,7 @@ describe('Greygen primary generator surface', () => {
 
     const failed = renderToStaticMarkup(
       <GeneratorSurface
+        {...surfaceProps()}
         audioSnapshot={{
           ...INITIAL_AUDIO_SNAPSHOT,
           status: 'error',
@@ -104,19 +111,28 @@ describe('Greygen primary generator surface', () => {
             recoverable: true,
           },
         }}
-        spectrumState={createSpectrumState('grey')}
-        engineReady
-        controlError={null}
-        onPrimaryAction={noop}
-        onStop={noop}
-        onPresetChange={noop}
-        onBandChange={noop}
-        onBandReset={noop}
-        onBandsReset={noop}
-        onMasterChange={noop}
       />,
     )
     expect(failed).toContain('Retry audio')
     expect(failed).toContain('Fixture processor creation failed.')
+  })
+
+  it('keeps sound reset and private-profile deletion visibly distinct', () => {
+    const markup = renderToStaticMarkup(
+      <GeneratorSurface
+        {...surfaceProps()}
+        profileCount={2}
+        storageNotice="Stored sound was recovered safely."
+        futureFeaturesVisible={false}
+      />,
+    )
+
+    expect(markup).toContain('2 private profiles')
+    expect(markup).toContain('Reset sound settings')
+    expect(markup).toContain('Delete local profiles')
+    expect(markup).toContain('never deleted by a sound reset')
+    expect(markup).toContain('Stored sound was recovered safely.')
+    expect(markup).toContain('Show roadmap controls')
+    expect(markup).not.toContain('Mono for now')
   })
 })
