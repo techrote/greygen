@@ -94,7 +94,7 @@ Implement seeded, bounded/mean-reverting animation modes with depth/speed and op
 
 ### #11 Preset library, user presets, and privacy-safe share URLs
 
-Formalize preset ownership semantics, save user sound presets, serialize versioned sound state into share URLs, and explicitly exclude calibration/profile data by default. Imports never auto-start audio.
+Formalize spectral-only ownership for built-in colour presets; save complete generic SoundState snapshots as local named user presets; serialize versioned SoundState into backend-free URL fragments; and exclude ProfileState, local preset names/library metadata, and UiState from normal sharing. Imports never auto-start audio.
 
 ### #12 Spectrum analyzer and diagnostics panel
 
