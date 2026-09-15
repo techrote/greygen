@@ -8,6 +8,7 @@ import {
 } from '../../src/audio/AudioEngine'
 import { createGainStageState } from '../../src/audio/dsp/gainSafety'
 import { createSpectrumState } from '../../src/audio/dsp/spectra'
+import { stereoWidthToCorrelation } from '../../src/audio/dsp/stereo'
 import {
   AUDIO_PROTOCOL_VERSION,
   type MainToWorkletMessage,
@@ -20,6 +21,7 @@ class MockMessagePort implements WorkletMessagePort {
   closed = false
   private targetId: 'white' | 'pink' | 'brown' | 'grey' = 'grey'
   private masterGainDb = -26.020599913279625
+  private stereoWidth = 0.5
 
   constructor(private readonly sampleRate: number) {}
 
@@ -29,6 +31,7 @@ class MockMessagePort implements WorkletMessagePort {
       case 'initialize':
         this.targetId = message.spectrum.targetId
         this.masterGainDb = message.gainStage.masterGainDb
+        this.stereoWidth = message.stereoWidth.width
         response = {
           version: AUDIO_PROTOCOL_VERSION,
           type: 'ready',
@@ -36,6 +39,7 @@ class MockMessagePort implements WorkletMessagePort {
           sampleRate: this.sampleRate,
           targetId: this.targetId,
           highBandMode: 'degraded-high-shelf',
+          stereoWidth: this.stereoWidth,
         }
         break
       case 'set-spectrum':
@@ -56,6 +60,15 @@ class MockMessagePort implements WorkletMessagePort {
           command: 'set-gain-stage',
         }
         break
+      case 'set-stereo-width':
+        this.stereoWidth = message.stereoWidth.width
+        response = {
+          version: AUDIO_PROTOCOL_VERSION,
+          type: 'ack',
+          requestId: message.requestId,
+          command: 'set-stereo-width',
+        }
+        break
       case 'reset-seed':
         response = {
           version: AUDIO_PROTOCOL_VERSION,
@@ -72,6 +85,7 @@ class MockMessagePort implements WorkletMessagePort {
           sampleRate: this.sampleRate,
           targetId: this.targetId,
           highBandMode: 'degraded-high-shelf',
+          stereoWidth: this.stereoWidth,
           renderedFrames: 256,
         }
         break
@@ -101,6 +115,8 @@ class MockMessagePort implements WorkletMessagePort {
       safetyPreGainTargetDb: -1,
       masterGainDb: this.masterGainDb,
       guardInterventions: 0,
+      stereoWidth: this.stereoWidth,
+      stereoCorrelation: stereoWidthToCorrelation(this.stereoWidth),
     }
     this.onmessage?.({ data: message })
   }
@@ -238,6 +254,7 @@ describe('AudioEngine lifecycle', () => {
       sampleRate: 48_000,
       targetId: 'grey',
       highBandMode: 'degraded-high-shelf',
+      stereoWidth: 0.5,
       telemetry: null,
     })
     expect(runtime.lastContext?.moduleUrl).toBe(runtime.workletModuleUrl)
@@ -249,42 +266,67 @@ describe('AudioEngine lifecycle', () => {
     expect(runtime.lastNode?.port.closed).toBe(true)
   })
 
-  it('round-trips spectrum, gain controls, seed, and status through protocol v2', async () => {
+  it('round-trips spectrum, gain controls, stereo width, seed, and status through protocol v3', async () => {
     const runtime = new MockRuntime()
     const engine = new AudioEngine(runtime)
     await engine.startFromUserGesture()
 
     await engine.setSpectrumState(createSpectrumState('pink'))
     await engine.setGainStageState(createGainStageState(-12))
+    await engine.setStereoWidth(0.82)
     await engine.resetSeed(1234)
     const status = await engine.requestStatus()
 
     expect(status).toMatchObject({
       type: 'status',
       targetId: 'pink',
+      stereoWidth: 0.82,
       renderedFrames: 256,
     })
     expect(engine.getSnapshot()).toMatchObject({
       targetId: 'pink',
       masterGainDb: -12,
+      stereoWidth: 0.82,
+      stereoCorrelation: stereoWidthToCorrelation(0.82),
     })
   })
 
-  it('accepts bounded unsolicited dBFS telemetry without request bookkeeping', async () => {
+  it('preloads stereo width while Ready without creating browser audio', async () => {
+    const runtime = new MockRuntime()
+    const engine = new AudioEngine(runtime)
+
+    await engine.setStereoWidth(0)
+
+    expect(runtime.createCount).toBe(0)
+    expect(engine.getSnapshot()).toMatchObject({
+      status: 'ready',
+      stereoWidth: 0,
+      stereoCorrelation: 1,
+    })
+  })
+
+  it('accepts bounded unsolicited stereo/dBFS telemetry without request bookkeeping', async () => {
     const runtime = new MockRuntime()
     const engine = new AudioEngine(runtime)
     await engine.startFromUserGesture()
     await engine.setMasterGainDb(-18)
+    await engine.setStereoWidth(1)
 
     runtime.lastNode?.port.emitTelemetry(7)
 
-    expect(engine.getSnapshot().telemetry).toMatchObject({
-      type: 'telemetry',
-      sequence: 7,
-      peakDbfs: -9.2,
-      rmsDbfs: -22.4,
-      masterGainDb: -18,
-      guardInterventions: 0,
+    expect(engine.getSnapshot()).toMatchObject({
+      stereoWidth: 1,
+      stereoCorrelation: 0,
+      telemetry: {
+        type: 'telemetry',
+        sequence: 7,
+        peakDbfs: -9.2,
+        rmsDbfs: -22.4,
+        masterGainDb: -18,
+        guardInterventions: 0,
+        stereoWidth: 1,
+        stereoCorrelation: 0,
+      },
     })
   })
 
