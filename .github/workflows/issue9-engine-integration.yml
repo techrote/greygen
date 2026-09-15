@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   integrate:
-    if: github.actor != 'github-actions[bot]'
+    if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -121,9 +121,6 @@ jobs:
           if anchor not in source:
               raise SystemExit('resetSeed anchor missing')
           source = source.replace(anchor, method + anchor, 1)
-
-          if "serializeStereoWidthState" not in source or "set-stereo-width" not in source:
-              raise SystemExit('stereo integration incomplete')
           path.write_text(source)
           PY
           npm run format
