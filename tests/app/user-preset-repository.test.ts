@@ -137,14 +137,17 @@ describe('user preset persistence domain', () => {
     expect(loaded.userPresets).toEqual(createDefaultUserPresetLibraryState())
     expect(
       loaded.diagnostics.some(
-        (entry) => entry.domain === 'presets' && entry.code === 'future-version',
+        (entry) =>
+          entry.domain === 'presets' && entry.code === 'future-version',
       ),
     ).toBe(true)
 
     const presetSave = repository.saveUserPresets(savedLibrary())
     expect(presetSave.ok).toBe(false)
     expect(presetSave.diagnostic?.code).toBe('future-version')
-    expect(storage.values.get(USER_PRESET_LIBRARY_STORAGE_KEY)).toBe(futureLibrary)
+    expect(storage.values.get(USER_PRESET_LIBRARY_STORAGE_KEY)).toBe(
+      futureLibrary,
+    )
 
     const sound = createSoundState({
       seed: 1,
@@ -154,16 +157,24 @@ describe('user preset persistence domain', () => {
     })
     expect(repository.saveSound(sound).ok).toBe(true)
     expect(storage.values.get(SOUND_STATE_STORAGE_KEY)).toContain('"white"')
-    expect(storage.values.get(USER_PRESET_LIBRARY_STORAGE_KEY)).toBe(futureLibrary)
+    expect(storage.values.get(USER_PRESET_LIBRARY_STORAGE_KEY)).toBe(
+      futureLibrary,
+    )
   })
 
   it('a future storage manifest also protects the preset library', () => {
     const storage = new MemoryStorage()
     const futureManifest = JSON.stringify({ schemaVersion: 99 })
-    const existingPresetLibrary = JSON.stringify({ schemaVersion: 99, presets: [] })
+    const existingPresetLibrary = JSON.stringify({
+      schemaVersion: 99,
+      presets: [],
+    })
     storage.values.set(STORAGE_MANIFEST_KEY, futureManifest)
     storage.values.set(USER_PRESET_LIBRARY_STORAGE_KEY, existingPresetLibrary)
-    storage.values.set(PROFILE_STATE_STORAGE_KEY, JSON.stringify({ schemaVersion: 1, profiles: [] }))
+    storage.values.set(
+      PROFILE_STATE_STORAGE_KEY,
+      JSON.stringify({ schemaVersion: 1, profiles: [] }),
+    )
     const repository = new AppStateRepository(storage)
 
     const loaded = repository.load()

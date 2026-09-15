@@ -59,7 +59,9 @@ test('saves, loads, sanitizes, and deletes full user sound presets while built-i
     })
     .click()
   await expect(list).toHaveCount(0)
-  await expect(page.getByText('No local sound presets saved yet.')).toBeVisible()
+  await expect(
+    page.getByText('No local sound presets saved yet.'),
+  ).toBeVisible()
 })
 
 test('manual and startup share imports restore only sound state and never auto-start audio', async ({
@@ -138,7 +140,9 @@ test('manual and startup share imports restore only sound state and never auto-s
   await expect(page.getByText('Ready', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Start audio' })).toBeEnabled()
   await expect(
-    page.getByText('Audio remains Ready until you choose Start', { exact: false }),
+    page.getByText('Audio remains Ready until you choose Start', {
+      exact: false,
+    }),
   ).toBeVisible()
   expect(page.url()).not.toContain('#s=')
 })
