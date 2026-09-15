@@ -140,11 +140,15 @@ describe('preset ownership and user library', () => {
   it('enforces the local preset count bound', () => {
     let state = createDefaultUserPresetLibraryState()
     for (let index = 0; index < USER_PRESET_LIBRARY_MAX_COUNT; index += 1) {
-      state = saveUserSoundPreset(state, `Preset ${index + 1}`, fixtureSound()).state
+      state = saveUserSoundPreset(
+        state,
+        `Preset ${index + 1}`,
+        fixtureSound(),
+      ).state
     }
-    expect(() => saveUserSoundPreset(state, 'Too many', fixtureSound())).toThrow(
-      RangeError,
-    )
+    expect(() =>
+      saveUserSoundPreset(state, 'Too many', fixtureSound()),
+    ).toThrow(RangeError)
     expect(createUserPresetLibraryState(state.presets).presets).toHaveLength(
       USER_PRESET_LIBRARY_MAX_COUNT,
     )
@@ -166,7 +170,9 @@ describe('privacy-safe share payloads', () => {
     const url = createSoundShareUrl('https://example.test/greygen?x=1', sound)
     expect(url).toContain('#s=')
     expect(parseSoundShareUrl(url).state).toEqual(sound)
-    expect(stripSoundShareFragment(url)).toBe('https://example.test/greygen?x=1')
+    expect(stripSoundShareFragment(url)).toBe(
+      'https://example.test/greygen?x=1',
+    )
   })
 
   it('contains only SoundState data and excludes private profile fixtures and user preset names', () => {
@@ -204,7 +210,8 @@ describe('privacy-safe share payloads', () => {
     const valid = serializeSoundStateForShare(fixtureSound())
     expect(parseSharedSoundPayload(valid.slice(0, -4)).code).toBe('malformed')
     expect(
-      parseSharedSoundPayload('a'.repeat(SHARE_PAYLOAD_MAX_CHARACTERS + 1)).code,
+      parseSharedSoundPayload('a'.repeat(SHARE_PAYLOAD_MAX_CHARACTERS + 1))
+        .code,
     ).toBe('oversized')
 
     const future = mutatePayload(valid, (payload) => {

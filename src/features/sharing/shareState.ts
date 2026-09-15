@@ -26,10 +26,7 @@ export interface ShareParseResult {
 }
 
 function encodeBase64Url(text: string): string {
-  return btoa(text)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '')
+  return btoa(text).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
 }
 
 function decodeBase64Url(text: string): string {
@@ -143,7 +140,9 @@ export function parseSharedSoundPayload(encoded: string): ShareParseResult {
     return {
       state: null,
       code: 'malformed',
-      messages: Object.freeze(['Unsupported shared sound format was not loaded.']),
+      messages: Object.freeze([
+        'Unsupported shared sound format was not loaded.',
+      ]),
     }
   }
 
@@ -155,7 +154,9 @@ export function parseSharedSoundPayload(encoded: string): ShareParseResult {
     return {
       state: null,
       code: 'malformed',
-      messages: Object.freeze(['Shared sound payload had no sound schema version.']),
+      messages: Object.freeze([
+        'Shared sound payload had no sound schema version.',
+      ]),
     }
   }
   if (soundSchemaVersion > SOUND_STATE_SCHEMA_VERSION) {
@@ -234,7 +235,10 @@ export function parseSharedSoundPayload(encoded: string): ShareParseResult {
   }
 }
 
-export function createSoundShareUrl(baseHref: string, state: SoundState): string {
+export function createSoundShareUrl(
+  baseHref: string,
+  state: SoundState,
+): string {
   const url = new URL(baseHref)
   url.hash = `${SHARE_FRAGMENT_KEY}=${serializeSoundStateForShare(state)}`
   return url.toString()
@@ -251,7 +255,9 @@ export function parseSoundShareUrl(
     return {
       state: null,
       code: 'malformed',
-      messages: Object.freeze(['Shared sound URL was invalid and was not loaded.']),
+      messages: Object.freeze([
+        'Shared sound URL was invalid and was not loaded.',
+      ]),
     }
   }
   const fragment = new URLSearchParams(url.hash.replace(/^#/, ''))

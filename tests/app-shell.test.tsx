@@ -22,6 +22,10 @@ function surfaceProps() {
     storageNotice: null,
     futureFeaturesVisible: true,
     profileCount: 0,
+    userPresets: [],
+    matchedUserPresetName: null,
+    shareUrl: 'https://example.test/#s=fixture',
+    shareNotice: null,
     onPrimaryAction: noop,
     onStop: noop,
     onPresetChange: noop,
@@ -37,6 +41,11 @@ function surfaceProps() {
     onToggleFutureFeatures: noop,
     onResetSound: noop,
     onDeleteProfiles: noop,
+    onSaveUserPreset: () => true,
+    onLoadUserPreset: noop,
+    onDeleteUserPreset: noop,
+    onCopyShareUrl: noop,
+    onImportShareUrl: noop,
   }
 }
 
@@ -53,6 +62,8 @@ describe('Greygen primary generator surface', () => {
     expect(markup).toContain('Target correlation')
     expect(markup).toContain('Spectral animation')
     expect(markup).toContain('Playback calibration')
+    expect(markup).toContain('Presets &amp; share links')
+    expect(markup).toContain('profiles, profile notes, and UI preferences')
     expect(markup).toContain('Persistence &amp; privacy')
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Start audio<\/button>/)
     expect(markup.match(/class="band-control"/g)).toHaveLength(10)

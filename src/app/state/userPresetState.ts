@@ -172,7 +172,9 @@ export function serializeUserPresetLibraryState(
   return JSON.stringify(createUserPresetLibraryState(state.presets))
 }
 
-export function parseUserPresetLibraryState(raw: string): UserPresetParseResult {
+export function parseUserPresetLibraryState(
+  raw: string,
+): UserPresetParseResult {
   let value: unknown
   try {
     value = JSON.parse(raw) as unknown
@@ -226,7 +228,10 @@ export function parseUserPresetLibraryState(raw: string): UserPresetParseResult 
   const messages: string[] = []
   const presets: UserSoundPreset[] = []
   const ids = new Set<string>()
-  for (const candidate of value.presets.slice(0, USER_PRESET_LIBRARY_MAX_COUNT)) {
+  for (const candidate of value.presets.slice(
+    0,
+    USER_PRESET_LIBRARY_MAX_COUNT,
+  )) {
     if (!isRecord(candidate)) {
       messages.push('An invalid user preset record was skipped.')
       continue
@@ -249,7 +254,9 @@ export function parseUserPresetLibraryState(raw: string): UserPresetParseResult 
       continue
     }
     if (name !== candidate.name) {
-      messages.push(`User preset ${candidate.id} name was sanitized for display.`)
+      messages.push(
+        `User preset ${candidate.id} name was sanitized for display.`,
+      )
     }
 
     const parsedSound = parseSoundState(JSON.stringify(candidate.sound))
