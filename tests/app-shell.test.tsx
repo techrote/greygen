@@ -14,6 +14,7 @@ function surfaceProps() {
   return {
     audioSnapshot: INITIAL_AUDIO_SNAPSHOT,
     spectrumState: createSpectrumState('grey'),
+    stereoWidth: 0.5,
     engineReady: true,
     controlError: null,
     storageNotice: null,
@@ -26,6 +27,7 @@ function surfaceProps() {
     onBandReset: noop,
     onBandsReset: noop,
     onMasterChange: noop,
+    onStereoWidthChange: noop,
     onToggleFutureFeatures: noop,
     onResetSound: noop,
     onDeleteProfiles: noop,
@@ -41,6 +43,8 @@ describe('Greygen primary generator surface', () => {
     expect(markup).toContain('Ten-band shape')
     expect(markup).toContain('Master level')
     expect(markup).toContain('Stereo width')
+    expect(markup).toContain('Normal')
+    expect(markup).toContain('Target correlation')
     expect(markup).toContain('Spectral animation')
     expect(markup).toContain('Playback calibration')
     expect(markup).toContain('Persistence &amp; privacy')
@@ -48,12 +52,13 @@ describe('Greygen primary generator surface', () => {
     expect(markup.match(/class="band-control"/g)).toHaveLength(10)
   })
 
-  it('renders deterministic meters, modified state, and runtime high-band degradation', () => {
+  it('renders deterministic meters, stereo state, modified state, and runtime high-band degradation', () => {
     const offsets = new Float64Array(10)
     offsets[2] = 3
     const markup = renderToStaticMarkup(
       <GeneratorSurface
         {...surfaceProps()}
+        stereoWidth={1}
         audioSnapshot={{
           ...INITIAL_AUDIO_SNAPSHOT,
           status: 'running',
@@ -61,6 +66,8 @@ describe('Greygen primary generator surface', () => {
           targetId: 'pink',
           highBandMode: 'degraded-high-shelf',
           masterGainDb: -18,
+          stereoWidth: 1,
+          stereoCorrelation: 0,
           telemetry: {
             version: AUDIO_PROTOCOL_VERSION,
             type: 'telemetry',
@@ -72,6 +79,8 @@ describe('Greygen primary generator surface', () => {
             safetyPreGainTargetDb: -4,
             masterGainDb: -18,
             guardInterventions: 0,
+            stereoWidth: 1,
+            stereoCorrelation: 0,
           },
         }}
         spectrumState={createSpectrumState('pink', offsets)}
@@ -85,6 +94,9 @@ describe('Greygen primary generator surface', () => {
     expect(markup).toContain('-4.0 dB')
     expect(markup).toContain('High shelf')
     expect(markup).toContain('16k control is a stable high shelf')
+    expect(markup).toContain('Wide')
+    expect(markup).toContain('100%')
+    expect(markup).toContain('Applied ρ 0.000')
     expect(markup).toContain('not acoustic dB SPL')
     expect(markup).toContain('not a medical hearing test')
   })
@@ -133,6 +145,6 @@ describe('Greygen primary generator surface', () => {
     expect(markup).toContain('never deleted by a sound reset')
     expect(markup).toContain('Stored sound was recovered safely.')
     expect(markup).toContain('Show roadmap controls')
-    expect(markup).not.toContain('Mono for now')
+    expect(markup).not.toContain('Power-preserving stereo arrives')
   })
 })
