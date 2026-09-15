@@ -287,7 +287,9 @@ export class GreygenDspEngine {
 
   renderStereo(left: Float32Array, right: Float32Array): void {
     if (left.length !== right.length) {
-      throw new RangeError('left and right stereo buffers must have equal length')
+      throw new RangeError(
+        'left and right stereo buffers must have equal length',
+      )
     }
 
     for (let frame = 0; frame < left.length; frame += 1) {

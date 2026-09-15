@@ -268,12 +268,11 @@ function normalizeSoundRecord(
   }
 
   let stereoWidth = defaults.stereoWidth
-  if (typeof value.stereoWidth === 'number' && Number.isFinite(value.stereoWidth)) {
-    stereoWidth = clamp(
-      value.stereoWidth,
-      STEREO_WIDTH_MIN,
-      STEREO_WIDTH_MAX,
-    )
+  if (
+    typeof value.stereoWidth === 'number' &&
+    Number.isFinite(value.stereoWidth)
+  ) {
+    stereoWidth = clamp(value.stereoWidth, STEREO_WIDTH_MIN, STEREO_WIDTH_MAX)
     if (stereoWidth !== value.stereoWidth) {
       messages.push('Stereo width was clamped to the supported range.')
     }

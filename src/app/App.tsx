@@ -473,9 +473,7 @@ export function GeneratorSurface({
         <div className="stereo-detail-row">
           <span>Target correlation ρ {targetCorrelation.toFixed(3)}</span>
           {audioSnapshot.status === 'running' ? (
-            <span>
-              Applied ρ {audioSnapshot.stereoCorrelation.toFixed(3)}
-            </span>
+            <span>Applied ρ {audioSnapshot.stereoCorrelation.toFixed(3)}</span>
           ) : null}
         </div>
         <p className="status-note">

@@ -96,9 +96,9 @@ test('persists sound, stereo width, and UI state across reload without persistin
   await expect(page.getByText('Wide', { exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: 'Hide roadmap controls' }).click()
-  await expect(page.getByText('Spectral animation', { exact: true })).toHaveCount(
-    0,
-  )
+  await expect(
+    page.getByText('Spectral animation', { exact: true }),
+  ).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Start audio' }).click()
   await expect(page.getByText('Running', { exact: true })).toBeVisible()
