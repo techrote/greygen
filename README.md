@@ -2,7 +2,7 @@
 
 A browser-based calibrated spectral-noise generator and psychoacoustic playground.
 
-Greygen is a clean-room implementation inspired by the *class* of tools exemplified by myNoise's Grey Noise generator, not a source/assets clone. The project synthesizes noise locally, exposes a simple ten-band model, and progressively adds deterministic DSP, safe headroom management, power-preserving stereo decorrelation, spectral animation, user calibration profiles, and an advanced continuous-spectrum editor.
+Greygen is grey noise. The project synthesizes noise locally, exposes a simple ten-band model, and progressively adds deterministic DSP, safe headroom management, power-preserving stereo decorrelation, spectral animation, user calibration profiles, and an advanced continuous-spectrum editor.
 
 ## Core principles
 
