@@ -102,24 +102,33 @@ test('browser suspension exposes Stop and explicit Resume', async ({
   page,
 }) => {
   await page.addInitScript(() => {
-    const OriginalAudioContext = globalThis.AudioContext
-    const capturedContexts: AudioContext[] = []
+    type CapturedAudioContext = {
+      suspend(): Promise<void>
+    }
+    type BrowserGlobal = typeof globalThis & {
+      AudioContext: new (...args: never[]) => CapturedAudioContext
+      __greygenCapturedContexts?: CapturedAudioContext[]
+    }
+
+    const browserGlobal = globalThis as BrowserGlobal
+    const OriginalAudioContext = browserGlobal.AudioContext
+    const capturedContexts: CapturedAudioContext[] = []
     const WrappedAudioContext = new Proxy(OriginalAudioContext, {
       construct(target, args, newTarget) {
         const context = Reflect.construct(
           target,
           args,
           newTarget,
-        ) as AudioContext
+        ) as CapturedAudioContext
         capturedContexts.push(context)
         return context
       },
     })
-    Object.defineProperty(globalThis, 'AudioContext', {
+    Object.defineProperty(browserGlobal, 'AudioContext', {
       configurable: true,
       value: WrappedAudioContext,
     })
-    Object.defineProperty(globalThis, '__greygenCapturedContexts', {
+    Object.defineProperty(browserGlobal, '__greygenCapturedContexts', {
       configurable: true,
       value: capturedContexts,
     })
@@ -130,8 +139,11 @@ test('browser suspension exposes Stop and explicit Resume', async ({
   await expect(page.getByText('Running', { exact: true })).toBeVisible()
 
   await page.evaluate(async () => {
+    type CapturedAudioContext = {
+      suspend(): Promise<void>
+    }
     const scope = globalThis as typeof globalThis & {
-      __greygenCapturedContexts: AudioContext[]
+      __greygenCapturedContexts: CapturedAudioContext[]
     }
     await scope.__greygenCapturedContexts[0].suspend()
   })
