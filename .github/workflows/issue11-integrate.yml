@@ -1,0 +1,35 @@
+name: Issue 11 integration
+
+on:
+  push:
+    branches:
+      - issue-11-presets-share-urls
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: issue-11-presets-share-urls
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: python scripts/issue11_integrate.py
+      - run: npm run format
+      - run: npm run typecheck
+      - name: Commit integration output
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src tests
+          git commit -m "feat: integrate user presets and share URLs"
+          git push origin HEAD:issue-11-presets-share-urls
