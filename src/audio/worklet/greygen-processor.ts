@@ -4,10 +4,12 @@ import {
   GREYGEN_PROCESSOR_NAME,
   type MainToWorkletMessage,
   type WorkletToMainMessage,
+  deserializeAnimationState,
   deserializeGainStageState,
   deserializeSpectrumState,
   deserializeStereoWidthState,
   parseMainToWorkletMessage,
+  serializeAnimationState,
 } from '../protocol'
 
 declare const sampleRate: number
@@ -95,6 +97,7 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
           spectrumState: deserializeSpectrumState(message.spectrum),
           gainStageState: deserializeGainStageState(message.gainStage),
           stereoWidthState: deserializeStereoWidthState(message.stereoWidth),
+          animationState: deserializeAnimationState(message.animation),
         })
         this.renderedFrames = 0
         this.framesSinceTelemetry = 0
@@ -109,6 +112,7 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
           targetId: this.engine.targetId,
           highBandMode: this.engine.highBandMode,
           stereoWidth: this.engine.stereoWidthState.width,
+          animation: serializeAnimationState(this.engine.animationState),
         })
         return
       case 'set-spectrum':
@@ -142,6 +146,17 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
           command: 'set-stereo-width',
         })
         return
+      case 'set-animation':
+        this.engine.setAnimationState(
+          deserializeAnimationState(message.animation),
+        )
+        this.post({
+          version: AUDIO_PROTOCOL_VERSION,
+          type: 'ack',
+          requestId: message.requestId,
+          command: 'set-animation',
+        })
+        return
       case 'reset-seed':
         this.engine.setSeed(message.seed)
         this.renderedFrames = 0
@@ -161,6 +176,7 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
           targetId: this.engine.targetId,
           highBandMode: this.engine.highBandMode,
           stereoWidth: this.engine.stereoWidthState.width,
+          animation: serializeAnimationState(this.engine.animationState),
           renderedFrames: this.renderedFrames,
         })
         return
