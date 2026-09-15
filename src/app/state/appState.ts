@@ -1,4 +1,7 @@
-import { DEFAULT_ENGINE_PRESET, DEFAULT_ENGINE_SEED } from '../../audio/dsp/engine'
+import {
+  DEFAULT_ENGINE_PRESET,
+  DEFAULT_ENGINE_SEED,
+} from '../../audio/dsp/engine'
 import { BAND_COUNT } from '../../audio/dsp/filterBank'
 import {
   DEFAULT_MASTER_GAIN_DB,
@@ -199,7 +202,10 @@ function normalizeSoundRecord(
   }
 
   let offsets = Array.from(defaults.userBandOffsetsDb)
-  if (Array.isArray(value.userBandOffsetsDb) && value.userBandOffsetsDb.length === BAND_COUNT) {
+  if (
+    Array.isArray(value.userBandOffsetsDb) &&
+    value.userBandOffsetsDb.length === BAND_COUNT
+  ) {
     offsets = value.userBandOffsetsDb.map((candidate, index) => {
       if (typeof candidate !== 'number' || !Number.isFinite(candidate)) {
         messages.push(`Band ${index + 1} offset was invalid and reset to 0 dB.`)
@@ -211,7 +217,9 @@ function normalizeSoundRecord(
         USER_BAND_OFFSET_MAX_DB,
       )
       if (bounded !== candidate) {
-        messages.push(`Band ${index + 1} offset was clamped to the supported range.`)
+        messages.push(
+          `Band ${index + 1} offset was clamped to the supported range.`,
+        )
       }
       return bounded
     })
@@ -220,13 +228,22 @@ function normalizeSoundRecord(
   }
 
   let masterGainDb = defaults.masterGainDb
-  if (typeof value.masterGainDb === 'number' && Number.isFinite(value.masterGainDb)) {
-    masterGainDb = clamp(value.masterGainDb, MASTER_GAIN_MIN_DB, MASTER_GAIN_MAX_DB)
+  if (
+    typeof value.masterGainDb === 'number' &&
+    Number.isFinite(value.masterGainDb)
+  ) {
+    masterGainDb = clamp(
+      value.masterGainDb,
+      MASTER_GAIN_MIN_DB,
+      MASTER_GAIN_MAX_DB,
+    )
     if (masterGainDb !== value.masterGainDb) {
       messages.push('Master level was clamped to the supported digital range.')
     }
   } else if (value.masterGainDb !== undefined) {
-    messages.push('Invalid master level was replaced with the conservative default.')
+    messages.push(
+      'Invalid master level was replaced with the conservative default.',
+    )
   }
 
   return {
@@ -269,7 +286,9 @@ export function parseSoundState(raw: string): StateParseResult<SoundState> {
     return {
       state: createDefaultSoundState(),
       code: 'malformed',
-      messages: Object.freeze(['Sound state JSON was malformed; safe defaults were used.']),
+      messages: Object.freeze([
+        'Sound state JSON was malformed; safe defaults were used.',
+      ]),
     }
   }
 
@@ -277,7 +296,9 @@ export function parseSoundState(raw: string): StateParseResult<SoundState> {
     return {
       state: createDefaultSoundState(),
       code: 'recovered',
-      messages: Object.freeze(['Sound state had no valid schema version; safe defaults were used.']),
+      messages: Object.freeze([
+        'Sound state had no valid schema version; safe defaults were used.',
+      ]),
     }
   }
 
@@ -297,7 +318,9 @@ export function parseSoundState(raw: string): StateParseResult<SoundState> {
     return {
       state: createDefaultSoundState(),
       code: 'recovered',
-      messages: Object.freeze(['Unsupported sound-state schema was replaced with safe defaults.']),
+      messages: Object.freeze([
+        'Unsupported sound-state schema was replaced with safe defaults.',
+      ]),
     }
   }
 
@@ -364,7 +387,9 @@ function parseProfileRecord(value: unknown): LocalProfileRecord | null {
     name: value.name,
     kind: value.kind,
     payloadSchemaVersion: value.payloadSchemaVersion,
-    payload: Object.freeze({ ...value.payload }) as Readonly<Record<string, JsonValue>>,
+    payload: Object.freeze({ ...value.payload }) as Readonly<
+      Record<string, JsonValue>
+    >,
   })
 }
 
@@ -416,11 +441,16 @@ export function parseProfileState(raw: string): StateParseResult<ProfileState> {
       ]),
     }
   }
-  if (value.schemaVersion !== PROFILE_STATE_SCHEMA_VERSION || !Array.isArray(value.profiles)) {
+  if (
+    value.schemaVersion !== PROFILE_STATE_SCHEMA_VERSION ||
+    !Array.isArray(value.profiles)
+  ) {
     return {
       state: createDefaultProfileState(),
       code: 'recovered',
-      messages: Object.freeze(['Private profile state was invalid and was not loaded.']),
+      messages: Object.freeze([
+        'Private profile state was invalid and was not loaded.',
+      ]),
     }
   }
 
@@ -461,7 +491,9 @@ export function parseUiState(raw: string): StateParseResult<UiState> {
     return {
       state: createDefaultUiState(),
       code: 'malformed',
-      messages: Object.freeze(['UI state JSON was malformed; presentation defaults were used.']),
+      messages: Object.freeze([
+        'UI state JSON was malformed; presentation defaults were used.',
+      ]),
     }
   }
 
@@ -469,7 +501,9 @@ export function parseUiState(raw: string): StateParseResult<UiState> {
     return {
       state: createDefaultUiState(),
       code: 'recovered',
-      messages: Object.freeze(['UI state had no valid schema version; presentation defaults were used.']),
+      messages: Object.freeze([
+        'UI state had no valid schema version; presentation defaults were used.',
+      ]),
     }
   }
   if (value.schemaVersion > UI_STATE_SCHEMA_VERSION) {
@@ -485,7 +519,9 @@ export function parseUiState(raw: string): StateParseResult<UiState> {
     return {
       state: createDefaultUiState(),
       code: 'recovered',
-      messages: Object.freeze(['Unsupported UI-state schema was replaced with presentation defaults.']),
+      messages: Object.freeze([
+        'Unsupported UI-state schema was replaced with presentation defaults.',
+      ]),
     }
   }
 
@@ -507,7 +543,9 @@ export function parseUiState(raw: string): StateParseResult<UiState> {
 }
 
 export function serializeStorageManifest(): string {
-  return JSON.stringify({ schemaVersion: APP_STORAGE_VERSION } satisfies StorageManifest)
+  return JSON.stringify({
+    schemaVersion: APP_STORAGE_VERSION,
+  } satisfies StorageManifest)
 }
 
 export function serializeSoundState(state: SoundState): string {

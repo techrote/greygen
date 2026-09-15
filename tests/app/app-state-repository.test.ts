@@ -148,7 +148,10 @@ describe('AppStateRepository', () => {
 
   it('treats an unknown future storage manifest as read-only and loads safe defaults', () => {
     const storage = new MemoryStorage()
-    storage.values.set(STORAGE_MANIFEST_KEY, JSON.stringify({ schemaVersion: 99 }))
+    storage.values.set(
+      STORAGE_MANIFEST_KEY,
+      JSON.stringify({ schemaVersion: 99 }),
+    )
     storage.values.set(
       SOUND_STATE_STORAGE_KEY,
       JSON.stringify({ schemaVersion: 99, targetId: 'white' }),
@@ -160,7 +163,9 @@ describe('AppStateRepository', () => {
     expect(loaded.profiles).toEqual(createDefaultProfileState())
     expect(loaded.ui).toEqual(createDefaultUiState())
     expect(
-      loaded.diagnostics.some((entry) => entry.code === 'future-storage-version'),
+      loaded.diagnostics.some(
+        (entry) => entry.code === 'future-storage-version',
+      ),
     ).toBe(true)
     expect(storage.values.get(STORAGE_MANIFEST_KEY)).toBe(
       JSON.stringify({ schemaVersion: 99 }),

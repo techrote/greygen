@@ -21,7 +21,9 @@ export function createBrowserAppStateRepository(): AppStateRepository {
     const storage = globalThis.localStorage
     if (!storage) {
       return new AppStateRepository(
-        new UnavailableStorage('localStorage is unavailable in this browser context'),
+        new UnavailableStorage(
+          'localStorage is unavailable in this browser context',
+        ),
       )
     }
     return new AppStateRepository(storage)

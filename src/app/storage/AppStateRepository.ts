@@ -249,9 +249,15 @@ export class AppStateRepository {
   private read(
     key: string,
     domain: StateDomain,
-  ): { readonly value: string | null; readonly diagnostics: readonly StorageDiagnostic[] } {
+  ): {
+    readonly value: string | null
+    readonly diagnostics: readonly StorageDiagnostic[]
+  } {
     try {
-      return { value: this.storage.getItem(key), diagnostics: Object.freeze([]) }
+      return {
+        value: this.storage.getItem(key),
+        diagnostics: Object.freeze([]),
+      }
     } catch (error) {
       return {
         value: null,

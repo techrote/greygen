@@ -434,7 +434,9 @@ export function GeneratorSurface({
             aria-expanded={futureFeaturesVisible}
             onClick={onToggleFutureFeatures}
           >
-            {futureFeaturesVisible ? 'Hide roadmap controls' : 'Show roadmap controls'}
+            {futureFeaturesVisible
+              ? 'Hide roadmap controls'
+              : 'Show roadmap controls'}
           </button>
         </div>
         {futureFeaturesVisible ? (
@@ -461,7 +463,8 @@ export function GeneratorSurface({
                 <option value="off">Off — coming in issue #10</option>
               </select>
               <p>
-                No fake motion: deterministic bounded animation is not active yet.
+                No fake motion: deterministic bounded animation is not active
+                yet.
               </p>
             </fieldset>
             <div className="calibration-placeholder">
@@ -489,9 +492,9 @@ export function GeneratorSurface({
           </span>
         </div>
         <p className="status-note">
-          Sound settings and presentation preferences are stored locally. Personal
-          playback/calibration profiles use a separate private storage domain and
-          are never deleted by a sound reset.
+          Sound settings and presentation preferences are stored locally.
+          Personal playback/calibration profiles use a separate private storage
+          domain and are never deleted by a sound reset.
         </p>
         {storageNotice ? (
           <p className="storage-notice" role="status">
@@ -567,7 +570,9 @@ export default function App() {
         }
       } catch (error) {
         if (!cancelled) {
-          setControlError(`Stored sound state could not be applied: ${errorText(error)}`)
+          setControlError(
+            `Stored sound state could not be applied: ${errorText(error)}`,
+          )
         }
       } finally {
         if (!cancelled) {
