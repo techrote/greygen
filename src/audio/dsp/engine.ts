@@ -1,3 +1,9 @@
+import {
+  ANIMATION_OUTPUT_SMOOTHING_SECONDS,
+  type AnimationState,
+  SpectralAnimation,
+  createAnimationState,
+} from './animation'
 import { BAND_COUNT, TenBandFilterBank, type HighBandMode } from './filterBank'
 import {
   CONTROL_SMOOTHING_TIME_SECONDS,
@@ -5,13 +11,14 @@ import {
   SAFETY_ATTACK_TIME_SECONDS,
   SAFETY_RELEASE_TIME_SECONDS,
   applyFinalGuard,
+  computeSafetyPreGainLinear,
   createGainStageState,
   masterGainLinear,
   resolveGainTargets,
   safetyPreGainDb,
 } from './gainSafety'
 import { MeterAccumulator, type MeterSnapshot } from './meters'
-import { gainToDecibels } from './numbers'
+import { decibelsToGain, gainToDecibels } from './numbers'
 import { Xoshiro128StarStar } from './rng'
 import { OnePoleSmoother } from './smoothing'
 import {
@@ -39,6 +46,7 @@ export interface GreygenDspEngineOptions {
   readonly spectrumState?: SpectrumState
   readonly gainStageState?: GainStageState
   readonly stereoWidthState?: StereoWidthState
+  readonly animationState?: AnimationState
 }
 
 export interface GreygenDspResetOptions {
@@ -46,6 +54,7 @@ export interface GreygenDspResetOptions {
   readonly spectrumState?: SpectrumState
   readonly gainStageState?: GainStageState
   readonly stereoWidthState?: StereoWidthState
+  readonly animationState?: AnimationState
 }
 
 export interface EngineTelemetry extends MeterSnapshot {
@@ -76,6 +85,16 @@ function canonicalStereoWidthState(state: StereoWidthState): StereoWidthState {
   return createStereoWidthState(state.width)
 }
 
+function canonicalAnimationState(state: AnimationState): AnimationState {
+  return createAnimationState(
+    state.mode,
+    state.seed,
+    state.depthDb,
+    state.speed,
+    state.energyPreserving,
+  )
+}
+
 export class GreygenDspEngine {
   readonly sampleRate: number
 
@@ -84,18 +103,22 @@ export class GreygenDspEngine {
   private readonly scratchBandsA = new Float64Array(BAND_COUNT)
   private readonly scratchBandsB = new Float64Array(BAND_COUNT)
   private readonly currentBandGains = new Float64Array(BAND_COUNT)
+  private readonly animationTargetOffsetsDb = new Float64Array(BAND_COUNT)
   private readonly bandGainSmoothers: OnePoleSmoother[]
+  private readonly animationBandSmoothers: OnePoleSmoother[]
   private readonly residualGainSmoother: OnePoleSmoother
   private readonly safetyPreGainSmoother: OnePoleSmoother
   private readonly masterGainSmoother: OnePoleSmoother
   private readonly stereoWidthSmoother: OnePoleSmoother
   private readonly meter = new MeterAccumulator()
+  private readonly animation: SpectralAnimation
   private generatorA: Xoshiro128StarStar
   private generatorB: Xoshiro128StarStar
   private seedValue: number
   private spectrumStateValue: SpectrumState
   private gainStageStateValue: GainStageState
   private stereoWidthStateValue: StereoWidthState
+  private animationStateValue: AnimationState
   private safetyPreGainTargetValue: number
   private guardInterventionsValue = 0
 
@@ -115,6 +138,13 @@ export class GreygenDspEngine {
     this.stereoWidthStateValue = options.stereoWidthState
       ? canonicalStereoWidthState(options.stereoWidthState)
       : createStereoWidthState(DEFAULT_STEREO_WIDTH)
+    this.animationStateValue = options.animationState
+      ? canonicalAnimationState(options.animationState)
+      : createAnimationState()
+    this.animation = new SpectralAnimation(
+      this.sampleRate,
+      this.animationStateValue,
+    )
 
     const targets = this.resolveTargets()
     this.bandGainSmoothers = Array.from(
@@ -126,14 +156,25 @@ export class GreygenDspEngine {
           CONTROL_SMOOTHING_TIME_SECONDS,
         ),
     )
+    this.animationBandSmoothers = Array.from(
+      { length: BAND_COUNT },
+      () =>
+        new OnePoleSmoother(
+          0,
+          this.sampleRate,
+          ANIMATION_OUTPUT_SMOOTHING_SECONDS,
+        ),
+    )
     this.residualGainSmoother = new OnePoleSmoother(
       targets.ultrasonicResidualGainLinear,
       this.sampleRate,
       CONTROL_SMOOTHING_TIME_SECONDS,
     )
-    this.safetyPreGainTargetValue = targets.safetyPreGainLinear
+    this.safetyPreGainTargetValue = this.resolveAnimationAwareSafetyTarget(
+      targets.estimatedShapedPeakLinear,
+    )
     this.safetyPreGainSmoother = new OnePoleSmoother(
-      targets.safetyPreGainLinear,
+      this.safetyPreGainTargetValue,
       this.sampleRate,
       SAFETY_RELEASE_TIME_SECONDS,
     )
@@ -166,6 +207,14 @@ export class GreygenDspEngine {
 
   get stereoWidthState(): StereoWidthState {
     return this.stereoWidthStateValue
+  }
+
+  get animationState(): AnimationState {
+    return this.animationStateValue
+  }
+
+  get animationSampleCursor(): number {
+    return this.animation.sampleCursor
   }
 
   get targetId(): SpectralPresetId {
@@ -219,6 +268,12 @@ export class GreygenDspEngine {
     this.stereoWidthSmoother.setTarget(this.stereoWidthStateValue.width)
   }
 
+  setAnimationState(state: AnimationState): void {
+    this.animationStateValue = canonicalAnimationState(state)
+    this.animation.setState(this.animationStateValue)
+    this.updateGainTargets()
+  }
+
   reset(options: GreygenDspResetOptions = {}): void {
     const nextSeed = options.seed ?? this.seedValue
     const nextGeneratorA = new Xoshiro128StarStar(nextSeed, 0)
@@ -232,6 +287,9 @@ export class GreygenDspEngine {
     const nextStereoWidth = options.stereoWidthState
       ? canonicalStereoWidthState(options.stereoWidthState)
       : this.stereoWidthStateValue
+    const nextAnimation = options.animationState
+      ? canonicalAnimationState(options.animationState)
+      : this.animationStateValue
 
     this.seedValue = nextSeed
     this.generatorA = nextGeneratorA
@@ -239,18 +297,23 @@ export class GreygenDspEngine {
     this.spectrumStateValue = nextSpectrum
     this.gainStageStateValue = nextGainStage
     this.stereoWidthStateValue = nextStereoWidth
+    this.animationStateValue = nextAnimation
     this.filterBankA.reset()
     this.filterBankB.reset()
+    this.animation.reset(nextAnimation)
     this.meter.reset()
     this.guardInterventionsValue = 0
 
     const targets = this.resolveTargets()
     for (let index = 0; index < BAND_COUNT; index += 1) {
       this.bandGainSmoothers[index].reset(targets.bandGainsLinear[index])
+      this.animationBandSmoothers[index].reset(0)
     }
     this.residualGainSmoother.reset(targets.ultrasonicResidualGainLinear)
-    this.safetyPreGainTargetValue = targets.safetyPreGainLinear
-    this.safetyPreGainSmoother.reset(targets.safetyPreGainLinear)
+    this.safetyPreGainTargetValue = this.resolveAnimationAwareSafetyTarget(
+      targets.estimatedShapedPeakLinear,
+    )
+    this.safetyPreGainSmoother.reset(this.safetyPreGainTargetValue)
     this.safetyPreGainSmoother.setTimeConstantSeconds(
       SAFETY_RELEASE_TIME_SECONDS,
     )
@@ -261,9 +324,7 @@ export class GreygenDspEngine {
 
   renderMono(output: Float32Array): void {
     for (let frame = 0; frame < output.length; frame += 1) {
-      for (let band = 0; band < BAND_COUNT; band += 1) {
-        this.currentBandGains[band] = this.bandGainSmoothers[band].next()
-      }
+      this.prepareCurrentBandGains()
       const residualGain = this.residualGainSmoother.next()
       const shaped = this.nextShapedSample(
         this.generatorA,
@@ -293,9 +354,7 @@ export class GreygenDspEngine {
     }
 
     for (let frame = 0; frame < left.length; frame += 1) {
-      for (let band = 0; band < BAND_COUNT; band += 1) {
-        this.currentBandGains[band] = this.bandGainSmoothers[band].next()
-      }
+      this.prepareCurrentBandGains()
       const residualGain = this.residualGainSmoother.next()
       const shapedA = this.nextShapedSample(
         this.generatorA,
@@ -357,6 +416,18 @@ export class GreygenDspEngine {
     return result
   }
 
+  private prepareCurrentBandGains(): void {
+    this.animation.nextOffsets(this.animationTargetOffsetsDb)
+    for (let band = 0; band < BAND_COUNT; band += 1) {
+      this.animationBandSmoothers[band].setTarget(
+        this.animationTargetOffsetsDb[band],
+      )
+      const animationDb = this.animationBandSmoothers[band].next()
+      this.currentBandGains[band] =
+        this.bandGainSmoothers[band].next() * decibelsToGain(animationDb)
+    }
+  }
+
   private nextShapedSample(
     generator: Xoshiro128StarStar,
     filterBank: TenBandFilterBank,
@@ -381,6 +452,18 @@ export class GreygenDspEngine {
     )
   }
 
+  private resolveAnimationAwareSafetyTarget(
+    estimatedShapedPeakLinear: number,
+  ): number {
+    const animationDepthDb =
+      this.animationStateValue.mode === 'off'
+        ? 0
+        : this.animationStateValue.depthDb
+    return computeSafetyPreGainLinear(
+      estimatedShapedPeakLinear * decibelsToGain(animationDepthDb),
+    )
+  }
+
   private updateGainTargets(): void {
     const targets = this.resolveTargets()
     for (let index = 0; index < BAND_COUNT; index += 1) {
@@ -388,13 +471,15 @@ export class GreygenDspEngine {
     }
     this.residualGainSmoother.setTarget(targets.ultrasonicResidualGainLinear)
 
-    this.safetyPreGainTargetValue = targets.safetyPreGainLinear
+    this.safetyPreGainTargetValue = this.resolveAnimationAwareSafetyTarget(
+      targets.estimatedShapedPeakLinear,
+    )
     this.safetyPreGainSmoother.setTimeConstantSeconds(
-      targets.safetyPreGainLinear < this.safetyPreGainSmoother.current
+      this.safetyPreGainTargetValue < this.safetyPreGainSmoother.current
         ? SAFETY_ATTACK_TIME_SECONDS
         : SAFETY_RELEASE_TIME_SECONDS,
     )
-    this.safetyPreGainSmoother.setTarget(targets.safetyPreGainLinear)
+    this.safetyPreGainSmoother.setTarget(this.safetyPreGainTargetValue)
     this.masterGainSmoother.setTarget(
       masterGainLinear(this.gainStageStateValue),
     )
