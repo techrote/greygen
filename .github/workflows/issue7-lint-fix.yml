@@ -29,19 +29,11 @@ jobs:
           from pathlib import Path
           path = Path('src/app/App.tsx')
           source = path.read_text()
-          old = '''        <div
-            className="band-scroll"
-            tabIndex={0}
-            aria-label="Ten frequency bands"
-          >'''
-          new = '''        <div
-            className="band-scroll"
-            role="group"
-            aria-label="Ten frequency bands"
-          >'''
-          if old not in source:
-              raise SystemExit('expected band-scroll block not found')
-          path.write_text(source.replace(old, new))
+          needle = 'tabIndex={0}\n          aria-label="Ten frequency bands"'
+          replacement = 'role="group"\n          aria-label="Ten frequency bands"'
+          if needle not in source:
+              raise SystemExit('expected band-scroll attributes not found')
+          path.write_text(source.replace(needle, replacement, 1))
           PY
           npm run format
           npm run lint
