@@ -96,13 +96,15 @@ describe('spectral animation', () => {
       )
       const output = new Float64Array(10)
       let maximum = 0
+      let finite = true
       for (let frame = 0; frame < 1 << 18; frame += 1) {
         animation.nextOffsets(output)
         for (const value of output) {
-          expect(Number.isFinite(value)).toBe(true)
+          finite &&= Number.isFinite(value)
           maximum = Math.max(maximum, Math.abs(value))
         }
       }
+      expect(finite).toBe(true)
       expect(maximum).toBeLessThanOrEqual(ANIMATION_DEPTH_MAX_DB)
     },
   )
@@ -179,6 +181,7 @@ describe('spectral animation', () => {
     const right = new Float32Array(128)
     const modes = ['drift', 'breathe', 'wander', 'orbit', 'off'] as const
 
+    let finite = true
     for (let iteration = 0; iteration < 200; iteration += 1) {
       engine.setAnimationState(
         createAnimationState(
@@ -190,8 +193,8 @@ describe('spectral animation', () => {
         ),
       )
       engine.renderStereo(left, right)
-      expect(isFiniteBlock(left)).toBe(true)
-      expect(isFiniteBlock(right)).toBe(true)
+      finite &&= isFiniteBlock(left) && isFiniteBlock(right)
     }
+    expect(finite).toBe(true)
   })
 })
