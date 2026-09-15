@@ -197,9 +197,9 @@ describe('AppStateRepository', () => {
 
     const ui = createUiState(false)
     expect(repository.saveUi(ui).ok).toBe(true)
-    expect(JSON.parse(storage.values.get(UI_STATE_STORAGE_KEY) ?? '{}')).toEqual(
-      ui,
-    )
+    expect(
+      JSON.parse(storage.values.get(UI_STATE_STORAGE_KEY) ?? '{}'),
+    ).toEqual(ui)
     expect(storage.values.get(SOUND_STATE_STORAGE_KEY)).toBe(futureSound)
   })
 
