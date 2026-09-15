@@ -14,7 +14,7 @@ test('loads the primary generator Ready and never auto-starts', async ({
   await expect(page.locator('#spectral-preset')).toHaveValue('grey')
   await expect(page.locator('.band-control')).toHaveCount(10)
   await expect(page.locator('#stereo-width')).toHaveValue('0.5')
-  await expect(page.getByText('Normal', { exact: true })).toBeVisible()
+  await expect(page.locator('.stereo-readout strong')).toHaveText('Normal')
   await expect(
     page.locator('dl[aria-label="Digital output meters"]'),
   ).toContainText('— dBFS')
@@ -58,8 +58,8 @@ test('preset, keyboard band, master, and stereo controls update without starting
   await expect(width).toHaveValue('0.49')
   await width.fill('1')
   await expect(width).toHaveValue('1')
-  await expect(page.getByText('Wide', { exact: true })).toBeVisible()
-  await expect(page.getByText('100%', { exact: true })).toBeVisible()
+  await expect(page.locator('.stereo-readout strong')).toHaveText('Wide')
+  await expect(page.locator('.stereo-readout span')).toHaveText('100%')
 
   await band.focus()
   await page.keyboard.press('ArrowUp')
@@ -93,7 +93,7 @@ test('persists sound, stereo width, and UI state across reload without persistin
   const width = page.locator('#stereo-width')
   await width.fill('0.82')
   await expect(width).toHaveValue('0.82')
-  await expect(page.getByText('Wide', { exact: true })).toBeVisible()
+  await expect(page.locator('.stereo-readout strong')).toHaveText('Wide')
 
   await page.getByRole('button', { name: 'Hide roadmap controls' }).click()
   await expect(
