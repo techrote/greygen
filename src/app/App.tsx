@@ -13,6 +13,13 @@ import {
 } from '../audio/dsp/gainSafety'
 import type { SpectralPresetId, SpectrumState } from '../audio/dsp/spectra'
 import {
+  DEFAULT_STEREO_WIDTH,
+  STEREO_WIDTH_MAX,
+  STEREO_WIDTH_MIN,
+  stereoWidthLabel,
+  stereoWidthToCorrelation,
+} from '../audio/dsp/stereo'
+import {
   BAND_STEP_DB,
   GENERATOR_BANDS,
   GENERATOR_PRESETS,
@@ -45,6 +52,8 @@ import type {
 } from './storage/AppStateRepository'
 import { createBrowserAppStateRepository } from './storage/browserStateRepository'
 
+const STEREO_WIDTH_STEP = 0.01
+
 export const INITIAL_AUDIO_SNAPSHOT: AudioEngineSnapshot = {
   status: 'ready',
   capability: 'supported',
@@ -53,6 +62,8 @@ export const INITIAL_AUDIO_SNAPSHOT: AudioEngineSnapshot = {
   targetId: DEFAULT_ENGINE_PRESET,
   highBandMode: null,
   masterGainDb: DEFAULT_MASTER_GAIN_DB,
+  stereoWidth: DEFAULT_STEREO_WIDTH,
+  stereoCorrelation: stereoWidthToCorrelation(DEFAULT_STEREO_WIDTH),
   telemetry: null,
 }
 
@@ -136,6 +147,7 @@ function diagnosticsNotice(
 export interface GeneratorSurfaceProps {
   readonly audioSnapshot: AudioEngineSnapshot
   readonly spectrumState: SpectrumState
+  readonly stereoWidth: number
   readonly engineReady: boolean
   readonly controlError: string | null
   readonly storageNotice: string | null
@@ -148,6 +160,7 @@ export interface GeneratorSurfaceProps {
   readonly onBandReset: (index: number) => void
   readonly onBandsReset: () => void
   readonly onMasterChange: (valueDb: number) => void
+  readonly onStereoWidthChange: (width: number) => void
   readonly onToggleFutureFeatures: () => void
   readonly onResetSound: () => void
   readonly onDeleteProfiles: () => void
@@ -156,6 +169,7 @@ export interface GeneratorSurfaceProps {
 export function GeneratorSurface({
   audioSnapshot,
   spectrumState,
+  stereoWidth,
   engineReady,
   controlError,
   storageNotice,
@@ -168,6 +182,7 @@ export function GeneratorSurface({
   onBandReset,
   onBandsReset,
   onMasterChange,
+  onStereoWidthChange,
   onToggleFutureFeatures,
   onResetSound,
   onDeleteProfiles,
@@ -183,6 +198,9 @@ export function GeneratorSurface({
     audioSnapshot.status === 'unsupported'
   const controlsDisabled = !engineReady
   const highBandDegraded = audioSnapshot.highBandMode === 'degraded-high-shelf'
+  const widthLabel = stereoWidthLabel(stereoWidth)
+  const widthPercent = Math.round(stereoWidth * 100)
+  const targetCorrelation = stereoWidthToCorrelation(stereoWidth)
 
   const handlePresetChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     if (isPresetId(event.currentTarget.value)) {
@@ -418,11 +436,60 @@ export function GeneratorSurface({
         </p>
       </section>
 
+      <section className="stereo-card" aria-labelledby="stereo-heading">
+        <div className="section-heading-row">
+          <div>
+            <p className="label">Spatial</p>
+            <h2 id="stereo-heading">Stereo width</h2>
+          </div>
+          <output className="stereo-readout" htmlFor="stereo-width">
+            <strong>{widthLabel}</strong>
+            <span>{widthPercent}%</span>
+          </output>
+        </div>
+        <label className="sr-only" htmlFor="stereo-width">
+          Stereo width
+        </label>
+        <input
+          id="stereo-width"
+          className="stereo-range"
+          type="range"
+          min={STEREO_WIDTH_MIN}
+          max={STEREO_WIDTH_MAX}
+          step={STEREO_WIDTH_STEP}
+          value={stereoWidth}
+          disabled={controlsDisabled}
+          aria-label={`Stereo width, ${widthLabel}, ${widthPercent} percent`}
+          aria-valuetext={`${widthLabel}, ${widthPercent} percent, target correlation ${targetCorrelation.toFixed(3)}`}
+          onChange={(event) =>
+            onStereoWidthChange(Number(event.currentTarget.value))
+          }
+        />
+        <div className="range-scale" aria-hidden="true">
+          <span>Mono</span>
+          <span>Normal</span>
+          <span>Wide</span>
+        </div>
+        <div className="stereo-detail-row">
+          <span>Target correlation ρ {targetCorrelation.toFixed(3)}</span>
+          {audioSnapshot.status === 'running' ? (
+            <span>
+              Applied ρ {audioSnapshot.stereoCorrelation.toFixed(3)}
+            </span>
+          ) : null}
+        </div>
+        <p className="status-note">
+          Width changes correlation between two deterministic noise streams
+          while preserving expected per-channel power. This control does not
+          enter an anti-phase region.
+        </p>
+      </section>
+
       <section className="future-card" aria-labelledby="future-heading">
         <div className="section-heading-row">
           <div>
             <p className="label">Next layers</p>
-            <h2 id="future-heading">Width, movement &amp; calibration</h2>
+            <h2 id="future-heading">Movement &amp; calibration</h2>
           </div>
           <button
             className="secondary-action panel-toggle"
@@ -436,19 +503,7 @@ export function GeneratorSurface({
           </button>
         </div>
         {futureFeaturesVisible ? (
-          <div className="future-grid">
-            <fieldset disabled>
-              <legend>Stereo width</legend>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value="0"
-                readOnly
-                aria-label="Stereo width, unavailable until stereo engine is implemented"
-              />
-              <p>Mono for now. Power-preserving stereo arrives in issue #9.</p>
-            </fieldset>
+          <div className="future-grid future-grid-two">
             <fieldset disabled>
               <legend>Spectral animation</legend>
               <select
@@ -557,6 +612,7 @@ export default function App() {
         await engine.resetSeed(loaded.sound.seed)
         await engine.setSpectrumState(soundStateToSpectrumState(loaded.sound))
         await engine.setMasterGainDb(loaded.sound.masterGainDb)
+        await engine.setStereoWidth(loaded.sound.stereoWidth)
 
         if (loaded.diagnostics.some((entry) => entry.code === 'migrated')) {
           const result = repository.saveSound(loaded.sound)
@@ -639,6 +695,7 @@ export default function App() {
       targetId: nextSpectrum.targetId,
       userBandOffsetsDb: nextSpectrum.userBandOffsetsDb,
       masterGainDb: soundState.masterGainDb,
+      stereoWidth: soundState.stereoWidth,
     })
     setControlError(null)
     setSoundState(next)
@@ -676,6 +733,7 @@ export default function App() {
       targetId: soundState.targetId,
       userBandOffsetsDb: soundState.userBandOffsetsDb,
       masterGainDb: valueDb,
+      stereoWidth: soundState.stereoWidth,
     })
     setControlError(null)
     void engine
@@ -684,6 +742,26 @@ export default function App() {
         setSoundState(next)
         persistSound(next)
       })
+      .catch(reportControlFailure)
+  }
+
+  const handleStereoWidthChange = (width: number): void => {
+    const engine = engineRef.current
+    if (!engine) {
+      return
+    }
+    const next = createSoundState({
+      seed: soundState.seed,
+      targetId: soundState.targetId,
+      userBandOffsetsDb: soundState.userBandOffsetsDb,
+      masterGainDb: soundState.masterGainDb,
+      stereoWidth: width,
+    })
+    setControlError(null)
+    setSoundState(next)
+    void engine
+      .setStereoWidth(width)
+      .then(() => persistSound(next))
       .catch(reportControlFailure)
   }
 
@@ -708,6 +786,7 @@ export default function App() {
       engine.resetSeed(next.seed),
       engine.setSpectrumState(soundStateToSpectrumState(next)),
       engine.setMasterGainDb(next.masterGainDb),
+      engine.setStereoWidth(next.stereoWidth),
     ])
       .then(() => {
         const repository = repositoryRef.current
@@ -731,6 +810,7 @@ export default function App() {
     <GeneratorSurface
       audioSnapshot={audioSnapshot}
       spectrumState={spectrumState}
+      stereoWidth={soundState.stereoWidth}
       engineReady={engineReady}
       controlError={controlError}
       storageNotice={storageNotice}
@@ -743,6 +823,7 @@ export default function App() {
       onBandReset={handleBandReset}
       onBandsReset={handleBandsReset}
       onMasterChange={handleMasterChange}
+      onStereoWidthChange={handleStereoWidthChange}
       onToggleFutureFeatures={handleToggleFutureFeatures}
       onResetSound={handleResetSound}
       onDeleteProfiles={handleDeleteProfiles}
