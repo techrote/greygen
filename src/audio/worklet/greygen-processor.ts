@@ -6,6 +6,7 @@ import {
   type WorkletToMainMessage,
   deserializeGainStageState,
   deserializeSpectrumState,
+  deserializeStereoWidthState,
   parseMainToWorkletMessage,
 } from '../protocol'
 
@@ -93,6 +94,7 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
           seed: message.seed,
           spectrumState: deserializeSpectrumState(message.spectrum),
           gainStageState: deserializeGainStageState(message.gainStage),
+          stereoWidthState: deserializeStereoWidthState(message.stereoWidth),
         })
         this.renderedFrames = 0
         this.framesSinceTelemetry = 0
@@ -106,6 +108,7 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
           sampleRate,
           targetId: this.engine.targetId,
           highBandMode: this.engine.highBandMode,
+          stereoWidth: this.engine.stereoWidthState.width,
         })
         return
       case 'set-spectrum':
@@ -128,6 +131,17 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
           command: 'set-gain-stage',
         })
         return
+      case 'set-stereo-width':
+        this.engine.setStereoWidthState(
+          deserializeStereoWidthState(message.stereoWidth),
+        )
+        this.post({
+          version: AUDIO_PROTOCOL_VERSION,
+          type: 'ack',
+          requestId: message.requestId,
+          command: 'set-stereo-width',
+        })
+        return
       case 'reset-seed':
         this.engine.setSeed(message.seed)
         this.renderedFrames = 0
@@ -146,6 +160,7 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
           sampleRate,
           targetId: this.engine.targetId,
           highBandMode: this.engine.highBandMode,
+          stereoWidth: this.engine.stereoWidthState.width,
           renderedFrames: this.renderedFrames,
         })
         return
@@ -177,6 +192,8 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
       safetyPreGainTargetDb: telemetry.safetyPreGainTargetDb,
       masterGainDb: telemetry.masterGainDb,
       guardInterventions: telemetry.guardInterventions,
+      stereoWidth: telemetry.stereoWidth,
+      stereoCorrelation: telemetry.stereoCorrelation,
     })
   }
 
@@ -190,24 +207,31 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
       return !this.stopped
     }
 
-    const mono = output[0]
-    if (!mono) {
+    const left = output[0]
+    if (!left) {
       return !this.stopped
     }
+    const right = output[1]
 
     if (this.stopped) {
-      mono.fill(0)
+      left.fill(0)
+      right?.fill(0)
       return false
     }
 
     if (!this.initialized) {
-      mono.fill(0)
+      left.fill(0)
+      right?.fill(0)
       return true
     }
 
-    this.engine.renderMono(mono)
-    this.renderedFrames += mono.length
-    this.framesSinceTelemetry += mono.length
+    if (right) {
+      this.engine.renderStereo(left, right)
+    } else {
+      this.engine.renderMono(left)
+    }
+    this.renderedFrames += left.length
+    this.framesSinceTelemetry += left.length
     if (this.framesSinceTelemetry >= this.telemetryIntervalFrames) {
       this.framesSinceTelemetry = 0
       this.emitTelemetry()
