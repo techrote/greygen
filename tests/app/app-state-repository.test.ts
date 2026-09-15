@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  APP_STORAGE_VERSION,
   PROFILE_RECORD_SCHEMA_VERSION,
   createDefaultProfileState,
   createDefaultSoundState,
@@ -146,16 +147,12 @@ describe('AppStateRepository', () => {
     ).toBe(true)
   })
 
-  it('treats an unknown future storage manifest as read-only and loads safe defaults', () => {
+  it('treats an unknown future storage manifest as read-only for the whole boot', () => {
     const storage = new MemoryStorage()
-    storage.values.set(
-      STORAGE_MANIFEST_KEY,
-      JSON.stringify({ schemaVersion: 99 }),
-    )
-    storage.values.set(
-      SOUND_STATE_STORAGE_KEY,
-      JSON.stringify({ schemaVersion: 99, targetId: 'white' }),
-    )
+    const futureManifest = JSON.stringify({ schemaVersion: 99 })
+    const futureSound = JSON.stringify({ schemaVersion: 99, targetId: 'white' })
+    storage.values.set(STORAGE_MANIFEST_KEY, futureManifest)
+    storage.values.set(SOUND_STATE_STORAGE_KEY, futureSound)
     const repository = new AppStateRepository(storage)
 
     const loaded = repository.load()
@@ -167,9 +164,43 @@ describe('AppStateRepository', () => {
         (entry) => entry.code === 'future-storage-version',
       ),
     ).toBe(true)
-    expect(storage.values.get(STORAGE_MANIFEST_KEY)).toBe(
-      JSON.stringify({ schemaVersion: 99 }),
+
+    const attemptedSave = repository.saveSound(createDefaultSoundState())
+    expect(attemptedSave.ok).toBe(false)
+    expect(attemptedSave.diagnostic?.code).toBe('future-storage-version')
+    expect(storage.values.get(STORAGE_MANIFEST_KEY)).toBe(futureManifest)
+    expect(storage.values.get(SOUND_STATE_STORAGE_KEY)).toBe(futureSound)
+  })
+
+  it('write-protects only an unknown future domain while current sibling domains remain writable', () => {
+    const storage = new MemoryStorage()
+    const futureSound = JSON.stringify({ schemaVersion: 99, targetId: 'pink' })
+    storage.values.set(
+      STORAGE_MANIFEST_KEY,
+      JSON.stringify({ schemaVersion: APP_STORAGE_VERSION }),
     )
+    storage.values.set(SOUND_STATE_STORAGE_KEY, futureSound)
+    const repository = new AppStateRepository(storage)
+
+    const loaded = repository.load()
+    expect(loaded.sound).toEqual(createDefaultSoundState())
+    expect(
+      loaded.diagnostics.some(
+        (entry) => entry.domain === 'sound' && entry.code === 'future-version',
+      ),
+    ).toBe(true)
+
+    const attemptedSoundSave = repository.saveSound(createDefaultSoundState())
+    expect(attemptedSoundSave.ok).toBe(false)
+    expect(attemptedSoundSave.diagnostic?.code).toBe('future-version')
+    expect(storage.values.get(SOUND_STATE_STORAGE_KEY)).toBe(futureSound)
+
+    const ui = createUiState(false)
+    expect(repository.saveUi(ui).ok).toBe(true)
+    expect(JSON.parse(storage.values.get(UI_STATE_STORAGE_KEY) ?? '{}')).toEqual(
+      ui,
+    )
+    expect(storage.values.get(SOUND_STATE_STORAGE_KEY)).toBe(futureSound)
   })
 
   it('resets sound without deleting personal profiles or UI preferences', () => {
