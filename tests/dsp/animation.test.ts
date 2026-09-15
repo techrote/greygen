@@ -152,6 +152,45 @@ describe('spectral animation', () => {
     expect(animation.appliedSpeed).toBeCloseTo(0.25, 4)
   })
 
+  it('rendered output converges back to the identical unanimated base path after Off', () => {
+    const seed = 0x1bad_b002
+    const gainStageState = createGainStageState(-24)
+    const animated = new GreygenDspEngine({
+      sampleRate: SAMPLE_RATE,
+      seed,
+      gainStageState,
+      animationState: createAnimationState('wander', 31415, 10, 2, true),
+    })
+    const base = new GreygenDspEngine({
+      sampleRate: SAMPLE_RATE,
+      seed,
+      gainStageState,
+      animationState: createAnimationState('off', 31415, 10, 2, true),
+    })
+
+    const warmAnimated = new Float32Array(SAMPLE_RATE / 2)
+    const warmBase = new Float32Array(SAMPLE_RATE / 2)
+    animated.renderMono(warmAnimated)
+    base.renderMono(warmBase)
+    expect(warmAnimated).not.toEqual(warmBase)
+
+    animated.setAnimationState(createAnimationState('off', 31415, 10, 2, true))
+    const settleFrames = SAMPLE_RATE * 2
+    const settledAnimated = new Float32Array(settleFrames)
+    const settledBase = new Float32Array(settleFrames)
+    animated.renderMono(settledAnimated)
+    base.renderMono(settledBase)
+
+    let maximumTailDifference = 0
+    for (let index = settleFrames - 4096; index < settleFrames; index += 1) {
+      maximumTailDifference = Math.max(
+        maximumTailDifference,
+        Math.abs(settledAnimated[index] - settledBase[index]),
+      )
+    }
+    expect(maximumTailDifference).toBeLessThan(1e-5)
+  })
+
   it('animation extrema participate in conservative safety pre-gain and stay finite', () => {
     const off = new GreygenDspEngine({
       sampleRate: 48_000,
