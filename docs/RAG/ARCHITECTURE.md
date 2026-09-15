@@ -113,7 +113,7 @@ Canonical behavior implemented in `src/audio/dsp/rng.ts`:
 - `nextUint32()` returns `[0, 2^32 - 1]` exactly;
 - unit-float mapping divides by `2^32`, producing `[0, 1)`;
 - bipolar audio mapping is `2 * uint32 / 2^32 - 1`, producing `[-1, 1)` with theoretical mean `0` and variance `1/3`;
-- stream identity is deterministic and intended for later independent left/right/feature streams;
+- stream identity is deterministic and intended for independent left/right/feature streams;
 - exact seed expansion and output golden vectors live in `tests/dsp/rng.test.ts`.
 
 Reference algorithm descriptions are available at `https://prng.di.unimi.it/` for xoshiro and in the public MurmurHash3 reference implementation for `fmix32`. Greygen's concrete seed-expansion composition and stream mapping are project-defined and locked by tests.
@@ -181,18 +181,33 @@ Generic grey is an original practical target shaped for broadly flatter perceive
 
 ## Stereo width/correlation
 
-Stereo width is a statistical property, not just pan.
+Stereo width is a statistical property, not pan. The accepted issue #9 renderer uses two deterministic independent zero-mean streams `A` and `B`, each passed through a separate instance of the same current spectral-shaping path, then applies a symmetric constant-power correlation matrix.
 
-A preferred model uses two independent zero-mean, unit-variance streams `A` and `B`, then constructs channels with a target correlation while preserving expected variance. One valid formulation is:
+For normalized width `w` in `[0,1]`:
 
 ```text
-L = A
-R = rho * A + sqrt(1 - rho^2) * B
+theta = w * pi / 4
+c = cos(theta)
+s = sin(theta)
+
+L = c * A + s * B
+R = c * A - s * B
 ```
 
-for `rho` in `[-1, 1]`, with user-facing width mapped to a safe/useful subset. If a symmetric matrix is chosen instead, it must similarly preserve power and be validated statistically.
+For independent equal-variance streams this gives:
 
-Do not allow width changes to create obvious loudness jumps.
+```text
+Var(L) = Var(R) = Var(A) = Var(B)
+Corr(L,R) = c^2 - s^2 = cos(w * pi / 2)
+```
+
+The user-facing range is intentionally non-negative correlation only: `w=0` is Mono (`rho=1`), `w=0.5` is the Normal default (`rho≈0.707`), and `w=1` is fully decorrelated Wide (`rho=0`). Issue #9 does not expose an anti-phase region.
+
+Stream identity is deterministic: stream A uses `(seed, 0)` and stream B uses `(seed, 1)`. Stream A retains the pre-stereo mono source identity. Each stream owns independent filter-bank state so decorrelation is not faked with panning or shared-state channel gain.
+
+Width changes are smoothed in the pure engine before the matrix coefficients are applied. Stereo meters count frames rather than channel samples and use mean channel power for RMS. `SoundState` persists normalized width; pre-stereo saved states migrate to Mono to preserve their previous renderer semantics, while a clean first run defaults to Normal.
+
+The exact model, persistence rules, UI labels, and deterministic statistical acceptance thresholds are canonicalized in `STEREO_WIDTH.md`. Width changes must not create an obvious nominal loudness jump or depend on the final guard for ordinary headroom-safe operation.
 
 ## Parameter smoothing
 
