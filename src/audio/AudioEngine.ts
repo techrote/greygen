@@ -1,3 +1,4 @@
+import { type AnimationState, createAnimationState } from './dsp/animation'
 import { DEFAULT_ENGINE_PRESET, DEFAULT_ENGINE_SEED } from './dsp/engine'
 import type { HighBandMode } from './dsp/filterBank'
 import { type GainStageState, createGainStageState } from './dsp/gainSafety'
@@ -21,6 +22,7 @@ import {
   type WorkletToMainMessage,
   isAudioSeed,
   parseWorkletToMainMessage,
+  serializeAnimationState,
   serializeGainStageState,
   serializeSpectrumState,
   serializeStereoWidthState,
@@ -208,6 +210,16 @@ function canonicalStereoWidth(state: StereoWidthState): StereoWidthState {
   return createStereoWidthState(state.width)
 }
 
+function canonicalAnimation(state: AnimationState): AnimationState {
+  return createAnimationState(
+    state.mode,
+    state.seed,
+    state.depthDb,
+    state.speed,
+    state.energyPreserving,
+  )
+}
+
 export class AudioEngine {
   private snapshotValue: AudioEngineSnapshot
   private readonly listeners = new Set<SnapshotListener>()
@@ -220,6 +232,7 @@ export class AudioEngine {
   private spectrumValue: SerializedSpectrumState
   private gainStageValue: GainStageState
   private stereoWidthValue: StereoWidthState
+  private animationValue: AnimationState
 
   constructor(
     private readonly runtime: AudioEngineRuntime,
@@ -230,6 +243,7 @@ export class AudioEngine {
     stereoWidthState: StereoWidthState = createStereoWidthState(
       DEFAULT_STEREO_WIDTH,
     ),
+    animationState: AnimationState = createAnimationState(),
   ) {
     if (!isAudioSeed(seed)) {
       throw new RangeError('seed must be an unsigned 32-bit integer')
@@ -239,6 +253,7 @@ export class AudioEngine {
     this.spectrumValue = canonicalSpectrum(spectrumState)
     this.gainStageValue = canonicalGainStage(gainStageState)
     this.stereoWidthValue = canonicalStereoWidth(stereoWidthState)
+    this.animationValue = canonicalAnimation(animationState)
     const capability = initialCapability(runtime)
     this.snapshotValue = Object.freeze({
       status: capability === 'supported' ? 'ready' : 'unsupported',
@@ -355,6 +370,7 @@ export class AudioEngine {
           spectrum: this.spectrumValue,
           gainStage: serializeGainStageState(this.gainStageValue),
           stereoWidth: serializeStereoWidthState(this.stereoWidthValue),
+          animation: serializeAnimationState(this.animationValue),
         },
         'ready',
       )
@@ -551,6 +567,28 @@ export class AudioEngine {
 
   async setStereoWidth(width: number): Promise<void> {
     await this.setStereoWidthState(createStereoWidthState(width))
+  }
+
+  async setAnimationState(state: AnimationState): Promise<void> {
+    const canonical = canonicalAnimation(state)
+    this.animationValue = canonical
+
+    if (!this.node) {
+      return
+    }
+
+    const response = await this.request(
+      {
+        version: AUDIO_PROTOCOL_VERSION,
+        type: 'set-animation',
+        requestId: this.allocateRequestId(),
+        animation: serializeAnimationState(canonical),
+      },
+      'ack',
+    )
+    if (response.type !== 'ack' || response.command !== 'set-animation') {
+      throw new Error('Unexpected set-animation acknowledgement')
+    }
   }
 
   async resetSeed(seed: number): Promise<void> {

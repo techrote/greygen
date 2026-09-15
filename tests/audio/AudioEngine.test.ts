@@ -6,6 +6,7 @@ import {
   type AudioWorkletNodePort,
   type WorkletMessagePort,
 } from '../../src/audio/AudioEngine'
+import { createAnimationState } from '../../src/audio/dsp/animation'
 import { createGainStageState } from '../../src/audio/dsp/gainSafety'
 import { createSpectrumState } from '../../src/audio/dsp/spectra'
 import { stereoWidthToCorrelation } from '../../src/audio/dsp/stereo'
@@ -14,6 +15,7 @@ import {
   type MainToWorkletMessage,
   type TelemetryMessage,
   type WorkletToMainMessage,
+  serializeAnimationState,
 } from '../../src/audio/protocol'
 
 class MockMessagePort implements WorkletMessagePort {
@@ -22,6 +24,7 @@ class MockMessagePort implements WorkletMessagePort {
   private targetId: 'white' | 'pink' | 'brown' | 'grey' = 'grey'
   private masterGainDb = -26.020599913279625
   private stereoWidth = 0.5
+  private animation = serializeAnimationState(createAnimationState())
 
   constructor(private readonly sampleRate: number) {}
 
@@ -32,6 +35,7 @@ class MockMessagePort implements WorkletMessagePort {
         this.targetId = message.spectrum.targetId
         this.masterGainDb = message.gainStage.masterGainDb
         this.stereoWidth = message.stereoWidth.width
+        this.animation = message.animation
         response = {
           version: AUDIO_PROTOCOL_VERSION,
           type: 'ready',
@@ -40,6 +44,7 @@ class MockMessagePort implements WorkletMessagePort {
           targetId: this.targetId,
           highBandMode: 'degraded-high-shelf',
           stereoWidth: this.stereoWidth,
+          animation: this.animation,
         }
         break
       case 'set-spectrum':
@@ -69,6 +74,15 @@ class MockMessagePort implements WorkletMessagePort {
           command: 'set-stereo-width',
         }
         break
+      case 'set-animation':
+        this.animation = message.animation
+        response = {
+          version: AUDIO_PROTOCOL_VERSION,
+          type: 'ack',
+          requestId: message.requestId,
+          command: 'set-animation',
+        }
+        break
       case 'reset-seed':
         response = {
           version: AUDIO_PROTOCOL_VERSION,
@@ -86,6 +100,7 @@ class MockMessagePort implements WorkletMessagePort {
           targetId: this.targetId,
           highBandMode: 'degraded-high-shelf',
           stereoWidth: this.stereoWidth,
+          animation: this.animation,
           renderedFrames: 256,
         }
         break
@@ -266,7 +281,7 @@ describe('AudioEngine lifecycle', () => {
     expect(runtime.lastNode?.port.closed).toBe(true)
   })
 
-  it('round-trips spectrum, gain controls, stereo width, seed, and status through protocol v3', async () => {
+  it('round-trips spectrum, gain controls, stereo width, animation, seed, and status through protocol v4', async () => {
     const runtime = new MockRuntime()
     const engine = new AudioEngine(runtime)
     await engine.startFromUserGesture()
@@ -274,6 +289,9 @@ describe('AudioEngine lifecycle', () => {
     await engine.setSpectrumState(createSpectrumState('pink'))
     await engine.setGainStageState(createGainStageState(-12))
     await engine.setStereoWidth(0.82)
+    await engine.setAnimationState(
+      createAnimationState('orbit', 99, 6, 1.5, true),
+    )
     await engine.resetSeed(1234)
     const status = await engine.requestStatus()
 
@@ -281,6 +299,7 @@ describe('AudioEngine lifecycle', () => {
       type: 'status',
       targetId: 'pink',
       stereoWidth: 0.82,
+      animation: { mode: 'orbit', seed: 99, depthDb: 6, speed: 1.5 },
       renderedFrames: 256,
     })
     expect(engine.getSnapshot()).toMatchObject({

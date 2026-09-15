@@ -486,7 +486,7 @@ export function parseMainToWorkletMessage(
         version: AUDIO_PROTOCOL_VERSION,
         type: 'reset-seed',
         requestId: value.requestId,
-        seed,
+        seed: value.seed,
       }
     case 'request-status':
       return {

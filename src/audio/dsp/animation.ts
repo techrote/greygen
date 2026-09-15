@@ -151,7 +151,10 @@ export class SpectralAnimation {
   private phase = 0
   private sampleCursorValue = 0
 
-  constructor(sampleRate: number, state: AnimationState = createAnimationState()) {
+  constructor(
+    sampleRate: number,
+    state: AnimationState = createAnimationState(),
+  ) {
     if (!(sampleRate > 0) || !Number.isFinite(sampleRate)) {
       throw new RangeError('sampleRate must be finite and positive')
     }
@@ -275,16 +278,12 @@ export class SpectralAnimation {
                   this.phases[band],
               ) +
             0.17 *
-              Math.sin(
-                this.phase * 1.37 + this.secondaryPhases[band] * 0.7,
-              ) +
+              Math.sin(this.phase * 1.37 + this.secondaryPhases[band] * 0.7) +
             0.08 * Math.sin(this.phase * 0.19 + band * 0.61)
           break
         case 'orbit':
           raw = 0.48 * Math.sin(this.phase - position * TWO_PI)
           break
-        case 'off':
-          raw = 0
       }
       outputDb[band] =
         Math.max(-RAW_AMPLITUDE_LIMIT, Math.min(RAW_AMPLITUDE_LIMIT, raw)) *

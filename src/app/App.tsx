@@ -1,4 +1,15 @@
 import { type ChangeEvent, useEffect, useRef, useState } from 'react'
+import {
+  ANIMATION_DEPTH_MAX_DB,
+  ANIMATION_DEPTH_MIN_DB,
+  ANIMATION_MODES,
+  ANIMATION_SPEED_MAX,
+  ANIMATION_SPEED_MIN,
+  type AnimationMode,
+  type AnimationState,
+  animationModeLabel,
+  createAnimationState,
+} from '../audio/dsp/animation'
 import type {
   AudioEngine,
   AudioEngineSnapshot,
@@ -43,6 +54,7 @@ import {
   createDefaultUiState,
   createSoundState,
   createUiState,
+  soundStateToAnimationState,
   soundStateToSpectrumState,
 } from './state/appState'
 import type {
@@ -53,6 +65,8 @@ import type {
 import { createBrowserAppStateRepository } from './storage/browserStateRepository'
 
 const STEREO_WIDTH_STEP = 0.01
+const ANIMATION_DEPTH_STEP_DB = 0.5
+const ANIMATION_SPEED_STEP = 0.25
 
 export const INITIAL_AUDIO_SNAPSHOT: AudioEngineSnapshot = {
   status: 'ready',
@@ -148,6 +162,7 @@ export interface GeneratorSurfaceProps {
   readonly audioSnapshot: AudioEngineSnapshot
   readonly spectrumState: SpectrumState
   readonly stereoWidth: number
+  readonly animation: AnimationState
   readonly engineReady: boolean
   readonly controlError: string | null
   readonly storageNotice: string | null
@@ -161,6 +176,10 @@ export interface GeneratorSurfaceProps {
   readonly onBandsReset: () => void
   readonly onMasterChange: (valueDb: number) => void
   readonly onStereoWidthChange: (width: number) => void
+  readonly onAnimationModeChange: (mode: AnimationMode) => void
+  readonly onAnimationDepthChange: (depthDb: number) => void
+  readonly onAnimationSpeedChange: (speed: number) => void
+  readonly onAnimationEnergyChange: (enabled: boolean) => void
   readonly onToggleFutureFeatures: () => void
   readonly onResetSound: () => void
   readonly onDeleteProfiles: () => void
@@ -170,6 +189,7 @@ export function GeneratorSurface({
   audioSnapshot,
   spectrumState,
   stereoWidth,
+  animation,
   engineReady,
   controlError,
   storageNotice,
@@ -183,6 +203,10 @@ export function GeneratorSurface({
   onBandsReset,
   onMasterChange,
   onStereoWidthChange,
+  onAnimationModeChange,
+  onAnimationDepthChange,
+  onAnimationSpeedChange,
+  onAnimationEnergyChange,
   onToggleFutureFeatures,
   onResetSound,
   onDeleteProfiles,
@@ -205,6 +229,15 @@ export function GeneratorSurface({
   const handlePresetChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     if (isPresetId(event.currentTarget.value)) {
       onPresetChange(event.currentTarget.value)
+    }
+  }
+
+  const handleAnimationModeChange = (
+    event: ChangeEvent<HTMLSelectElement>,
+  ): void => {
+    const mode = event.currentTarget.value as AnimationMode
+    if (ANIMATION_MODES.includes(mode)) {
+      onAnimationModeChange(mode)
     }
   }
 
@@ -502,18 +535,72 @@ export function GeneratorSurface({
         </div>
         {futureFeaturesVisible ? (
           <div className="future-grid future-grid-two">
-            <fieldset disabled>
+            <fieldset
+              className="animation-controls"
+              disabled={controlsDisabled}
+            >
               <legend>Spectral animation</legend>
+              <label htmlFor="animation-mode">Mode</label>
               <select
-                value="off"
-                aria-label="Spectral animation, unavailable until animation engine is implemented"
-                onChange={() => undefined}
+                id="animation-mode"
+                value={animation.mode}
+                aria-label={`Spectral animation mode, ${animationModeLabel(animation.mode)}`}
+                onChange={handleAnimationModeChange}
               >
-                <option value="off">Off — coming in issue #10</option>
+                {ANIMATION_MODES.map((mode) => (
+                  <option value={mode} key={mode}>
+                    {animationModeLabel(mode)}
+                  </option>
+                ))}
               </select>
+              <label htmlFor="animation-depth">Depth</label>
+              <input
+                id="animation-depth"
+                type="range"
+                min={ANIMATION_DEPTH_MIN_DB}
+                max={ANIMATION_DEPTH_MAX_DB}
+                step={ANIMATION_DEPTH_STEP_DB}
+                value={animation.depthDb}
+                aria-label={`Animation depth, ${animation.depthDb.toFixed(1)} dB`}
+                aria-valuetext={`${animation.depthDb.toFixed(1)} dB`}
+                onChange={(event) =>
+                  onAnimationDepthChange(Number(event.currentTarget.value))
+                }
+              />
+              <output htmlFor="animation-depth">
+                {animation.depthDb.toFixed(1)} dB
+              </output>
+              <label htmlFor="animation-speed">Speed</label>
+              <input
+                id="animation-speed"
+                type="range"
+                min={ANIMATION_SPEED_MIN}
+                max={ANIMATION_SPEED_MAX}
+                step={ANIMATION_SPEED_STEP}
+                value={animation.speed}
+                aria-label={`Animation speed, ${animation.speed.toFixed(2)} times`}
+                aria-valuetext={`${animation.speed.toFixed(2)}×`}
+                onChange={(event) =>
+                  onAnimationSpeedChange(Number(event.currentTarget.value))
+                }
+              />
+              <output htmlFor="animation-speed">
+                {animation.speed.toFixed(2)}×
+              </output>
+              <label className="animation-energy-toggle">
+                <input
+                  id="animation-energy"
+                  type="checkbox"
+                  checked={animation.energyPreserving}
+                  onChange={(event) =>
+                    onAnimationEnergyChange(event.currentTarget.checked)
+                  }
+                />
+                Preserve mean band power
+              </label>
               <p>
-                No fake motion: deterministic bounded animation is not active
-                yet.
+                Seeded motion is bounded and returns smoothly to the underlying
+                spectrum when switched Off.
               </p>
             </fieldset>
             <div className="calibration-placeholder">
@@ -611,6 +698,7 @@ export default function App() {
         await engine.setSpectrumState(soundStateToSpectrumState(loaded.sound))
         await engine.setMasterGainDb(loaded.sound.masterGainDb)
         await engine.setStereoWidth(loaded.sound.stereoWidth)
+        await engine.setAnimationState(soundStateToAnimationState(loaded.sound))
 
         if (loaded.diagnostics.some((entry) => entry.code === 'migrated')) {
           const result = repository.saveSound(loaded.sound)
@@ -694,6 +782,7 @@ export default function App() {
       userBandOffsetsDb: nextSpectrum.userBandOffsetsDb,
       masterGainDb: soundState.masterGainDb,
       stereoWidth: soundState.stereoWidth,
+      animation: soundState.animation,
     })
     setControlError(null)
     setSoundState(next)
@@ -732,6 +821,7 @@ export default function App() {
       userBandOffsetsDb: soundState.userBandOffsetsDb,
       masterGainDb: valueDb,
       stereoWidth: soundState.stereoWidth,
+      animation: soundState.animation,
     })
     setControlError(null)
     void engine
@@ -754,6 +844,7 @@ export default function App() {
       userBandOffsetsDb: soundState.userBandOffsetsDb,
       masterGainDb: soundState.masterGainDb,
       stereoWidth: width,
+      animation: soundState.animation,
     })
     setControlError(null)
     setSoundState(next)
@@ -761,6 +852,75 @@ export default function App() {
       .setStereoWidth(width)
       .then(() => persistSound(next))
       .catch(reportControlFailure)
+  }
+
+  const commitAnimationState = (animation: AnimationState): void => {
+    const engine = engineRef.current
+    if (!engine) {
+      return
+    }
+    const next = createSoundState({
+      seed: soundState.seed,
+      targetId: soundState.targetId,
+      userBandOffsetsDb: soundState.userBandOffsetsDb,
+      masterGainDb: soundState.masterGainDb,
+      stereoWidth: soundState.stereoWidth,
+      animation,
+    })
+    setControlError(null)
+    setSoundState(next)
+    void engine
+      .setAnimationState(animation)
+      .then(() => persistSound(next))
+      .catch(reportControlFailure)
+  }
+
+  const handleAnimationModeChange = (mode: AnimationMode): void => {
+    commitAnimationState(
+      createAnimationState(
+        mode,
+        soundState.animation.seed,
+        soundState.animation.depthDb,
+        soundState.animation.speed,
+        soundState.animation.energyPreserving,
+      ),
+    )
+  }
+
+  const handleAnimationDepthChange = (depthDb: number): void => {
+    commitAnimationState(
+      createAnimationState(
+        soundState.animation.mode,
+        soundState.animation.seed,
+        depthDb,
+        soundState.animation.speed,
+        soundState.animation.energyPreserving,
+      ),
+    )
+  }
+
+  const handleAnimationSpeedChange = (speed: number): void => {
+    commitAnimationState(
+      createAnimationState(
+        soundState.animation.mode,
+        soundState.animation.seed,
+        soundState.animation.depthDb,
+        speed,
+        soundState.animation.energyPreserving,
+      ),
+    )
+  }
+
+  const handleAnimationEnergyChange = (enabled: boolean): void => {
+    commitAnimationState(
+      createAnimationState(
+        soundState.animation.mode,
+        soundState.animation.seed,
+        soundState.animation.depthDb,
+        soundState.animation.speed,
+        enabled,
+      ),
+    )
   }
 
   const handleToggleFutureFeatures = (): void => {
@@ -785,6 +945,7 @@ export default function App() {
       engine.setSpectrumState(soundStateToSpectrumState(next)),
       engine.setMasterGainDb(next.masterGainDb),
       engine.setStereoWidth(next.stereoWidth),
+      engine.setAnimationState(soundStateToAnimationState(next)),
     ])
       .then(() => {
         const repository = repositoryRef.current
@@ -809,6 +970,7 @@ export default function App() {
       audioSnapshot={audioSnapshot}
       spectrumState={spectrumState}
       stereoWidth={soundState.stereoWidth}
+      animation={soundState.animation}
       engineReady={engineReady}
       controlError={controlError}
       storageNotice={storageNotice}
@@ -822,6 +984,10 @@ export default function App() {
       onBandsReset={handleBandsReset}
       onMasterChange={handleMasterChange}
       onStereoWidthChange={handleStereoWidthChange}
+      onAnimationModeChange={handleAnimationModeChange}
+      onAnimationDepthChange={handleAnimationDepthChange}
+      onAnimationSpeedChange={handleAnimationSpeedChange}
+      onAnimationEnergyChange={handleAnimationEnergyChange}
       onToggleFutureFeatures={handleToggleFutureFeatures}
       onResetSound={handleResetSound}
       onDeleteProfiles={handleDeleteProfiles}

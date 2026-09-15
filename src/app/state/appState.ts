@@ -1,4 +1,13 @@
 import {
+  ANIMATION_DEPTH_MAX_DB,
+  ANIMATION_DEPTH_MIN_DB,
+  ANIMATION_SPEED_MAX,
+  ANIMATION_SPEED_MIN,
+  type AnimationState,
+  createAnimationState,
+  isAnimationMode,
+} from '../../audio/dsp/animation'
+import {
   DEFAULT_ENGINE_PRESET,
   DEFAULT_ENGINE_SEED,
 } from '../../audio/dsp/engine'
@@ -24,7 +33,7 @@ import {
 } from '../../audio/dsp/stereo'
 
 export const APP_STORAGE_VERSION = 1 as const
-export const SOUND_STATE_SCHEMA_VERSION = 2 as const
+export const SOUND_STATE_SCHEMA_VERSION = 3 as const
 export const PROFILE_STATE_SCHEMA_VERSION = 1 as const
 export const UI_STATE_SCHEMA_VERSION = 1 as const
 export const PROFILE_RECORD_SCHEMA_VERSION = 1 as const
@@ -40,6 +49,7 @@ export interface SoundState {
   readonly userBandOffsetsDb: readonly number[]
   readonly masterGainDb: number
   readonly stereoWidth: number
+  readonly animation: AnimationState
 }
 
 export type ProfileKind = 'calibration' | 'playback'
@@ -100,6 +110,15 @@ interface LegacySoundStateV1 {
   readonly masterGainDb?: unknown
 }
 
+interface LegacySoundStateV2 {
+  readonly schemaVersion: 2
+  readonly seed?: unknown
+  readonly targetId?: unknown
+  readonly userBandOffsetsDb?: unknown
+  readonly masterGainDb?: unknown
+  readonly stereoWidth?: unknown
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -134,6 +153,7 @@ function canonicalSoundState(
   userBandOffsetsDb: ArrayLike<number>,
   masterGainDb: number,
   stereoWidth: number,
+  animationState: AnimationState,
 ): SoundState {
   const spectrum = createSpectrumState(targetId, userBandOffsetsDb)
   if (
@@ -149,6 +169,13 @@ function canonicalSoundState(
     throw new RangeError('seed must be an unsigned 32-bit integer')
   }
   const stereo = createStereoWidthState(stereoWidth)
+  const animation = createAnimationState(
+    animationState.mode,
+    animationState.seed,
+    animationState.depthDb,
+    animationState.speed,
+    animationState.energyPreserving,
+  )
 
   return Object.freeze({
     schemaVersion: SOUND_STATE_SCHEMA_VERSION,
@@ -157,6 +184,7 @@ function canonicalSoundState(
     userBandOffsetsDb: freezeNumbers(spectrum.userBandOffsetsDb),
     masterGainDb,
     stereoWidth: stereo.width,
+    animation,
   })
 }
 
@@ -167,6 +195,7 @@ export function createDefaultSoundState(): SoundState {
     new Float64Array(BAND_COUNT),
     DEFAULT_MASTER_GAIN_DB,
     DEFAULT_STEREO_WIDTH,
+    createAnimationState(),
   )
 }
 
@@ -176,6 +205,7 @@ export function createSoundState(input: {
   readonly userBandOffsetsDb: ArrayLike<number>
   readonly masterGainDb: number
   readonly stereoWidth?: number
+  readonly animation?: AnimationState
 }): SoundState {
   return canonicalSoundState(
     input.seed,
@@ -183,11 +213,22 @@ export function createSoundState(input: {
     input.userBandOffsetsDb,
     input.masterGainDb,
     input.stereoWidth ?? DEFAULT_STEREO_WIDTH,
+    input.animation ?? createAnimationState(),
   )
 }
 
 export function soundStateToSpectrumState(state: SoundState): SpectrumState {
   return createSpectrumState(state.targetId, state.userBandOffsetsDb)
+}
+
+export function soundStateToAnimationState(state: SoundState): AnimationState {
+  return createAnimationState(
+    state.animation.mode,
+    state.animation.seed,
+    state.animation.depthDb,
+    state.animation.speed,
+    state.animation.energyPreserving,
+  )
 }
 
 export function createDefaultProfileState(): ProfileState {
@@ -280,6 +321,55 @@ function normalizeSoundRecord(
     messages.push('Invalid stereo width was replaced with the Normal default.')
   }
 
+  const defaultAnimation = createAnimationState()
+  let animation = defaultAnimation
+  if (isRecord(value.animation)) {
+    const mode = isAnimationMode(value.animation.mode)
+      ? value.animation.mode
+      : defaultAnimation.mode
+    const animationSeed = isAudioSeed(value.animation.seed)
+      ? value.animation.seed
+      : defaultAnimation.seed
+    const depthDb =
+      typeof value.animation.depthDb === 'number' &&
+      Number.isFinite(value.animation.depthDb)
+        ? clamp(
+            value.animation.depthDb,
+            ANIMATION_DEPTH_MIN_DB,
+            ANIMATION_DEPTH_MAX_DB,
+          )
+        : defaultAnimation.depthDb
+    const speed =
+      typeof value.animation.speed === 'number' &&
+      Number.isFinite(value.animation.speed)
+        ? clamp(value.animation.speed, ANIMATION_SPEED_MIN, ANIMATION_SPEED_MAX)
+        : defaultAnimation.speed
+    const energyPreserving =
+      typeof value.animation.energyPreserving === 'boolean'
+        ? value.animation.energyPreserving
+        : defaultAnimation.energyPreserving
+    if (
+      mode !== value.animation.mode ||
+      animationSeed !== value.animation.seed ||
+      depthDb !== value.animation.depthDb ||
+      speed !== value.animation.speed ||
+      energyPreserving !== value.animation.energyPreserving
+    ) {
+      messages.push(
+        'Invalid animation settings were recovered to supported bounds.',
+      )
+    }
+    animation = createAnimationState(
+      mode,
+      animationSeed,
+      depthDb,
+      speed,
+      energyPreserving,
+    )
+  } else if (value.animation !== undefined) {
+    messages.push('Invalid animation state was replaced with Off defaults.')
+  }
+
   return {
     state: canonicalSoundState(
       seed,
@@ -287,9 +377,32 @@ function normalizeSoundRecord(
       offsets,
       masterGainDb,
       stereoWidth,
+      animation,
     ),
     code: messages.length === 0 ? 'ok' : 'recovered',
     messages: Object.freeze(messages),
+  }
+}
+
+export function migrateSoundStateV2(
+  legacy: LegacySoundStateV2,
+): StateParseResult<SoundState> {
+  const normalized = normalizeSoundRecord({
+    schemaVersion: SOUND_STATE_SCHEMA_VERSION,
+    seed: legacy.seed,
+    targetId: legacy.targetId,
+    userBandOffsetsDb: legacy.userBandOffsetsDb,
+    masterGainDb: legacy.masterGainDb,
+    stereoWidth: legacy.stereoWidth,
+    animation: createAnimationState('off'),
+  })
+  return {
+    state: normalized.state,
+    code: 'migrated',
+    messages: Object.freeze([
+      'Sound state schema v2 was migrated to v3 with spectral animation Off to preserve the previous renderer.',
+      ...normalized.messages,
+    ]),
   }
 }
 
@@ -303,12 +416,13 @@ export function migrateSoundStateV1(
     userBandOffsetsDb: legacy.userBandOffsetsDb,
     masterGainDb: legacy.masterGainDb,
     stereoWidth: 0,
+    animation: createAnimationState('off'),
   })
   return {
     state: normalized.state,
     code: 'migrated',
     messages: Object.freeze([
-      'Sound state schema v1 was migrated to v2 with Mono width to preserve the previous renderer.',
+      'Sound state schema v1 was migrated to v3 with Mono width and animation Off to preserve the previous renderer.',
       ...normalized.messages,
     ]),
   }
@@ -324,12 +438,13 @@ export function migrateSoundStateV0(
     userBandOffsetsDb: legacy.bandsDb,
     masterGainDb: legacy.masterDb,
     stereoWidth: 0,
+    animation: createAnimationState('off'),
   })
   return {
     state: normalized.state,
     code: 'migrated',
     messages: Object.freeze([
-      'Sound state schema v0 was migrated to v2 with Mono width to preserve the previous renderer.',
+      'Sound state schema v0 was migrated to v3 with Mono width and animation Off to preserve the previous renderer.',
       ...normalized.messages,
     ]),
   }
@@ -372,6 +487,9 @@ export function parseSoundState(raw: string): StateParseResult<SoundState> {
   }
   if (value.schemaVersion === 1) {
     return migrateSoundStateV1(value as unknown as LegacySoundStateV1)
+  }
+  if (value.schemaVersion === 2) {
+    return migrateSoundStateV2(value as unknown as LegacySoundStateV2)
   }
   if (value.schemaVersion > SOUND_STATE_SCHEMA_VERSION) {
     return {
