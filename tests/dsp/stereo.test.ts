@@ -62,9 +62,9 @@ function renderStereoFixture(width: number, seed = 0x1357_9bdf) {
 describe('stereo width model', () => {
   it('maps the normalized control to a safe non-negative correlation range', () => {
     expect(createStereoWidthState().width).toBe(DEFAULT_STEREO_WIDTH)
-    expect(stereoWidthToCorrelation(0)).toBeCloseTo(1, 12)
+    expect(stereoWidthToCorrelation(0)).toBe(1)
     expect(stereoWidthToCorrelation(0.5)).toBeCloseTo(Math.SQRT1_2, 12)
-    expect(stereoWidthToCorrelation(1)).toBeCloseTo(0, 12)
+    expect(stereoWidthToCorrelation(1)).toBe(0)
     expect(stereoWidthLabel(0)).toBe('Mono')
     expect(stereoWidthLabel(0.2)).toBe('Narrow')
     expect(stereoWidthLabel(0.5)).toBe('Normal')
@@ -76,7 +76,7 @@ describe('stereo width model', () => {
   it.each([0, 0.5, 1])(
     'tracks requested correlation and channel power at width %s',
     (width) => {
-      const { left, right } = renderStereoFixture(width)
+      const { engine, left, right } = renderStereoFixture(width)
       const correlation = pearsonCorrelation(left, right)
       const target = stereoWidthToCorrelation(width)
       const leftStats = blockStatistics(left)
@@ -84,12 +84,14 @@ describe('stereo width model', () => {
       const rmsDifferenceDb = Math.abs(
         gainToDecibels(leftStats.rms / rightStats.rms),
       )
+      const telemetry = engine.consumeTelemetry()
 
       expect(isFiniteBlock(left)).toBe(true)
       expect(isFiniteBlock(right)).toBe(true)
       expect(correlation).toBeCloseTo(target, 1)
       expect(Math.abs(correlation - target)).toBeLessThanOrEqual(0.03)
       expect(rmsDifferenceDb).toBeLessThanOrEqual(0.25)
+      expect(telemetry.guardInterventions).toBe(0)
     },
   )
 
