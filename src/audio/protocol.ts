@@ -10,9 +10,14 @@ import {
   type SpectrumState,
   createSpectrumState,
 } from './dsp/spectra'
+import {
+  STEREO_WIDTH_SCHEMA_VERSION,
+  type StereoWidthState,
+  createStereoWidthState,
+} from './dsp/stereo'
 
-export const AUDIO_PROTOCOL_VERSION = 2 as const
-export const GREYGEN_PROCESSOR_NAME = 'greygen-processor-v2'
+export const AUDIO_PROTOCOL_VERSION = 3 as const
+export const GREYGEN_PROCESSOR_NAME = 'greygen-processor-v3'
 
 export interface SerializedSpectrumState {
   readonly targetId: SpectralPresetId
@@ -26,6 +31,11 @@ export interface SerializedGainStageState {
   readonly calibrationBandOffsetsDb: readonly number[]
 }
 
+export interface SerializedStereoWidthState {
+  readonly schemaVersion: typeof STEREO_WIDTH_SCHEMA_VERSION
+  readonly width: number
+}
+
 interface ProtocolEnvelope {
   readonly version: typeof AUDIO_PROTOCOL_VERSION
   readonly requestId: number
@@ -36,6 +46,7 @@ export interface InitializeMessage extends ProtocolEnvelope {
   readonly seed: number
   readonly spectrum: SerializedSpectrumState
   readonly gainStage: SerializedGainStageState
+  readonly stereoWidth: SerializedStereoWidthState
 }
 
 export interface SetSpectrumMessage extends ProtocolEnvelope {
@@ -46,6 +57,11 @@ export interface SetSpectrumMessage extends ProtocolEnvelope {
 export interface SetGainStageMessage extends ProtocolEnvelope {
   readonly type: 'set-gain-stage'
   readonly gainStage: SerializedGainStageState
+}
+
+export interface SetStereoWidthMessage extends ProtocolEnvelope {
+  readonly type: 'set-stereo-width'
+  readonly stereoWidth: SerializedStereoWidthState
 }
 
 export interface ResetSeedMessage extends ProtocolEnvelope {
@@ -65,6 +81,7 @@ export type MainToWorkletMessage =
   | InitializeMessage
   | SetSpectrumMessage
   | SetGainStageMessage
+  | SetStereoWidthMessage
   | ResetSeedMessage
   | RequestStatusMessage
   | StopMessage
@@ -74,11 +91,16 @@ export interface ReadyMessage extends ProtocolEnvelope {
   readonly sampleRate: number
   readonly targetId: SpectralPresetId
   readonly highBandMode: HighBandMode
+  readonly stereoWidth: number
 }
 
 export interface AckMessage extends ProtocolEnvelope {
   readonly type: 'ack'
-  readonly command: 'set-spectrum' | 'set-gain-stage' | 'reset-seed'
+  readonly command:
+    | 'set-spectrum'
+    | 'set-gain-stage'
+    | 'set-stereo-width'
+    | 'reset-seed'
 }
 
 export interface StatusMessage extends ProtocolEnvelope {
@@ -86,6 +108,7 @@ export interface StatusMessage extends ProtocolEnvelope {
   readonly sampleRate: number
   readonly targetId: SpectralPresetId
   readonly highBandMode: HighBandMode
+  readonly stereoWidth: number
   readonly renderedFrames: number
 }
 
@@ -100,6 +123,8 @@ export interface TelemetryMessage {
   readonly safetyPreGainTargetDb: number
   readonly masterGainDb: number
   readonly guardInterventions: number
+  readonly stereoWidth: number
+  readonly stereoCorrelation: number
 }
 
 export interface StoppedMessage extends ProtocolEnvelope {
@@ -140,6 +165,14 @@ function isPositiveSafeInteger(value: unknown): value is number {
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isStereoWidth(value: unknown): value is number {
+  return isFiniteNumber(value) && value >= 0 && value <= 1
+}
+
+function isStereoCorrelation(value: unknown): value is number {
+  return isFiniteNumber(value) && value >= 0 && value <= 1
 }
 
 export function isAudioSeed(value: unknown): value is number {
@@ -203,6 +236,20 @@ function parseGainStageState(value: unknown): SerializedGainStageState | null {
   }
 }
 
+function parseStereoWidthState(
+  value: unknown,
+): SerializedStereoWidthState | null {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== STEREO_WIDTH_SCHEMA_VERSION ||
+    !isStereoWidth(value.width)
+  ) {
+    return null
+  }
+
+  return serializeStereoWidthState(createStereoWidthState(value.width))
+}
+
 export function serializeSpectrumState(
   state: SpectrumState,
 ): SerializedSpectrumState {
@@ -245,6 +292,22 @@ export function deserializeGainStageState(
   )
 }
 
+export function serializeStereoWidthState(
+  state: StereoWidthState,
+): SerializedStereoWidthState {
+  const canonical = createStereoWidthState(state.width)
+  return {
+    schemaVersion: STEREO_WIDTH_SCHEMA_VERSION,
+    width: canonical.width,
+  }
+}
+
+export function deserializeStereoWidthState(
+  state: SerializedStereoWidthState,
+): StereoWidthState {
+  return createStereoWidthState(state.width)
+}
+
 export function parseMainToWorkletMessage(
   value: unknown,
 ): MainToWorkletMessage | null {
@@ -261,7 +324,8 @@ export function parseMainToWorkletMessage(
     case 'initialize': {
       const spectrum = parseSpectrumState(value.spectrum)
       const gainStage = parseGainStageState(value.gainStage)
-      if (!isAudioSeed(value.seed) || !spectrum || !gainStage) {
+      const stereoWidth = parseStereoWidthState(value.stereoWidth)
+      if (!isAudioSeed(value.seed) || !spectrum || !gainStage || !stereoWidth) {
         return null
       }
       return {
@@ -271,6 +335,7 @@ export function parseMainToWorkletMessage(
         seed: value.seed,
         spectrum,
         gainStage,
+        stereoWidth,
       }
     }
     case 'set-spectrum': {
@@ -295,6 +360,18 @@ export function parseMainToWorkletMessage(
         type: 'set-gain-stage',
         requestId: value.requestId,
         gainStage,
+      }
+    }
+    case 'set-stereo-width': {
+      const stereoWidth = parseStereoWidthState(value.stereoWidth)
+      if (!stereoWidth) {
+        return null
+      }
+      return {
+        version: AUDIO_PROTOCOL_VERSION,
+        type: 'set-stereo-width',
+        requestId: value.requestId,
+        stereoWidth,
       }
     }
     case 'reset-seed':
@@ -344,7 +421,9 @@ export function parseWorkletToMainMessage(
       !isFiniteNumber(value.safetyPreGainDb) ||
       !isFiniteNumber(value.safetyPreGainTargetDb) ||
       !isFiniteNumber(value.masterGainDb) ||
-      !isNonNegativeSafeInteger(value.guardInterventions)
+      !isNonNegativeSafeInteger(value.guardInterventions) ||
+      !isStereoWidth(value.stereoWidth) ||
+      !isStereoCorrelation(value.stereoCorrelation)
     ) {
       return null
     }
@@ -359,6 +438,8 @@ export function parseWorkletToMainMessage(
       safetyPreGainTargetDb: value.safetyPreGainTargetDb,
       masterGainDb: value.masterGainDb,
       guardInterventions: value.guardInterventions,
+      stereoWidth: value.stereoWidth,
+      stereoCorrelation: value.stereoCorrelation,
     }
   }
 
@@ -389,7 +470,8 @@ export function parseWorkletToMainMessage(
         !isFiniteNumber(value.sampleRate) ||
         !(value.sampleRate > 0) ||
         !isPresetId(value.targetId) ||
-        !isHighBandMode(value.highBandMode)
+        !isHighBandMode(value.highBandMode) ||
+        !isStereoWidth(value.stereoWidth)
       ) {
         return null
       }
@@ -400,11 +482,13 @@ export function parseWorkletToMainMessage(
         sampleRate: value.sampleRate,
         targetId: value.targetId,
         highBandMode: value.highBandMode,
+        stereoWidth: value.stereoWidth,
       }
     case 'ack':
       if (
         value.command !== 'set-spectrum' &&
         value.command !== 'set-gain-stage' &&
+        value.command !== 'set-stereo-width' &&
         value.command !== 'reset-seed'
       ) {
         return null
@@ -421,6 +505,7 @@ export function parseWorkletToMainMessage(
         !(value.sampleRate > 0) ||
         !isPresetId(value.targetId) ||
         !isHighBandMode(value.highBandMode) ||
+        !isStereoWidth(value.stereoWidth) ||
         !isNonNegativeSafeInteger(value.renderedFrames)
       ) {
         return null
@@ -432,6 +517,7 @@ export function parseWorkletToMainMessage(
         sampleRate: value.sampleRate,
         targetId: value.targetId,
         highBandMode: value.highBandMode,
+        stereoWidth: value.stereoWidth,
         renderedFrames: value.renderedFrames,
       }
     case 'stopped':
