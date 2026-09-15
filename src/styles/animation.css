@@ -1,0 +1,47 @@
+.animation-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem 0.75rem;
+}
+
+.animation-controls legend,
+.animation-controls p,
+.animation-controls select,
+.animation-energy-toggle {
+  grid-column: 1 / -1;
+}
+
+.animation-controls > label:not(.animation-energy-toggle) {
+  color: #c8cec1;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.animation-controls input[type="range"] {
+  width: 100%;
+  margin: 0;
+  accent-color: #aab99c;
+}
+
+.animation-controls output {
+  min-width: 4.5rem;
+  text-align: right;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+
+.animation-energy-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.25rem;
+  color: #d7ddd1;
+  font-size: 0.82rem;
+}
+
+.animation-energy-toggle input {
+  width: auto;
+  margin: 0;
+}
