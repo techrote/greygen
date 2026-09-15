@@ -31,6 +31,23 @@ import {
   resetUserBandOffset,
   setUserBandOffset,
 } from '../features/generator/uiModel'
+import {
+  type ProfileState,
+  type SoundState,
+  type UiState,
+  createDefaultProfileState,
+  createDefaultSoundState,
+  createDefaultUiState,
+  createSoundState,
+  createUiState,
+  soundStateToSpectrumState,
+} from './state/appState'
+import type {
+  AppStateRepository,
+  PersistenceResult,
+  StorageDiagnostic,
+} from './storage/AppStateRepository'
+import { createBrowserAppStateRepository } from './storage/browserStateRepository'
 
 export const INITIAL_AUDIO_SNAPSHOT: AudioEngineSnapshot = {
   status: 'ready',
@@ -111,11 +128,23 @@ function isPresetId(value: string): value is SpectralPresetId {
   return GENERATOR_PRESETS.some((preset) => preset.id === value)
 }
 
+function diagnosticsNotice(
+  diagnostics: readonly StorageDiagnostic[],
+): string | null {
+  if (diagnostics.length === 0) {
+    return null
+  }
+  return diagnostics.map((entry) => entry.message).join(' ')
+}
+
 export interface GeneratorSurfaceProps {
   readonly audioSnapshot: AudioEngineSnapshot
   readonly spectrumState: SpectrumState
   readonly engineReady: boolean
   readonly controlError: string | null
+  readonly storageNotice: string | null
+  readonly futureFeaturesVisible: boolean
+  readonly profileCount: number
   readonly onPrimaryAction: () => void
   readonly onStop: () => void
   readonly onPresetChange: (targetId: SpectralPresetId) => void
@@ -123,6 +152,9 @@ export interface GeneratorSurfaceProps {
   readonly onBandReset: (index: number) => void
   readonly onBandsReset: () => void
   readonly onMasterChange: (valueDb: number) => void
+  readonly onToggleFutureFeatures: () => void
+  readonly onResetSound: () => void
+  readonly onDeleteProfiles: () => void
 }
 
 export function GeneratorSurface({
@@ -130,6 +162,9 @@ export function GeneratorSurface({
   spectrumState,
   engineReady,
   controlError,
+  storageNotice,
+  futureFeaturesVisible,
+  profileCount,
   onPrimaryAction,
   onStop,
   onPresetChange,
@@ -137,6 +172,9 @@ export function GeneratorSurface({
   onBandReset,
   onBandsReset,
   onMasterChange,
+  onToggleFutureFeatures,
+  onResetSound,
+  onDeleteProfiles,
 }: GeneratorSurfaceProps) {
   const telemetry = audioSnapshot.telemetry
   const modified = isModifiedPreset(spectrumState)
@@ -385,46 +423,98 @@ export function GeneratorSurface({
       </section>
 
       <section className="future-card" aria-labelledby="future-heading">
-        <div>
-          <p className="label">Next layers</p>
-          <h2 id="future-heading">Width, movement &amp; calibration</h2>
-        </div>
-        <div className="future-grid">
-          <fieldset disabled>
-            <legend>Stereo width</legend>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value="0"
-              readOnly
-              aria-label="Stereo width, unavailable until stereo engine is implemented"
-            />
-            <p>Mono for now. Power-preserving stereo arrives in issue #9.</p>
-          </fieldset>
-          <fieldset disabled>
-            <legend>Spectral animation</legend>
-            <select
-              value="off"
-              aria-label="Spectral animation, unavailable until animation engine is implemented"
-              onChange={() => undefined}
-            >
-              <option value="off">Off — coming in issue #10</option>
-            </select>
-            <p>
-              No fake motion: deterministic bounded animation is not active yet.
-            </p>
-          </fieldset>
-          <div className="calibration-placeholder">
-            <h3>Playback calibration</h3>
-            <button type="button" disabled>
-              Calibration profiles — coming later
-            </button>
-            <p>
-              Future profiles will describe relative listener + playback-chain
-              correction. This is not a medical hearing test.
-            </p>
+        <div className="section-heading-row">
+          <div>
+            <p className="label">Next layers</p>
+            <h2 id="future-heading">Width, movement &amp; calibration</h2>
           </div>
+          <button
+            className="secondary-action panel-toggle"
+            type="button"
+            aria-expanded={futureFeaturesVisible}
+            onClick={onToggleFutureFeatures}
+          >
+            {futureFeaturesVisible ? 'Hide roadmap controls' : 'Show roadmap controls'}
+          </button>
+        </div>
+        {futureFeaturesVisible ? (
+          <div className="future-grid">
+            <fieldset disabled>
+              <legend>Stereo width</legend>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value="0"
+                readOnly
+                aria-label="Stereo width, unavailable until stereo engine is implemented"
+              />
+              <p>Mono for now. Power-preserving stereo arrives in issue #9.</p>
+            </fieldset>
+            <fieldset disabled>
+              <legend>Spectral animation</legend>
+              <select
+                value="off"
+                aria-label="Spectral animation, unavailable until animation engine is implemented"
+                onChange={() => undefined}
+              >
+                <option value="off">Off — coming in issue #10</option>
+              </select>
+              <p>
+                No fake motion: deterministic bounded animation is not active yet.
+              </p>
+            </fieldset>
+            <div className="calibration-placeholder">
+              <h3>Playback calibration</h3>
+              <button type="button" disabled>
+                Calibration profiles — coming later
+              </button>
+              <p>
+                Future profiles will describe relative listener + playback-chain
+                correction. This is not a medical hearing test.
+              </p>
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="state-card" aria-labelledby="local-state-heading">
+        <div className="section-heading-row">
+          <div>
+            <p className="label">Local state</p>
+            <h2 id="local-state-heading">Persistence &amp; privacy</h2>
+          </div>
+          <span className="profile-count">
+            {profileCount} private {profileCount === 1 ? 'profile' : 'profiles'}
+          </span>
+        </div>
+        <p className="status-note">
+          Sound settings and presentation preferences are stored locally. Personal
+          playback/calibration profiles use a separate private storage domain and
+          are never deleted by a sound reset.
+        </p>
+        {storageNotice ? (
+          <p className="storage-notice" role="status">
+            {storageNotice}
+          </p>
+        ) : null}
+        <div className="state-actions">
+          <button
+            className="secondary-action"
+            type="button"
+            disabled={!engineReady}
+            onClick={onResetSound}
+          >
+            Reset sound settings
+          </button>
+          <button
+            className="danger-action"
+            type="button"
+            disabled={profileCount === 0}
+            onClick={onDeleteProfiles}
+          >
+            Delete local profiles
+          </button>
         </div>
       </section>
     </main>
@@ -433,24 +523,65 @@ export function GeneratorSurface({
 
 export default function App() {
   const engineRef = useRef<AudioEngine | null>(null)
+  const repositoryRef = useRef<AppStateRepository | null>(null)
   const [engineReady, setEngineReady] = useState(false)
   const [audioSnapshot, setAudioSnapshot] = useState<AudioEngineSnapshot>(
     INITIAL_AUDIO_SNAPSHOT,
   )
-  const [spectrumState, setSpectrumState] = useState<SpectrumState>(() =>
-    createSpectrumState(DEFAULT_ENGINE_PRESET),
+  const [soundState, setSoundState] = useState<SoundState>(() =>
+    createDefaultSoundState(),
   )
+  const [profileState, setProfileState] = useState<ProfileState>(() =>
+    createDefaultProfileState(),
+  )
+  const [uiState, setUiState] = useState<UiState>(() => createDefaultUiState())
   const [controlError, setControlError] = useState<string | null>(null)
+  const [storageNotice, setStorageNotice] = useState<string | null>(null)
 
   useEffect(() => {
+    let cancelled = false
+    const repository = createBrowserAppStateRepository()
+    repositoryRef.current = repository
+    const loaded = repository.load()
+    setSoundState(loaded.sound)
+    setProfileState(loaded.profiles)
+    setUiState(loaded.ui)
+    setStorageNotice(diagnosticsNotice(loaded.diagnostics))
+
     const engine = createBrowserAudioEngine()
     engineRef.current = engine
     const unsubscribe = engine.subscribe(setAudioSnapshot)
     setAudioSnapshot(engine.getSnapshot())
-    setEngineReady(true)
+
+    const bootstrap = async (): Promise<void> => {
+      try {
+        await engine.resetSeed(loaded.sound.seed)
+        await engine.setSpectrumState(soundStateToSpectrumState(loaded.sound))
+        await engine.setMasterGainDb(loaded.sound.masterGainDb)
+
+        if (loaded.diagnostics.some((entry) => entry.code === 'migrated')) {
+          const result = repository.saveSound(loaded.sound)
+          if (!result.ok && result.diagnostic && !cancelled) {
+            setStorageNotice(result.diagnostic.message)
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setControlError(`Stored sound state could not be applied: ${errorText(error)}`)
+        }
+      } finally {
+        if (!cancelled) {
+          setAudioSnapshot(engine.getSnapshot())
+          setEngineReady(true)
+        }
+      }
+    }
+    void bootstrap()
 
     return () => {
+      cancelled = true
       unsubscribe()
+      repositoryRef.current = null
       engineRef.current = null
       void engine.dispose()
     }
@@ -458,6 +589,21 @@ export default function App() {
 
   const reportControlFailure = (error: unknown): void => {
     setControlError(errorText(error))
+  }
+
+  const reportPersistenceResult = (result: PersistenceResult): void => {
+    if (!result.ok && result.diagnostic) {
+      setStorageNotice(
+        `${result.diagnostic.message} This session remains usable, but the change may not survive reload.`,
+      )
+    }
+  }
+
+  const persistSound = (next: SoundState): void => {
+    const repository = repositoryRef.current
+    if (repository) {
+      reportPersistenceResult(repository.saveSound(next))
+    }
   }
 
   const handlePrimaryAction = (): void => {
@@ -481,19 +627,31 @@ export default function App() {
     void engineRef.current?.stop().catch(reportControlFailure)
   }
 
-  const commitSpectrumState = (next: SpectrumState): void => {
+  const commitSpectrumState = (nextSpectrum: SpectrumState): void => {
     const engine = engineRef.current
     if (!engine) {
       return
     }
+
+    const next = createSoundState({
+      seed: soundState.seed,
+      targetId: nextSpectrum.targetId,
+      userBandOffsetsDb: nextSpectrum.userBandOffsetsDb,
+      masterGainDb: soundState.masterGainDb,
+    })
     setControlError(null)
-    setSpectrumState(next)
-    void engine.setSpectrumState(next).catch(reportControlFailure)
+    setSoundState(next)
+    void engine
+      .setSpectrumState(nextSpectrum)
+      .then(() => persistSound(next))
+      .catch(reportControlFailure)
   }
 
   const handlePresetChange = (targetId: SpectralPresetId): void => {
     commitSpectrumState(applyNamedPreset(targetId))
   }
+
+  const spectrumState = soundStateToSpectrumState(soundState)
 
   const handleBandChange = (index: number, valueDb: number): void => {
     commitSpectrumState(setUserBandOffset(spectrumState, index, valueDb))
@@ -512,8 +670,60 @@ export default function App() {
     if (!engine) {
       return
     }
+    const next = createSoundState({
+      seed: soundState.seed,
+      targetId: soundState.targetId,
+      userBandOffsetsDb: soundState.userBandOffsetsDb,
+      masterGainDb: valueDb,
+    })
     setControlError(null)
-    void engine.setMasterGainDb(valueDb).catch(reportControlFailure)
+    void engine
+      .setMasterGainDb(valueDb)
+      .then(() => {
+        setSoundState(next)
+        persistSound(next)
+      })
+      .catch(reportControlFailure)
+  }
+
+  const handleToggleFutureFeatures = (): void => {
+    const next = createUiState(!uiState.futureFeaturesVisible)
+    setUiState(next)
+    const repository = repositoryRef.current
+    if (repository) {
+      reportPersistenceResult(repository.saveUi(next))
+    }
+  }
+
+  const handleResetSound = (): void => {
+    const engine = engineRef.current
+    if (!engine) {
+      return
+    }
+    const next = createDefaultSoundState()
+    setControlError(null)
+    setSoundState(next)
+    void Promise.all([
+      engine.resetSeed(next.seed),
+      engine.setSpectrumState(soundStateToSpectrumState(next)),
+      engine.setMasterGainDb(next.masterGainDb),
+    ])
+      .then(() => {
+        const repository = repositoryRef.current
+        if (repository) {
+          reportPersistenceResult(repository.resetSound())
+        }
+      })
+      .catch(reportControlFailure)
+  }
+
+  const handleDeleteProfiles = (): void => {
+    const next = createDefaultProfileState()
+    setProfileState(next)
+    const repository = repositoryRef.current
+    if (repository) {
+      reportPersistenceResult(repository.deleteProfiles())
+    }
   }
 
   return (
@@ -522,6 +732,9 @@ export default function App() {
       spectrumState={spectrumState}
       engineReady={engineReady}
       controlError={controlError}
+      storageNotice={storageNotice}
+      futureFeaturesVisible={uiState.futureFeaturesVisible}
+      profileCount={profileState.profiles.length}
       onPrimaryAction={handlePrimaryAction}
       onStop={handleStop}
       onPresetChange={handlePresetChange}
@@ -529,6 +742,9 @@ export default function App() {
       onBandReset={handleBandReset}
       onBandsReset={handleBandsReset}
       onMasterChange={handleMasterChange}
+      onToggleFutureFeatures={handleToggleFutureFeatures}
+      onResetSound={handleResetSound}
+      onDeleteProfiles={handleDeleteProfiles}
     />
   )
 }
