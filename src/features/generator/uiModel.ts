@@ -22,7 +22,7 @@ function formatFrequency(frequencyHz: number): string {
   if (frequencyHz >= 1000) {
     return `${frequencyHz / 1000}k`
   }
-  return `${Math.round(frequencyHz)}`
+  return `${Math.floor(frequencyHz)}`
 }
 
 export const GENERATOR_BANDS: readonly GeneratorBandDefinition[] =
