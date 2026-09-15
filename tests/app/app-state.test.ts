@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_ENGINE_SEED } from '../../src/audio/dsp/engine'
 import { DEFAULT_MASTER_GAIN_DB } from '../../src/audio/dsp/gainSafety'
+import { DEFAULT_STEREO_WIDTH } from '../../src/audio/dsp/stereo'
 import { isModifiedPreset } from '../../src/features/generator/uiModel'
 import {
   PROFILE_RECORD_SCHEMA_VERSION,
@@ -19,16 +20,17 @@ import {
 } from '../../src/app/state/appState'
 
 describe('versioned app state schemas', () => {
-  it('creates conservative deterministic sound defaults', () => {
+  it('creates conservative deterministic sound defaults with Normal stereo width', () => {
     const state = createDefaultSoundState()
     expect(state.schemaVersion).toBe(SOUND_STATE_SCHEMA_VERSION)
     expect(state.seed).toBe(DEFAULT_ENGINE_SEED)
     expect(state.targetId).toBe('grey')
     expect(state.userBandOffsetsDb).toEqual(Array(10).fill(0))
     expect(state.masterGainDb).toBe(DEFAULT_MASTER_GAIN_DB)
+    expect(state.stereoWidth).toBe(DEFAULT_STEREO_WIDTH)
   })
 
-  it('migrates the explicit legacy sound v0 fixture deterministically', () => {
+  it('migrates the explicit legacy sound v0 fixture deterministically and preserves mono rendering', () => {
     const result = parseSoundState(
       JSON.stringify({
         schemaVersion: 0,
@@ -45,7 +47,29 @@ describe('versioned app state schemas', () => {
     expect(result.state.userBandOffsetsDb[2]).toBe(2)
     expect(result.state.userBandOffsetsDb[9]).toBe(-1)
     expect(result.state.masterGainDb).toBe(-18)
+    expect(result.state.stereoWidth).toBe(0)
     expect(isModifiedPreset(soundStateToSpectrumState(result.state))).toBe(true)
+  })
+
+  it('migrates sound schema v1 to v2 with Mono width so existing sound does not change', () => {
+    const result = parseSoundState(
+      JSON.stringify({
+        schemaVersion: 1,
+        seed: 77,
+        targetId: 'white',
+        userBandOffsetsDb: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        masterGainDb: -20,
+      }),
+    )
+
+    expect(result.code).toBe('migrated')
+    expect(result.state).toMatchObject({
+      schemaVersion: SOUND_STATE_SCHEMA_VERSION,
+      seed: 77,
+      targetId: 'white',
+      masterGainDb: -20,
+      stereoWidth: 0,
+    })
   })
 
   it('recovers wrong types and clamps finite out-of-range sound values', () => {
@@ -56,6 +80,7 @@ describe('versioned app state schemas', () => {
         targetId: 'ultraviolet',
         userBandOffsetsDb: [99, -99, null, 4, 5, 6, 7, 8, 9, 10],
         masterGainDb: 12,
+        stereoWidth: 4,
       }),
     )
 
@@ -66,6 +91,7 @@ describe('versioned app state schemas', () => {
     expect(result.state.userBandOffsetsDb[1]).toBe(-24)
     expect(result.state.userBandOffsetsDb[2]).toBe(0)
     expect(result.state.masterGainDb).toBe(0)
+    expect(result.state.stereoWidth).toBe(1)
     expect(result.messages.length).toBeGreaterThan(0)
   })
 
@@ -87,6 +113,7 @@ describe('versioned app state schemas', () => {
       targetId: 'brown',
       userBandOffsetsDb: [0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
       masterGainDb: -24,
+      stereoWidth: 0.8,
     })
     const profiles = createProfileState([
       {
@@ -102,6 +129,7 @@ describe('versioned app state schemas', () => {
     const soundJson = serializeSoundState(sound)
     const profileJson = serializeProfileState(profiles)
 
+    expect(soundJson).toContain('"stereoWidth":0.8')
     expect(soundJson).not.toContain('profiles')
     expect(soundJson).not.toContain('Fixture headphones')
     expect(soundJson).not.toContain('private fixture')
