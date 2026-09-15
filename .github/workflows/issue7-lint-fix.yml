@@ -27,39 +27,22 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-
           app = Path('src/app/App.tsx')
           source = app.read_text()
-          opening = '''        <div
-          className="band-scroll"
-          tabIndex={0}
-          aria-label="Ten frequency bands"
-        >'''
-          replacement = '''        <fieldset className="band-scroll">
-          <legend className="sr-only">Ten frequency bands</legend>'''
+          opening = '        <div\n          className="band-scroll"\n          tabIndex={0}\n          aria-label="Ten frequency bands"\n        >'
+          replacement = '        <fieldset className="band-scroll">\n          <legend className="sr-only">Ten frequency bands</legend>'
           if opening not in source:
               raise SystemExit('expected band-scroll opening not found')
           source = source.replace(opening, replacement, 1)
-          closing = '''          </div>
-        </div>
-
-        {highBandDegraded ? ('''
-          closing_replacement = '''          </div>
-        </fieldset>
-
-        {highBandDegraded ? ('''
+          closing = '          </div>\n        </div>\n\n        {highBandDegraded ? ('
+          closing_replacement = '          </div>\n        </fieldset>\n\n        {highBandDegraded ? ('
           if closing not in source:
               raise SystemExit('expected band-scroll closing not found')
           app.write_text(source.replace(closing, closing_replacement, 1))
-
           css = Path('src/styles/base.css')
           styles = css.read_text()
-          needle = '''.band-scroll {
-  overflow-x: auto;'''
-          replacement_css = '''.band-scroll {
-  min-width: 0;
-  border: 0;
-  overflow-x: auto;'''
+          needle = '.band-scroll {\n  overflow-x: auto;'
+          replacement_css = '.band-scroll {\n  min-width: 0;\n  border: 0;\n  overflow-x: auto;'
           if needle not in styles:
               raise SystemExit('expected band-scroll styles not found')
           css.write_text(styles.replace(needle, replacement_css, 1))
