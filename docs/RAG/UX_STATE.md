@@ -1,28 +1,30 @@
 # UX and State Model
 
-Status: canonical product-state and interaction guidance for the initial application.
+Status: canonical product-state and interaction guidance for the initial application, reconciled through issue #11 presets and sharing.
 
 ## Primary interaction model
 
 The default screen should answer four questions immediately:
 
 1. Is audio running?
-2. What spectral shape is active?
+2. What spectral shape/saved sound is active?
 3. How loud is the digital output relative to full scale?
 4. How do I stop/mute it instantly?
 
-The friendly default should not expose implementation jargon such as biquad Q, render quanta, or correlation coefficients.
+The friendly default should not expose implementation jargon such as biquad Q or render quanta.
 
 ## Default control surface
 
 Required primary controls:
 
 - explicit Start/Stop or Start/Mute transport;
-- ten vertically oriented or otherwise visually spectral band controls labelled by frequency;
+- ten frequency-labelled spectral controls;
 - master level;
-- preset selector: White, Pink, Brown/Red, Grey, plus user presets later;
+- built-in White/Pink/Brown/Grey colour selector;
+- local user sound-preset save/load/delete;
+- normal sound share-link copy/load;
 - stereo width;
-- animation enable/mode/depth/speed;
+- animation mode/depth/speed;
 - calibration/profile entry point;
 - compact peak/RMS/headroom status.
 
@@ -30,78 +32,71 @@ Advanced controls belong in a collapsible/secondary surface.
 
 ## Band behavior
 
-Band labels use human-readable frequency notation while internal values remain numeric Hz.
-
 Recommended display labels:
 
 `31, 62, 125, 250, 500, 1k, 2k, 4k, 8k, 16k`.
 
-Each band control needs:
-
-- keyboard increments;
-- accessible name including frequency and current gain;
-- numeric readout available without relying solely on pointer position;
-- reset-to-neutral action;
-- clear disabled/degraded treatment if runtime sample rate cannot safely support the nominal band.
-
-Do not communicate band level using color alone.
+Each band control needs keyboard increments, an accessible name including frequency/current gain, a numeric readout, neutral reset, and clear text for any runtime degradation. Do not communicate band level using colour alone.
 
 ## Start/lifecycle UX
 
-Browsers require user activation for reliable audio start. Initial UI should therefore be honest about state:
+Initial UI is honest about browser autoplay constraints:
 
-- before start: controls may be editable but audio status is `Ready`; prominent Start action;
-- starting: brief `Starting…` state while worklet loads/context resumes;
-- running: visible active state and immediate mute/stop;
-- suspended/interrupted: visible recoverable state with Resume action;
+- before start: controls may be editable but status is Ready; prominent Start action;
+- starting: brief Starting… state while worklet/context initialize;
+- running: visible active state and immediate Stop;
+- suspended/interrupted: visible recoverable state with Resume and Stop;
 - unsupported: capability explanation rather than silent failure.
 
-## Preset behavior
+Loading persisted state, a local saved preset, or a share URL does not create an autoplay exception.
 
-Applying a preset changes the nominal target spectrum with smoothing. It must not abruptly reset unrelated state unless the preset explicitly owns it.
+## Built-in preset behavior
 
-Define which fields a preset owns. Initial color presets should own spectral target only; master level, stereo width, calibration profile, and animation on/off remain user choices.
+Built-in colour presets own only spectral target fields: target id and ten user band offsets. Selecting one resets those offsets to neutral but preserves master, stereo width, animation, audio seed, user-preset library, private profiles, and UI state.
 
-User changes after applying a named preset put the spectral state into a `Modified` variant until saved/reset.
+User band changes after a built-in colour selection produce visible `Modified` state. Changes to master/stereo/animation do not make a built-in colour target Modified because those fields are outside its ownership.
+
+## User sound presets
+
+A saved user preset is a local named snapshot of complete generic SoundState. It may include seed, spectral target/bands, master, stereo, and animation, but never private ProfileState or UiState.
+
+When current SoundState exactly matches a saved snapshot, show the sanitized local name and `Saved preset`. Loading remains explicit and never starts audio. Deletion affects only that library record. Reset sound and Delete profiles preserve the library.
+
+Names must be sanitized/bounded before storage/display and rendered as text rather than HTML.
 
 ## Animation
 
-Default animation UX should use conceptual names rather than stochastic-process terminology. Candidate modes:
-
-- Drift — slow independent mean-reverting band movement;
-- Breathe — coherent broad spectral motion;
-- Wander — deeper bounded movement;
-- Orbit — coordinated movement across spectral regions.
-
-Exact shipping modes can evolve. UI exposes depth and speed; advanced view may expose seed and normalization behavior.
-
-Animation must be deterministic given state + seed and must respect global gain/safety bounds.
+Shipping modes are conceptual names: Off, Drift, Breathe, Wander, Orbit. UI exposes depth, speed, and mean-band-power normalization. Animation is deterministic given state + seed and respects global gain/safety bounds.
 
 ## Metering
 
-Primary meter status can show:
+Primary meter status can show Peak dBFS, RMS dBFS, safety pre-gain, and final guard activity. Do not label digital meters as SPL, phon, sones, or hearing threshold.
 
-- Peak dBFS;
-- RMS dBFS;
-- safety pre-gain when non-zero;
-- limiter/guard indicator only when active.
-
-Do not overload the default screen with analyzer detail. A spectrum view belongs in an expandable panel.
-
-## State domains
+## State semantics
 
 ### SoundState
 
 Shareable by default:
 
-- schema/engine version;
-- seed;
+- schema version;
+- audio seed;
 - target/preset identifier;
-- ten band offsets/target parameters;
+- ten band offsets;
 - master level;
-- stereo width/correlation mapping;
-- animation mode/depth/speed/seed;
+- stereo width;
+- animation mode/depth/speed/seed/normalization;
 - generic non-personal engine options.
+
+### UserPresetLibraryState
+
+Local sound-library metadata:
+
+- its own schema version;
+- deterministic local preset ids;
+- sanitized local display names;
+- canonical SoundState snapshots.
+
+It is not included in normal share URLs. A saved preset name is metadata around a SoundState, not part of the sound identity itself.
 
 ### ProfileState
 
@@ -116,56 +111,51 @@ Private/local by default:
 
 ### UiState
 
-Local only:
-
-- open panels;
-- preferred simple/advanced view;
-- visual theme/settings;
-- analyzer visibility;
-- non-audio presentation preferences.
+Local only: open panels, visual preferences, analyzer visibility, and other non-audio presentation state.
 
 ## Persistence
 
-Use a single explicit app storage version plus per-structure versioning where useful. Initial implementation may use `localStorage` for compact state; move to IndexedDB only when data size/transaction needs justify it.
+Use an explicit app storage version plus independently versioned documents where useful. Current compact state uses localStorage through the repository abstraction.
 
 Rules:
 
 - parse persisted input defensively;
 - validate numeric ranges;
 - migrate older versions deterministically;
-- recover gracefully to defaults on corrupt state;
-- tests cover migrations and malformed input;
-- reset actions distinguish `reset sound`, `delete profiles`, and `factory reset` where practical.
+- recover gracefully on corruption;
+- never overwrite unknown future documents from an older build;
+- keep reset actions distinct.
+
+Current reset/deletion distinctions are:
+
+- Reset sound — current SoundState only;
+- Delete saved preset — one UserPresetLibraryState record only;
+- Delete profiles — private ProfileState only.
 
 ## Share URLs
 
-A share URL represents sound state, not identity/profile data.
+A normal share URL represents **SoundState only**, not identity/profile/library/UI data.
 
-Requirements:
+Current requirements and implementation:
 
-- compact versioned serialization;
-- no personal calibration data by default;
-- no local profile names/notes;
-- validation/clamping on import;
-- malformed URLs fail safely;
-- imported state does not auto-start audio;
-- future versions can migrate or reject incompatible payloads clearly.
+- compact versioned deterministic serialization;
+- URL fragment rather than backend-dependent storage;
+- no personal calibration data;
+- no profile names/notes/ids;
+- no saved user-preset names/library contents;
+- no UI preferences;
+- canonical validation/clamping for finite accepted values;
+- bounded rejection of malformed/truncated/oversized payloads;
+- clear rejection of unknown future versions;
+- imported state never auto-starts audio.
 
-An explicit advanced export may later include calibration profiles, but only through an intentional user action with clear wording.
+A normal share input is therefore safe to load while Ready: it changes requested SoundState and remains Ready/silent. If the user explicitly loads one while already Running, existing typed/smoothed AudioEngine controls update the current engine; there is still no hidden start/resume action.
+
+An explicit advanced private-profile export may later exist only through a separate intentional action and format.
 
 ## Calibration UX
 
-Default guided calibration should:
-
-- explain non-medical nature and playback-chain dependency;
-- require comfortable master level confirmation;
-- compare a reference band against one test band at a time;
-- randomize/retest rather than using only monotonic ordering;
-- allow `skip/cannot comfortably match`;
-- bound correction range;
-- show progress;
-- let user audition Off vs Balanced vs Full result;
-- save a named local profile only after review.
+Default guided calibration should explain its non-medical/playback-chain nature, require comfortable level confirmation, use bounded reference/test comparisons, permit skip/cannot-match, randomize/retest, and save a named local profile only after review.
 
 ## Accessibility
 
@@ -177,24 +167,18 @@ Minimum requirements:
 - native semantic controls where possible;
 - labels/readouts available to screen readers;
 - no pointer-only drag requirement for precise values;
-- motion/animation UI respects reduced-motion preferences for visual movement (audio animation remains user-controlled separately);
+- visual motion respects reduced-motion preferences;
 - sufficient contrast;
-- status changes exposed appropriately without chatty live-region spam.
+- status changes exposed without chatty live-region spam.
+
+Saved preset names are ordinary escaped text. Share URLs use selectable text inputs with labelled buttons/forms.
 
 ## Responsive behavior
 
-The ten-band surface must remain usable on narrow displays. Do not solve mobile width by shrinking hit targets below comfortable sizes. Horizontal scrolling for the spectrum is preferable to microscopic sliders if necessary, but responsive grouped layouts should be evaluated first.
+The ten-band surface must remain usable on narrow displays. Do not shrink hit targets to microscopic sizes; horizontal spectral scrolling is preferable when needed. Preset/share forms may stack into a single column on narrow viewports.
 
 ## Error states
 
-Provide user-visible states for:
-
-- AudioWorklet unsupported;
-- secure-context requirement not met;
-- worklet module load failure;
-- AudioContext resume failure;
-- corrupted persisted state;
-- imported/share state incompatible;
-- runtime sample rate causing high-band degradation.
+Provide user-visible states for AudioWorklet unsupported, secure-context/worklet failures, AudioContext resume failure, corrupt persisted state, future/malformed shared state, storage/clipboard failure, and runtime high-band degradation.
 
 Errors should state what remains usable and what the user can do next.
