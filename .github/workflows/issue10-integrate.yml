@@ -23,6 +23,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: python scripts/issue10_patch.py
+      - run: python scripts/issue10_fix.py
       - run: npm run format
       - run: npm run typecheck
       - name: Commit integration output
@@ -30,6 +31,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/audio/AudioEngine.ts src/app/state/appState.ts src/app/App.tsx
+          git add src/audio/dsp/animation.ts src/audio/protocol.ts src/audio/AudioEngine.ts src/app/state/appState.ts src/app/App.tsx tests/app-shell.test.tsx tests/audio/AudioEngine.test.ts
           git commit -m "feat: integrate animation through app state and audio facade"
           git push origin HEAD:issue-10-spectral-animation
