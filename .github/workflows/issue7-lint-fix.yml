@@ -1,0 +1,55 @@
+name: Issue 7 lint fix
+
+on:
+  push:
+    branches:
+      - issue-7-primary-generator-ui
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: issue-7-primary-generator-ui
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Fix scroll-region semantics
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/app/App.tsx')
+          source = path.read_text()
+          old = '''        <div
+            className="band-scroll"
+            tabIndex={0}
+            aria-label="Ten frequency bands"
+          >'''
+          new = '''        <div
+            className="band-scroll"
+            role="group"
+            aria-label="Ten frequency bands"
+          >'''
+          if old not in source:
+              raise SystemExit('expected band-scroll block not found')
+          path.write_text(source.replace(old, new))
+          PY
+          npm run format
+          npm run lint
+      - name: Commit lint fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/App.tsx
+          git commit -m "fix: use semantic band group"
+          git push origin HEAD:issue-7-primary-generator-ui
