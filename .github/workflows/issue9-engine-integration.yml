@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   integrate:
-    if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
@@ -21,16 +20,18 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
       - name: Integrate stereo state through AudioEngine
         shell: bash
         run: |
+          if [ "$GITHUB_ACTOR" = "github-actions[bot]" ]; then
+            exit 0
+          fi
+          npm ci
           python - <<'PY'
           from pathlib import Path
 
           path = Path('src/audio/AudioEngine.ts')
           source = path.read_text()
-
           source = source.replace(
               "import {\n  type SpectralPresetId,\n  type SpectrumState,\n  createSpectrumState,\n} from './dsp/spectra'\n",
               "import {\n  type SpectralPresetId,\n  type SpectrumState,\n  createSpectrumState,\n} from './dsp/spectra'\nimport {\n  DEFAULT_STEREO_WIDTH,\n  type StereoWidthState,\n  createStereoWidthState,\n  stereoWidthToCorrelation,\n} from './dsp/stereo'\n",
@@ -126,9 +127,6 @@ jobs:
           npm run format
           npm run lint
           npm run typecheck
-      - name: Commit engine integration
-        shell: bash
-        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/audio/AudioEngine.ts
