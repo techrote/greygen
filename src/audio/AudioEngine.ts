@@ -567,6 +567,16 @@ export class AudioEngine {
     )
   }
 
+  async setCalibrationBandOffsetsDb(values: ArrayLike<number>): Promise<void> {
+    await this.setGainStageState(
+      createGainStageState(
+        this.gainStageValue.masterGainDb,
+        this.gainStageValue.animationBandOffsetsDb,
+        values,
+      ),
+    )
+  }
+
   async setStereoWidthState(state: StereoWidthState): Promise<void> {
     const canonical = canonicalStereoWidth(state)
     this.stereoWidthValue = canonical

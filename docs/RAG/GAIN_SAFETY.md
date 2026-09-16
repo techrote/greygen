@@ -1,16 +1,16 @@
 # Gain Safety, Smoothing, and Digital Metering
 
-Status: canonical contract for issue #6 gain staging, deterministic headroom, smoothing, final guard, and output telemetry.
+Status: canonical contract for issue #6 gain staging, deterministic headroom, smoothing, final guard, and output telemetry, updated for implemented animation and calibration layers.
 
 ## Signal order
 
-Greygen's pure `GreygenDspEngine` owns the complete level path. The current mono path is:
+Greygen's pure `GreygenDspEngine` owns the complete level path. The current path is:
 
 1. seeded bipolar source normalization (`1.0` linear);
 2. nominal preset / target realization;
 3. user band offsets from `SpectrumState`;
-4. bounded animation-offset layer placeholder;
-5. bounded calibration-correction layer placeholder;
+4. bounded spectral-animation offsets;
+5. bounded calibration correction;
 6. deterministic safety pre-gain;
 7. master gain;
 8. final emergency full-scale guard;
@@ -18,7 +18,7 @@ Greygen's pure `GreygenDspEngine` owns the complete level path. The current mono
 
 The main thread does not apply a second gain stage and does not process audio blocks. `AudioEngine` sends typed state to the worklet and receives bounded telemetry only.
 
-Nominal requested shaping and safety attenuation remain separate values. A preset or user correction never mutates the reported safety pre-gain.
+Nominal requested shaping and safety attenuation remain separate values. A preset, animation trajectory, or calibration correction never mutates the reported safety pre-gain; it changes the deterministic response estimate from which safety attenuation is derived.
 
 ## Gain-state schema and bounds
 
@@ -28,13 +28,11 @@ Nominal requested shaping and safety attenuation remain separate values. A prese
 - ten animation offsets, each in `[-12, +12] dB`;
 - ten calibration offsets, each in `[-24, +24] dB`.
 
-Animation and calibration are explicit zero-default placeholders in issue #6. Their owning later issues can change how those values are generated/applied, but must preserve bounded deterministic state and the same safety accounting boundary.
+The issue #6 placeholders are now owned by implemented layers. Spectral animation generates bounded deterministic animation offsets. Calibration profiles resolve Off/Balanced/Full into bounded calibration offsets; `CALIBRATION_PROFILES.md` is canonical for that transform. Both continue to use the original gain-stage accounting boundary.
 
-User band offsets remain owned by `SpectrumState` and are currently bounded to `[-24, +24] dB` by the spectral-target contract.
+User band offsets remain owned by `SpectrumState` and are bounded to `[-24, +24] dB` by the spectral-target contract.
 
-The default master value is `20*log10(0.05)`, approximately `-26.0206 dB`. This preserves the conservative digital startup level introduced by issue #5 while moving it into the pure/worklet engine where it can be smoothed, tested, metered, and later controlled by the primary UI.
-
-Digital gain values are not acoustic level measurements.
+The default master value is `20*log10(0.05)`, approximately `-26.0206 dB`. Digital gain values are not acoustic level measurements.
 
 ## Deterministic safety pre-gain
 
@@ -50,6 +48,8 @@ Headroom calculation then applies:
 
 For neutral White reconstruction the estimated transfer magnitude is exactly unity to numerical precision, producing approximately `-1 dB` safety pre-gain from the target plus margin. Positive user/calibration/animation layers automatically produce more attenuation.
 
+Calibration therefore cannot consume headroom invisibly: its resolved offsets are part of the response estimate before safety pre-gain. Full calibration remains bounded to ±24 dB and Balanced to ±12 dB even before this protective attenuation.
+
 This response estimate is deterministic and sample-rate-aware, but is not claimed to be an absolute time-domain bound for every possible transient. The final sample-domain guard below remains the last invariant that output cannot escape legal digital range.
 
 ## Smoothing
@@ -62,6 +62,8 @@ Current smoothing constants:
 - master gain: `40 ms` one-pole time constant;
 - safety attenuation attack: `5 ms`;
 - safety attenuation release: `150 ms`.
+
+User offsets, animation offsets, and calibration offsets all converge through the component-gain smoothing path. Switching profile or Off/Balanced/Full therefore does not hard-step filter gain targets.
 
 The shorter safety attack reduces exposure to a newly demanding state while remaining continuous. The final guard covers the short attack interval. Slower release avoids a sudden level rise when requested boosts are removed.
 
@@ -77,7 +79,7 @@ The final guard is intentionally simple and emergency-only:
 - a non-finite sample is converted to zero;
 - every intervention is counted in the current telemetry window.
 
-This is not a loudness maximizer, compressor, or normal tone-shaping stage. Ordinary White/Pink/Brown/Grey deterministic reference fixtures at `0 dB` master must produce zero guard interventions in validation. If a normal preset begins relying on the guard materially, gain staging must be redesigned rather than treating clipping as normal behavior.
+This is not a loudness maximizer, compressor, or normal tone-shaping stage. Ordinary White/Pink/Brown/Grey deterministic reference fixtures at `0 dB` master must produce zero guard interventions in validation. If a normal requested state begins relying on the guard materially, gain staging must be redesigned rather than treating clipping as normal behavior.
 
 ## Meter stage and units
 
@@ -95,38 +97,30 @@ The worklet emits telemetry at a bounded nominal rate of 10 updates per second. 
 
 `dBFS` means level relative to digital full scale. No Greygen digital meter is labelled dB SPL, phon, sone, hearing threshold, or any other acoustic/clinical unit.
 
-## Protocol v2
+## Protocol history and current control use
 
-Issue #6 advances the worklet protocol and processor identity to version `2`.
+Issue #6 introduced worklet protocol v2 with serialized spectral/gain-stage state, `set-gain-stage`, and bounded telemetry. Later issues advanced the overall protocol for stereo and animation, but calibration deliberately reuses the existing gain-stage message shape: no separate real-time calibration protocol is required.
 
-`initialize` now carries both serialized spectral state and gain-stage state. `set-gain-stage` updates master/placeholder layers through the same validated contract. The processor additionally emits unsolicited validated `telemetry` messages at the bounded cadence above.
-
-Telemetry messages are not request/response traffic and therefore do not consume `requestId`s. Control acknowledgements remain request-scoped.
+`AudioEngine.setCalibrationBandOffsetsDb()` preserves current master and animation state and sends a validated `set-gain-stage` update. Control acknowledgements remain request-scoped.
 
 ## Real-time constraints
 
-The per-sample render path performs:
+The per-sample render path performs seeded source generation, complementary filter-bank processing, preallocated smoother updates, scalar gain multiplication, final finite/clamp checks, and primitive meter accumulation. It performs no logging, DOM/storage/URL/network access, Promise work, MessagePort traffic, or deliberate per-sample allocation.
 
-- seeded source generation;
-- existing complementary filter-bank component processing;
-- preallocated smoother updates;
-- scalar gain multiplication;
-- final clamp/finite check;
-- primitive peak/sum-of-squares accumulation.
-
-It performs no logging, DOM/network access, Promise work, MessagePort traffic, or deliberate per-sample allocation. Frequency-response headroom estimation occurs only when accepted state changes, outside the per-sample loop.
+Frequency-response headroom estimation occurs only when accepted state changes, outside the per-sample loop.
 
 ## Validation invariants
 
-Issue #6 deterministic validation covers:
+Validation covers:
 
 - neutral White response estimate at 44.1, 48, and 96 kHz;
 - all user bands at maximum accepted offset;
-- maximum animation and calibration placeholder offsets;
+- maximum animation and calibration offsets;
+- positive calibration correction causing stronger safety attenuation than neutral state;
 - master at maximum `0 dB`;
 - pathological-state output finite and inside the final guard at 44.1, 48, and 96 kHz;
 - rapid alternating extreme controls;
-- same-seed first-sample transition regression for smoothing;
+- same-seed transition regression for smoothing;
 - applied safety pre-gain matching reported telemetry;
 - known-vector peak/RMS math;
 - ordinary White/Pink/Brown/Grey long fixtures producing zero final-guard interventions at `0 dB` master;

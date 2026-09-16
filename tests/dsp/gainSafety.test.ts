@@ -62,7 +62,33 @@ describe('gain safety model', () => {
     },
   )
 
-  it('keeps placeholder layers explicitly bounded and versioned', () => {
+  it('accounts for positive calibration correction before master gain', () => {
+    const spectral = resolveSpectrumState(createSpectrumState('white'))
+    const neutral = resolveGainTargets(
+      48_000,
+      spectral,
+      createGainStageState(0),
+    )
+    const correction = new Float64Array(10)
+    correction[2] = 24
+    correction[3] = 24
+    correction[4] = 24
+    const corrected = resolveGainTargets(
+      48_000,
+      spectral,
+      createGainStageState(0, filled(0), correction),
+    )
+
+    expect(corrected.estimatedShapedPeakLinear).toBeGreaterThan(
+      neutral.estimatedShapedPeakLinear,
+    )
+    expect(corrected.safetyPreGainLinear).toBeLessThan(
+      neutral.safetyPreGainLinear,
+    )
+    expect(gainToDecibels(corrected.safetyPreGainLinear)).toBeLessThan(-10)
+  })
+
+  it('keeps dynamic and calibration layers explicitly bounded and versioned', () => {
     const animation = filled(0)
     const calibration = filled(0)
     animation[2] = ANIMATION_BAND_OFFSET_LIMIT_DB

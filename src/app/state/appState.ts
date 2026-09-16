@@ -34,7 +34,7 @@ import {
 
 export const APP_STORAGE_VERSION = 1 as const
 export const SOUND_STATE_SCHEMA_VERSION = 3 as const
-export const PROFILE_STATE_SCHEMA_VERSION = 1 as const
+export const PROFILE_STATE_SCHEMA_VERSION = 2 as const
 export const UI_STATE_SCHEMA_VERSION = 2 as const
 export const PROFILE_RECORD_SCHEMA_VERSION = 1 as const
 
@@ -53,6 +53,7 @@ export interface SoundState {
 }
 
 export type ProfileKind = 'calibration' | 'playback'
+export type CalibrationApplicationMode = 'off' | 'balanced' | 'full'
 
 export type JsonValue =
   | null
@@ -74,6 +75,8 @@ export interface LocalProfileRecord {
 export interface ProfileState {
   readonly schemaVersion: typeof PROFILE_STATE_SCHEMA_VERSION
   readonly profiles: readonly LocalProfileRecord[]
+  readonly activeProfileId: string | null
+  readonly calibrationMode: CalibrationApplicationMode
 }
 
 export interface UiState {
@@ -233,10 +236,7 @@ export function soundStateToAnimationState(state: SoundState): AnimationState {
 }
 
 export function createDefaultProfileState(): ProfileState {
-  return Object.freeze({
-    schemaVersion: PROFILE_STATE_SCHEMA_VERSION,
-    profiles: Object.freeze([]),
-  })
+  return createProfileState([], null, 'off')
 }
 
 export function createDefaultUiState(): UiState {
@@ -579,6 +579,8 @@ function parseProfileRecord(value: unknown): LocalProfileRecord | null {
 
 export function createProfileState(
   profiles: readonly LocalProfileRecord[],
+  activeProfileId: string | null = null,
+  calibrationMode: CalibrationApplicationMode = 'off',
 ): ProfileState {
   const canonical = profiles.map((profile) => {
     const parsed = parseProfileRecord(profile)
@@ -587,9 +589,23 @@ export function createProfileState(
     }
     return parsed
   })
+  const active =
+    activeProfileId !== null &&
+    canonical.some((profile) => profile.id === activeProfileId)
+      ? activeProfileId
+      : null
+  const mode =
+    active === null ||
+    (calibrationMode !== 'off' &&
+      calibrationMode !== 'balanced' &&
+      calibrationMode !== 'full')
+      ? 'off'
+      : calibrationMode
   return Object.freeze({
     schemaVersion: PROFILE_STATE_SCHEMA_VERSION,
     profiles: Object.freeze(canonical),
+    activeProfileId: active,
+    calibrationMode: mode,
   })
 }
 
@@ -630,14 +646,24 @@ export function parseProfileState(raw: string): StateParseResult<ProfileState> {
     }
   }
   if (
-    value.schemaVersion !== PROFILE_STATE_SCHEMA_VERSION ||
-    !Array.isArray(value.profiles)
+    value.schemaVersion !== 1 &&
+    value.schemaVersion !== PROFILE_STATE_SCHEMA_VERSION
   ) {
     return {
       state: createDefaultProfileState(),
       code: 'recovered',
       messages: Object.freeze([
         'Private profile state was invalid and was not loaded.',
+      ]),
+    }
+  }
+
+  if (!Array.isArray(value.profiles)) {
+    return {
+      state: createDefaultProfileState(),
+      code: 'recovered',
+      messages: Object.freeze([
+        'Private profile list was invalid and was not loaded.',
       ]),
     }
   }
@@ -657,10 +683,42 @@ export function parseProfileState(raw: string): StateParseResult<ProfileState> {
     profiles.push(parsed)
   }
 
+  if (value.schemaVersion === 1) {
+    return {
+      state: createProfileState(profiles, null, 'off'),
+      code: 'migrated',
+      messages: Object.freeze([
+        'Private profile state schema v1 was migrated to v2 with correction bypassed to preserve previous audio behavior.',
+      ]),
+    }
+  }
+
+  const requestedActive =
+    typeof value.activeProfileId === 'string' ? value.activeProfileId : null
+  const activeProfileId =
+    requestedActive !== null &&
+    profiles.some((profile) => profile.id === requestedActive)
+      ? requestedActive
+      : null
+  const requestedMode = value.calibrationMode
+  const calibrationMode: CalibrationApplicationMode =
+    activeProfileId !== null &&
+    (requestedMode === 'off' ||
+      requestedMode === 'balanced' ||
+      requestedMode === 'full')
+      ? requestedMode
+      : 'off'
+  const recovered =
+    requestedActive !== activeProfileId || requestedMode !== calibrationMode
+
   return {
-    state: createProfileState(profiles),
-    code: 'ok',
-    messages: Object.freeze([]),
+    state: createProfileState(profiles, activeProfileId, calibrationMode),
+    code: recovered ? 'recovered' : 'ok',
+    messages: recovered
+      ? Object.freeze([
+          'Invalid calibration profile selection/application state was bypassed safely.',
+        ])
+      : Object.freeze([]),
   }
 }
 
@@ -774,7 +832,11 @@ export function serializeSoundState(state: SoundState): string {
 }
 
 export function serializeProfileState(state: ProfileState): string {
-  const canonical = createProfileState(state.profiles)
+  const canonical = createProfileState(
+    state.profiles,
+    state.activeProfileId,
+    state.calibrationMode,
+  )
   return JSON.stringify(canonical)
 }
 
