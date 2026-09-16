@@ -128,9 +128,8 @@ test('manual and direct share imports restore only sound state and never auto-st
   ).toBeVisible()
   const copiedShare = await page.evaluate(
     () =>
-      (
-        globalThis as typeof globalThis & { __copiedGreygenShare?: string }
-      ).__copiedGreygenShare,
+      (globalThis as typeof globalThis & { __copiedGreygenShare?: string })
+        .__copiedGreygenShare,
   )
   expect(copiedShare).toBe(shareUrl)
 
