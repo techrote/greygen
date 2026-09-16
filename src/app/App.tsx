@@ -2,6 +2,7 @@ import {
   Suspense,
   type ChangeEvent,
   lazy,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -1426,6 +1427,12 @@ export default function App() {
     }
   }
 
+  const readAnalyzerFrame = useCallback(
+    (): AnalyzerSpectrumFrame | null =>
+      engineRef.current?.readAnalyzerFrame() ?? null,
+    [],
+  )
+
   const matchingUserPreset = findMatchingUserSoundPreset(
     userPresetState,
     soundState,
@@ -1466,7 +1473,7 @@ export default function App() {
       onAnimationEnergyChange={handleAnimationEnergyChange}
       onToggleFutureFeatures={handleToggleFutureFeatures}
       onToggleAnalyzer={handleToggleAnalyzer}
-      readAnalyzerFrame={() => engineRef.current?.readAnalyzerFrame() ?? null}
+      readAnalyzerFrame={readAnalyzerFrame}
       onResetSound={handleResetSound}
       onDeleteProfiles={handleDeleteProfiles}
       onSaveUserPreset={handleSaveUserPreset}

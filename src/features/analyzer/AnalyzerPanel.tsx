@@ -35,7 +35,8 @@ export default function AnalyzerPanel({
 
   useEffect(() => {
     let loop: BoundedFrameLoop | null = null
-    let media: MediaQueryList | null = null
+    const media =
+      globalThis.matchMedia?.('(prefers-reduced-motion: reduce)') ?? null
 
     const stop = (): void => {
       loop?.stop()
@@ -48,8 +49,6 @@ export default function AnalyzerPanel({
         audioSnapshot.status !== 'running'
       )
         return
-      media =
-        globalThis.matchMedia?.('(prefers-reduced-motion: reduce)') ?? null
       const fps = media?.matches
         ? ANALYZER_REDUCED_MOTION_MAX_FPS
         : ANALYZER_MAX_FPS
@@ -79,7 +78,6 @@ export default function AnalyzerPanel({
     const visibilityChanged = (): void => start()
     const motionChanged = (): void => start()
     document.addEventListener('visibilitychange', visibilityChanged)
-    media = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)') ?? null
     media?.addEventListener?.('change', motionChanged)
     start()
     return () => {

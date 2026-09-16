@@ -933,6 +933,14 @@ export class AudioEngine {
       }
     }
 
+    if (this.analyzer) {
+      try {
+        this.analyzer.disconnect()
+      } catch {
+        // Disconnect may throw if the browser already tore the graph down.
+      }
+    }
+
     const context = this.context
     if (context) {
       context.removeEventListener('statechange', this.handleContextStateChange)
