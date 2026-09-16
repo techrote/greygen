@@ -862,6 +862,11 @@ export default function App() {
   const [controlError, setControlError] = useState<string | null>(null)
   const [storageNotice, setStorageNotice] = useState<string | null>(null)
   const [shareNotice, setShareNotice] = useState<string | null>(null)
+  const [bootShare] = useState(() =>
+    typeof globalThis.location === 'undefined'
+      ? null
+      : parseSoundShareUrl(globalThis.location.href),
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -874,26 +879,29 @@ export default function App() {
     setUiState(loaded.ui)
     setStorageNotice(diagnosticsNotice(loaded.diagnostics))
 
-    if (typeof globalThis.location !== 'undefined') {
-      const shared = parseSoundShareUrl(globalThis.location.href)
-      if (shared.state) {
-        initialSound = shared.state
+    if (bootShare) {
+      if (bootShare.state) {
+        initialSound = bootShare.state
         const detail =
-          shared.messages.length > 0 ? ` ${shared.messages.join(' ')}` : ''
+          bootShare.messages.length > 0
+            ? ` ${bootShare.messages.join(' ')}`
+            : ''
         setShareNotice(
           `Shared sound loaded. Audio remains Ready until you choose Start.${detail}`,
         )
-        try {
-          globalThis.history?.replaceState(
-            null,
-            '',
-            stripSoundShareFragment(globalThis.location.href),
-          )
-        } catch {
-          // URL cleanup is cosmetic; successful import remains authoritative.
+        if (typeof globalThis.location !== 'undefined') {
+          try {
+            globalThis.history?.replaceState(
+              null,
+              '',
+              stripSoundShareFragment(globalThis.location.href),
+            )
+          } catch {
+            // URL cleanup is cosmetic; successful import remains authoritative.
+          }
         }
-      } else if (shared.code !== 'absent') {
-        setShareNotice(shared.messages.join(' '))
+      } else if (bootShare.code !== 'absent') {
+        setShareNotice(bootShare.messages.join(' '))
       }
     }
     setSoundState(initialSound)
@@ -935,14 +943,77 @@ export default function App() {
     }
     void bootstrap()
 
+    const handleShareHashChange = (): void => {
+      if (typeof globalThis.location === 'undefined') {
+        return
+      }
+      const shared = parseSoundShareUrl(globalThis.location.href)
+      if (shared.code === 'absent') {
+        return
+      }
+      if (!shared.state) {
+        if (!cancelled) {
+          setShareNotice(
+            shared.messages.join(' ') ||
+              'Shared sound payload could not be loaded safely.',
+          )
+        }
+        return
+      }
+
+      const next = shared.state
+      const detail =
+        shared.messages.length > 0 ? ` ${shared.messages.join(' ')}` : ''
+      setControlError(null)
+      setSoundState(next)
+      void Promise.all([
+        engine.resetSeed(next.seed),
+        engine.setSpectrumState(soundStateToSpectrumState(next)),
+        engine.setMasterGainDb(next.masterGainDb),
+        engine.setStereoWidth(next.stereoWidth),
+        engine.setAnimationState(soundStateToAnimationState(next)),
+      ])
+        .then(() => {
+          if (cancelled) {
+            return
+          }
+          const result = repository.saveSound(next)
+          if (!result.ok && result.diagnostic) {
+            setStorageNotice(result.diagnostic.message)
+          }
+          setShareNotice(
+            `Shared sound loaded. Loading did not start audio.${detail}`,
+          )
+          try {
+            globalThis.history?.replaceState(
+              null,
+              '',
+              stripSoundShareFragment(globalThis.location.href),
+            )
+          } catch {
+            // URL cleanup is cosmetic; successful import remains authoritative.
+          }
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setControlError(
+              `Shared sound state could not be applied: ${errorText(error)}`,
+            )
+          }
+        })
+    }
+
+    globalThis.addEventListener?.('hashchange', handleShareHashChange)
+
     return () => {
       cancelled = true
+      globalThis.removeEventListener?.('hashchange', handleShareHashChange)
       unsubscribe()
       repositoryRef.current = null
       engineRef.current = null
       void engine.dispose()
     }
-  }, [])
+  }, [bootShare])
 
   const reportControlFailure = (error: unknown): void => {
     setControlError(errorText(error))
