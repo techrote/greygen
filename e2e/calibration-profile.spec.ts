@@ -82,10 +82,18 @@ test('saves, applies, persists, bypasses, and deletes a private calibration prof
   await expect(page.locator('#calibration-mode')).toHaveValue('off')
   await expect(page.getByText('Ready', { exact: true })).toBeVisible()
   await expect
-    .poll(() =>
-      page.evaluate(() => localStorage.getItem('greygen.profile-state')),
-    )
-    .toBeNull()
+    .poll(async () => {
+      const raw = await page.evaluate(() =>
+        localStorage.getItem('greygen.profile-state'),
+      )
+      return raw ? JSON.parse(raw) : null
+    })
+    .toEqual({
+      schemaVersion: 2,
+      profiles: [],
+      activeProfileId: null,
+      calibrationMode: 'off',
+    })
 })
 
 test('corrupt profile storage recovers safely and stays silent', async ({
