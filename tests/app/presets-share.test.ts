@@ -165,7 +165,11 @@ describe('privacy-safe share payloads', () => {
 
     const parsed = parseSharedSoundPayload(first)
     expect(parsed.code).toBe('ok')
-    expect(serializeSoundState(parsed.state!)).toBe(serializeSoundState(sound))
+    expect(parsed.state).not.toBeNull()
+    if (!parsed.state) {
+      throw new Error('Expected a valid shared sound state')
+    }
+    expect(serializeSoundState(parsed.state)).toBe(serializeSoundState(sound))
 
     const url = createSoundShareUrl('https://example.test/greygen?x=1', sound)
     expect(url).toContain('#s=')
