@@ -23,6 +23,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: python scripts/issue12_impl.py
+      - run: python scripts/issue12_fix1.py
       - run: npm run format
       - run: npm run typecheck
       - run: npm test
