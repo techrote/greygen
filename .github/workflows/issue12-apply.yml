@@ -1,0 +1,36 @@
+name: Issue 12 apply
+
+on:
+  push:
+    branches:
+      - issue-12-analyzer-diagnostics
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: issue-12-analyzer-diagnostics
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: python scripts/issue12_impl.py
+      - run: npm run format
+      - run: npm run typecheck
+      - run: npm test
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md docs src tests e2e
+          git commit -m "feat: add bounded analyzer and diagnostics panel"
+          git push origin HEAD:issue-12-analyzer-diagnostics
