@@ -6,6 +6,7 @@ import { DEFAULT_STEREO_WIDTH } from '../../src/audio/dsp/stereo'
 import { isModifiedPreset } from '../../src/features/generator/uiModel'
 import {
   PROFILE_RECORD_SCHEMA_VERSION,
+  PROFILE_STATE_SCHEMA_VERSION,
   SOUND_STATE_SCHEMA_VERSION,
   UI_STATE_SCHEMA_VERSION,
   createDefaultProfileState,
@@ -173,28 +174,70 @@ describe('versioned app state schemas', () => {
     expect(profileJson).toContain('private fixture')
   })
 
-  it('validates private profile envelopes without interpreting future profile payload semantics', () => {
-    const valid = parseProfileState(
+  it('migrates private profile schema v1 with correction bypassed', () => {
+    const migrated = parseProfileState(
       JSON.stringify({
         schemaVersion: 1,
         profiles: [
           {
             recordSchemaVersion: PROFILE_RECORD_SCHEMA_VERSION,
-            id: 'p1',
-            name: 'Playback chain A',
-            kind: 'playback',
-            payloadSchemaVersion: 3,
-            payload: { sampleRate: 48000, values: [1, 2, 3] },
+            id: 'legacy-profile',
+            name: 'Legacy profile',
+            kind: 'calibration',
+            payloadSchemaVersion: 1,
+            payload: { rawBandOffsetsDb: Array(10).fill(0) },
           },
         ],
       }),
     )
-    expect(valid.code).toBe('ok')
-    expect(valid.state.profiles).toHaveLength(1)
+    expect(migrated.code).toBe('migrated')
+    expect(migrated.state.schemaVersion).toBe(PROFILE_STATE_SCHEMA_VERSION)
+    expect(migrated.state.profiles).toHaveLength(1)
+    expect(migrated.state.activeProfileId).toBeNull()
+    expect(migrated.state.calibrationMode).toBe('off')
+  })
 
-    const invalid = parseProfileState(
+  it('validates current private profile selection and recovers invalid activation safely', () => {
+    const valid = parseProfileState(
       JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: PROFILE_STATE_SCHEMA_VERSION,
+        profiles: [
+          {
+            recordSchemaVersion: PROFILE_RECORD_SCHEMA_VERSION,
+            id: 'p1',
+            name: 'Playback chain A',
+            kind: 'calibration',
+            payloadSchemaVersion: 1,
+            payload: {
+              sampleRateHz: 48000,
+              referenceBandIndex: 5,
+              rawBandOffsetsDb: Array(10).fill(0),
+            },
+          },
+        ],
+        activeProfileId: 'p1',
+        calibrationMode: 'balanced',
+      }),
+    )
+    expect(valid.code).toBe('ok')
+    expect(valid.state.activeProfileId).toBe('p1')
+    expect(valid.state.calibrationMode).toBe('balanced')
+
+    const invalidSelection = parseProfileState(
+      JSON.stringify({
+        schemaVersion: PROFILE_STATE_SCHEMA_VERSION,
+        profiles: valid.state.profiles,
+        activeProfileId: 'missing',
+        calibrationMode: 'full',
+      }),
+    )
+    expect(invalidSelection.code).toBe('recovered')
+    expect(invalidSelection.state.activeProfileId).toBeNull()
+    expect(invalidSelection.state.calibrationMode).toBe('off')
+
+    const invalidRecord = parseProfileState(
+      JSON.stringify({
+        schemaVersion: PROFILE_STATE_SCHEMA_VERSION,
         profiles: [
           {
             recordSchemaVersion: PROFILE_RECORD_SCHEMA_VERSION,
@@ -205,10 +248,12 @@ describe('versioned app state schemas', () => {
             payload: {},
           },
         ],
+        activeProfileId: null,
+        calibrationMode: 'off',
       }),
     )
-    expect(invalid.code).toBe('recovered')
-    expect(invalid.state).toEqual(createDefaultProfileState())
+    expect(invalidRecord.code).toBe('recovered')
+    expect(invalidRecord.state).toEqual(createDefaultProfileState())
   })
 
   it('recovers UI preferences independently from sound/profile state', () => {
@@ -216,6 +261,7 @@ describe('versioned app state schemas', () => {
       JSON.stringify({
         schemaVersion: UI_STATE_SCHEMA_VERSION,
         futureFeaturesVisible: false,
+        analyzerVisible: false,
       }),
     )
     expect(valid.code).toBe('ok')
@@ -225,6 +271,7 @@ describe('versioned app state schemas', () => {
       JSON.stringify({
         schemaVersion: UI_STATE_SCHEMA_VERSION,
         futureFeaturesVisible: 'yes',
+        analyzerVisible: false,
       }),
     )
     expect(invalid.code).toBe('recovered')
