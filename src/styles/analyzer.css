@@ -1,0 +1,64 @@
+.analyzer-card {
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: var(--surface);
+}
+
+.analyzer-panel {
+  display: grid;
+  gap: 1rem;
+}
+.spectrum-visual {
+  min-block-size: 12rem;
+  block-size: clamp(12rem, 24vw, 18rem);
+  display: flex;
+  align-items: end;
+  gap: 2px;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+.spectrum-bar {
+  flex: 1 1 0;
+  min-inline-size: 1px;
+  background: currentColor;
+  opacity: 0.72;
+}
+.analyzer-empty {
+  margin: auto;
+  text-align: center;
+}
+.analyzer-note,
+.analyzer-private-note {
+  margin: 0;
+  font-size: 0.875rem;
+  opacity: 0.82;
+}
+.diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.55rem;
+  margin: 0;
+}
+.diagnostics-grid div {
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  min-inline-size: 0;
+}
+.diagnostics-grid dt {
+  font-size: 0.75rem;
+  opacity: 0.72;
+}
+.diagnostics-grid dd {
+  margin: 0.15rem 0 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spectrum-bar {
+    transition: none;
+  }
+}

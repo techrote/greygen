@@ -82,6 +82,25 @@ export interface WorkletMessagePort {
   close?(): void
 }
 
+export interface AnalyzerNodePort {
+  fftSize: number
+  minDecibels: number
+  maxDecibels: number
+  smoothingTimeConstant: number
+  readonly frequencyBinCount: number
+  connect(destination: unknown): unknown
+  disconnect(): void
+  getFloatFrequencyData(target: Float32Array): void
+}
+
+export interface AnalyzerSpectrumFrame {
+  readonly sampleRate: number
+  readonly fftSize: number
+  readonly minDb: number
+  readonly maxDb: number
+  readonly values: Float32Array
+}
+
 export interface AudioWorkletNodePort {
   readonly port: WorkletMessagePort
   connect(destination: unknown): unknown
@@ -97,6 +116,7 @@ export interface AudioContextPort {
     addModule(moduleUrl: string): Promise<void>
   }
   readonly state: string
+  createAnalyser?(): AnalyzerNodePort
   resume(): Promise<void>
   close(): Promise<void>
   addEventListener(type: 'statechange', listener: () => void): void
@@ -226,6 +246,8 @@ export class AudioEngine {
   private readonly pendingRequests = new Map<number, PendingRequest>()
   private context: AudioContextPort | null = null
   private node: AudioWorkletNodePort | null = null
+  private analyzer: AnalyzerNodePort | null = null
+  private analyzerBuffer: Float32Array | null = null
   private nextRequestId = 1
   private suppressContextState = false
   private seedValue: number
@@ -359,7 +381,19 @@ export class AudioEngine {
       node.addEventListener('processorerror', this.handleProcessorError)
       node.port.onmessage = this.handlePortMessage
       node.port.start?.()
-      node.connect(context.destination)
+      if (context.createAnalyser) {
+        const analyzer = context.createAnalyser()
+        analyzer.fftSize = 2048
+        analyzer.minDecibels = -120
+        analyzer.maxDecibels = 0
+        analyzer.smoothingTimeConstant = 0.72
+        this.analyzer = analyzer
+        this.analyzerBuffer = new Float32Array(analyzer.frequencyBinCount)
+        node.connect(analyzer)
+        analyzer.connect(context.destination)
+      } else {
+        node.connect(context.destination)
+      }
 
       const response = await this.request(
         {
@@ -615,6 +649,36 @@ export class AudioEngine {
     }
   }
 
+  readAnalyzerFrame(): AnalyzerSpectrumFrame | null {
+    const analyzer = this.analyzer
+    const buffer = this.analyzerBuffer
+    if (this.analyzer) {
+      try {
+        this.analyzer.disconnect()
+      } catch {
+        // Browser graph may already be torn down.
+      }
+    }
+
+    const context = this.context
+    if (
+      !analyzer ||
+      !buffer ||
+      !context ||
+      this.snapshotValue.status !== 'running'
+    ) {
+      return null
+    }
+    analyzer.getFloatFrequencyData(buffer)
+    return {
+      sampleRate: context.sampleRate,
+      fftSize: analyzer.fftSize,
+      minDb: analyzer.minDecibels,
+      maxDb: analyzer.maxDecibels,
+      values: buffer,
+    }
+  }
+
   async requestStatus(): Promise<StatusMessage> {
     if (!this.node) {
       throw new Error('Audio engine is not running')
@@ -637,6 +701,7 @@ export class AudioEngine {
     return (
       this.context !== null ||
       this.node !== null ||
+      this.analyzer !== null ||
       this.pendingRequests.size > 0
     )
   }
@@ -881,6 +946,8 @@ export class AudioEngine {
     }
 
     this.node = null
+    this.analyzer = null
+    this.analyzerBuffer = null
     this.context = null
     this.suppressContextState = false
   }

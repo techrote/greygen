@@ -167,6 +167,10 @@ Normal sharing is a deterministic versioned base64url tuple in the URL fragment.
 
 Share decode is bounded before parsing and passes accepted finite values through canonical SoundState validation/clamping. Future versions fail closed/visibly. No backend is required.
 
+## Analyzer / diagnostics
+
+The browser graph may insert a native AnalyserNode after the worklet and before destination. Spectrum FFT/display work remains outside the worklet hot loop; existing worklet telemetry stays bounded. The analyzer UI is lazily loaded, visibility-aware, reduced-motion-aware, and private-profile-blind. `ANALYZER_DIAGNOSTICS.md` is canonical for details.
+
 ## Future continuous spectral engine
 
 Ten-band state should remain representable as a sampled target curve so a future denser model can convert predictably. UI/application state must continue to speak in target/sound terms rather than reaching into filter sections.
