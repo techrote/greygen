@@ -77,7 +77,10 @@ export default function CalibrationPanel({
   }
 
   return (
-    <section className="calibration-panel" aria-labelledby="calibration-heading">
+    <section
+      className="calibration-panel"
+      aria-labelledby="calibration-heading"
+    >
       <div className="section-heading-row">
         <div>
           <p className="label">Private local profile</p>
@@ -117,7 +120,9 @@ export default function CalibrationPanel({
             value={applicationMode}
             disabled={disabled || !activeProfileId}
             onChange={(event) =>
-              onModeChange(event.currentTarget.value as CalibrationApplicationMode)
+              onModeChange(
+                event.currentTarget.value as CalibrationApplicationMode,
+              )
             }
           >
             <option value="off">Off</option>
@@ -128,8 +133,8 @@ export default function CalibrationPanel({
       </div>
       <p className="status-note">
         Balanced is the conservative default. Full is explicit opt-in and still
-        obeys global correction/headroom bounds. Profile changes use the existing
-        smoothed gain path.
+        obeys global correction/headroom bounds. Profile changes use the
+        existing smoothed gain path.
       </p>
 
       {calibrationProfiles.length > 0 ? (
@@ -158,8 +163,8 @@ export default function CalibrationPanel({
       <fieldset className="calibration-editor" disabled={disabled}>
         <legend>Create manual relative profile</legend>
         <p className="status-note">
-          Blank a non-reference band to mark it unknown/skipped. Do not raise the
-          system level aggressively to force an inaudible band to appear.
+          Blank a non-reference band to mark it unknown/skipped. Do not raise
+          the system level aggressively to force an inaudible band to appear.
         </p>
         <label htmlFor="calibration-profile-name">
           Profile name
@@ -200,7 +205,9 @@ export default function CalibrationPanel({
                 value={offsetDrafts[index]}
                 required={index === referenceBandIndex}
                 aria-label={`${frequencyLabel(frequency)} calibration relative correction; blank means skipped`}
-                onChange={(event) => setOffset(index, event.currentTarget.value)}
+                onChange={(event) =>
+                  setOffset(index, event.currentTarget.value)
+                }
               />
             </label>
           ))}

@@ -13,9 +13,9 @@ import { createSoundShareUrl } from '../../src/features/sharing/shareState'
 
 describe('calibration profile model', () => {
   it('sanitizes names and canonicalizes bounded relative payloads', () => {
-    expect(sanitizeCalibrationProfileName('  <b> Desk\n Headphones </b>  ')).toBe(
-      'b Desk Headphones /b',
-    )
+    expect(
+      sanitizeCalibrationProfileName('  <b> Desk\n Headphones </b>  '),
+    ).toBe('b Desk Headphones /b')
 
     const profile = createCalibrationProfilePayload({
       sampleRateHz: 48000,
@@ -53,16 +53,7 @@ describe('calibration profile model', () => {
       rawBandOffsetsDb: [-24, -12, 0, 12, 24, -24, 24, null, -4, 8],
     })
     expect(resolveCalibrationBandOffsetsDb(profile, 'full')).toEqual([
-      0,
-      12,
-      24,
-      24,
-      24,
-      0,
-      24,
-      0,
-      20,
-      24,
+      0, 12, 24, 24, 24, 0, 24, 0, 20, 24,
     ])
   })
 
@@ -74,16 +65,8 @@ describe('calibration profile model', () => {
       rawBandOffsetsDb: [24, 12, 6, 0, -6, 0, 6, 12, 24, null],
     })
     expect(resolveCalibrationBandOffsetsDb(profile, 'balanced')).toEqual([
-      12,
-      8.1,
-      3.5999999999999996,
-      0,
-      -1.7999999999999998,
-      0,
-      3.5999999999999996,
-      8.1,
-      12,
-      0,
+      12, 8.1, 3.5999999999999996, 0, -1.7999999999999998, 0,
+      3.5999999999999996, 8.1, 12, 0,
     ])
   })
 

@@ -26,7 +26,9 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value))
 }
 
-function freezeOffsets(values: readonly (number | null)[]): readonly (number | null)[] {
+function freezeOffsets(
+  values: readonly (number | null)[],
+): readonly (number | null)[] {
   return Object.freeze(Array.from(values))
 }
 
@@ -39,7 +41,9 @@ export function sanitizeCalibrationProfileName(value: string): string {
   normalized = Array.from(normalized)
     .filter((character) => {
       const code = character.codePointAt(0) ?? 0
-      return code >= 0x20 && code !== 0x7f && character !== '<' && character !== '>'
+      return (
+        code >= 0x20 && code !== 0x7f && character !== '<' && character !== '>'
+      )
     })
     .join('')
     .replace(/\s+/g, ' ')
@@ -53,7 +57,9 @@ export function createCalibrationProfilePayload(input: {
   readonly rawBandOffsetsDb: readonly (number | null)[]
 }): CalibrationProfilePayload {
   if (input.rawBandOffsetsDb.length !== BAND_COUNT) {
-    throw new RangeError(`rawBandOffsetsDb must contain exactly ${BAND_COUNT} values`)
+    throw new RangeError(
+      `rawBandOffsetsDb must contain exactly ${BAND_COUNT} values`,
+    )
   }
   const referenceBandIndex =
     input.referenceBandIndex ?? DEFAULT_CALIBRATION_REFERENCE_BAND_INDEX
@@ -68,9 +74,13 @@ export function createCalibrationProfilePayload(input: {
   const sampleRateHz = input.sampleRateHz ?? null
   if (
     sampleRateHz !== null &&
-    (!Number.isFinite(sampleRateHz) || sampleRateHz < 8000 || sampleRateHz > 384000)
+    (!Number.isFinite(sampleRateHz) ||
+      sampleRateHz < 8000 ||
+      sampleRateHz > 384000)
   ) {
-    throw new RangeError('sampleRateHz must be null or a plausible finite sample rate')
+    throw new RangeError(
+      'sampleRateHz must be null or a plausible finite sample rate',
+    )
   }
 
   const rawBandOffsetsDb = input.rawBandOffsetsDb.map((value, index) => {
@@ -132,19 +142,24 @@ export function parseCalibrationProfileRecord(
 ): CalibrationProfileParseResult {
   if (
     record.kind !== 'calibration' ||
-    record.payloadSchemaVersion !== CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION ||
+    record.payloadSchemaVersion !==
+      CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION ||
     !isRecord(record.payload)
   ) {
     return {
       profile: null,
-      messages: Object.freeze(['Profile is not a supported calibration payload.']),
+      messages: Object.freeze([
+        'Profile is not a supported calibration payload.',
+      ]),
     }
   }
   const payload = record.payload
   if (!Array.isArray(payload.rawBandOffsetsDb)) {
     return {
       profile: null,
-      messages: Object.freeze(['Calibration profile band data is missing or malformed.']),
+      messages: Object.freeze([
+        'Calibration profile band data is missing or malformed.',
+      ]),
     }
   }
   try {
@@ -153,7 +168,8 @@ export function parseCalibrationProfileRecord(
     )
     const profile = createCalibrationProfilePayload({
       sampleRateHz:
-        payload.sampleRateHz === null || typeof payload.sampleRateHz === 'number'
+        payload.sampleRateHz === null ||
+        typeof payload.sampleRateHz === 'number'
           ? payload.sampleRateHz
           : null,
       referenceBandIndex:
@@ -175,7 +191,9 @@ export function parseCalibrationProfileRecord(
   }
 }
 
-function normalizedFullOffsets(profile: CalibrationProfilePayload): readonly (number | null)[] {
+function normalizedFullOffsets(
+  profile: CalibrationProfilePayload,
+): readonly (number | null)[] {
   const reference = profile.rawBandOffsetsDb[profile.referenceBandIndex]
   if (reference === null) {
     return Object.freeze(Array(BAND_COUNT).fill(null))
@@ -193,7 +211,9 @@ function normalizedFullOffsets(profile: CalibrationProfilePayload): readonly (nu
   )
 }
 
-function smoothKnown(values: readonly (number | null)[]): readonly (number | null)[] {
+function smoothKnown(
+  values: readonly (number | null)[],
+): readonly (number | null)[] {
   return Object.freeze(
     values.map((value, index) => {
       if (value === null) {

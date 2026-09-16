@@ -73,7 +73,9 @@ test('saves, applies, persists, bypasses, and deletes a private calibration prof
   ).toHaveCount(0)
 })
 
-test('corrupt profile storage recovers safely and stays silent', async ({ page }) => {
+test('corrupt profile storage recovers safely and stays silent', async ({
+  page,
+}) => {
   await page.goto('/')
   await page.evaluate(() => {
     localStorage.setItem('greygen.profile-state', '{broken profile json')
