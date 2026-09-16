@@ -59,13 +59,23 @@ import {
   resetUserBandOffset,
   setUserBandOffset,
 } from '../features/generator/uiModel'
+import CalibrationPanel, {
+  type CalibrationDraft,
+} from '../features/calibration/CalibrationPanel'
 import {
+  createCalibrationProfileRecord,
+  findCalibrationProfile,
+  resolveCalibrationRecordOffsetsDb,
+} from '../features/calibration/calibrationProfile'
+import {
+  type CalibrationApplicationMode,
   type ProfileState,
   type SoundState,
   type UiState,
   createDefaultProfileState,
   createDefaultSoundState,
   createDefaultUiState,
+  createProfileState,
   createSoundState,
   createUiState,
   soundStateToAnimationState,
@@ -196,6 +206,7 @@ export interface GeneratorSurfaceProps {
   readonly futureFeaturesVisible: boolean
   readonly analyzerVisible: boolean
   readonly profileCount: number
+  readonly profileState?: ProfileState
   readonly userPresets: readonly UserSoundPreset[]
   readonly matchedUserPresetName: string | null
   readonly shareUrl: string
@@ -217,6 +228,10 @@ export interface GeneratorSurfaceProps {
   readonly readAnalyzerFrame: () => AnalyzerSpectrumFrame | null
   readonly onResetSound: () => void
   readonly onDeleteProfiles: () => void
+  readonly onSaveCalibrationProfile?: (draft: CalibrationDraft) => void
+  readonly onSelectCalibrationProfile?: (id: string | null) => void
+  readonly onCalibrationModeChange?: (mode: CalibrationApplicationMode) => void
+  readonly onDeleteCalibrationProfile?: (id: string) => void
   readonly onSaveUserPreset: (name: string) => boolean
   readonly onLoadUserPreset: (id: string) => void
   readonly onDeleteUserPreset: (id: string) => void
@@ -236,6 +251,7 @@ export function GeneratorSurface({
   futureFeaturesVisible,
   analyzerVisible,
   profileCount,
+  profileState = createDefaultProfileState(),
   userPresets,
   matchedUserPresetName,
   shareUrl,
@@ -257,6 +273,10 @@ export function GeneratorSurface({
   readAnalyzerFrame,
   onResetSound,
   onDeleteProfiles,
+  onSaveCalibrationProfile = () => {},
+  onSelectCalibrationProfile = () => {},
+  onCalibrationModeChange = () => {},
+  onDeleteCalibrationProfile = () => {},
   onSaveUserPreset,
   onLoadUserPreset,
   onDeleteUserPreset,
@@ -839,16 +859,17 @@ export function GeneratorSurface({
                 spectrum when switched Off.
               </p>
             </fieldset>
-            <div className="calibration-placeholder">
-              <h3>Playback calibration</h3>
-              <button type="button" disabled>
-                Calibration profiles — coming later
-              </button>
-              <p>
-                Future profiles will describe relative listener + playback-chain
-                correction. This is not a medical hearing test.
-              </p>
-            </div>
+            <CalibrationPanel
+              profiles={profileState.profiles}
+              activeProfileId={profileState.activeProfileId}
+              applicationMode={profileState.calibrationMode}
+              sampleRate={audioSnapshot.sampleRate}
+              disabled={controlsDisabled}
+              onSave={onSaveCalibrationProfile}
+              onSelect={onSelectCalibrationProfile}
+              onModeChange={onCalibrationModeChange}
+              onDelete={onDeleteCalibrationProfile}
+            />
           </div>
         ) : null}
       </section>
@@ -973,6 +994,16 @@ export default function App() {
         await engine.setMasterGainDb(initialSound.masterGainDb)
         await engine.setStereoWidth(initialSound.stereoWidth)
         await engine.setAnimationState(soundStateToAnimationState(initialSound))
+        const initialCalibration = findCalibrationProfile(
+          loaded.profiles.profiles,
+          loaded.profiles.activeProfileId,
+        )
+        await engine.setCalibrationBandOffsetsDb(
+          resolveCalibrationRecordOffsetsDb(
+            initialCalibration,
+            loaded.profiles.calibrationMode,
+          ),
+        )
 
         if (
           initialSound !== loaded.sound ||
@@ -1094,6 +1125,31 @@ export default function App() {
     if (repository) {
       reportPersistenceResult(repository.saveSound(next))
     }
+  }
+
+  const persistProfiles = (next: ProfileState): void => {
+    const repository = repositoryRef.current
+    if (repository) {
+      reportPersistenceResult(repository.saveProfiles(next))
+    }
+  }
+
+  const applyProfileState = (next: ProfileState): void => {
+    const engine = engineRef.current
+    if (!engine) {
+      return
+    }
+    const active = findCalibrationProfile(next.profiles, next.activeProfileId)
+    setControlError(null)
+    void engine
+      .setCalibrationBandOffsetsDb(
+        resolveCalibrationRecordOffsetsDb(active, next.calibrationMode),
+      )
+      .then(() => {
+        setProfileState(next)
+        persistProfiles(next)
+      })
+      .catch(reportControlFailure)
   }
 
   const handlePrimaryAction = (): void => {
@@ -1418,13 +1474,71 @@ export default function App() {
       .catch(reportControlFailure)
   }
 
-  const handleDeleteProfiles = (): void => {
-    const next = createDefaultProfileState()
-    setProfileState(next)
-    const repository = repositoryRef.current
-    if (repository) {
-      reportPersistenceResult(repository.deleteProfiles())
+  const handleSaveCalibrationProfile = (draft: CalibrationDraft): void => {
+    let suffix = profileState.profiles.length + 1
+    let id = `calibration-${suffix}`
+    while (profileState.profiles.some((profile) => profile.id === id)) {
+      suffix += 1
+      id = `calibration-${suffix}`
     }
+    try {
+      const record = createCalibrationProfileRecord({
+        id,
+        name: draft.name,
+        sampleRateHz: audioSnapshot.sampleRate,
+        referenceBandIndex: draft.referenceBandIndex,
+        rawBandOffsetsDb: draft.rawBandOffsetsDb,
+      })
+      applyProfileState(
+        createProfileState(
+          [...profileState.profiles, record],
+          record.id,
+          'balanced',
+        ),
+      )
+    } catch (error) {
+      setControlError(errorText(error))
+    }
+  }
+
+  const handleSelectCalibrationProfile = (id: string | null): void => {
+    applyProfileState(
+      createProfileState(
+        profileState.profiles,
+        id,
+        id === null ? 'off' : 'balanced',
+      ),
+    )
+  }
+
+  const handleCalibrationModeChange = (
+    mode: CalibrationApplicationMode,
+  ): void => {
+    applyProfileState(
+      createProfileState(
+        profileState.profiles,
+        profileState.activeProfileId,
+        mode,
+      ),
+    )
+  }
+
+  const handleDeleteCalibrationProfile = (id: string): void => {
+    const profiles = profileState.profiles.filter(
+      (profile) => profile.id !== id,
+    )
+    const deletingActive = profileState.activeProfileId === id
+    applyProfileState(
+      createProfileState(
+        profiles,
+        deletingActive ? null : profileState.activeProfileId,
+        deletingActive ? 'off' : profileState.calibrationMode,
+      ),
+    )
+  }
+
+  const handleDeleteProfiles = (): void => {
+    applyProfileState(createDefaultProfileState())
   }
 
   const readAnalyzerFrame = useCallback(
@@ -1455,6 +1569,7 @@ export default function App() {
       futureFeaturesVisible={uiState.futureFeaturesVisible}
       analyzerVisible={uiState.analyzerVisible}
       profileCount={profileState.profiles.length}
+      profileState={profileState}
       userPresets={userPresetState.presets}
       matchedUserPresetName={matchingUserPreset?.name ?? null}
       shareUrl={shareUrl}
@@ -1476,6 +1591,10 @@ export default function App() {
       readAnalyzerFrame={readAnalyzerFrame}
       onResetSound={handleResetSound}
       onDeleteProfiles={handleDeleteProfiles}
+      onSaveCalibrationProfile={handleSaveCalibrationProfile}
+      onSelectCalibrationProfile={handleSelectCalibrationProfile}
+      onCalibrationModeChange={handleCalibrationModeChange}
+      onDeleteCalibrationProfile={handleDeleteCalibrationProfile}
       onSaveUserPreset={handleSaveUserPreset}
       onLoadUserPreset={handleLoadUserPreset}
       onDeleteUserPreset={handleDeleteUserPreset}

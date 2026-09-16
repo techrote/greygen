@@ -594,3 +594,56 @@ button.danger-action:hover:not(:disabled) {
     grid-template-columns: repeat(10, 5.8rem);
   }
 }
+
+.calibration-panel {
+  min-width: 0;
+}
+
+.calibration-apply-row,
+.calibration-editor {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.calibration-apply-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.calibration-apply-row label,
+.calibration-editor > label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.calibration-editor {
+  margin: 1rem 0 0;
+  padding: 0.9rem;
+  border: 1px solid currentColor;
+  border-radius: 0.6rem;
+}
+
+.calibration-band-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(4.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.calibration-band-grid label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.calibration-band-grid input {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (max-width: 52rem) {
+  .calibration-apply-row {
+    grid-template-columns: 1fr;
+  }
+  .calibration-band-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
