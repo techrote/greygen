@@ -95,10 +95,10 @@ export default function AnalyzerPanel({
         aria-label="Live digital output spectrum from 0 Hz to Nyquist; exact diagnostics follow below."
       >
         {bars.length > 0 ? (
-          bars.map((bar, index) => (
+          bars.map((bar) => (
             <span
               className="spectrum-bar"
-              key={`${index}-${bar.startHz}`}
+              key={`${bar.startHz}-${bar.endHz}`}
               style={{ blockSize: `${Math.max(2, bar.level * 100)}%` }}
               title={`${Math.round(bar.startHz)}–${Math.round(bar.endHz)} Hz: ${bar.db.toFixed(1)} dBFS`}
             />
