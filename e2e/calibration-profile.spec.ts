@@ -71,6 +71,21 @@ test('saves, applies, persists, bypasses, and deletes a private calibration prof
   await expect(
     page.getByRole('list', { name: 'Calibration profiles' }),
   ).toHaveCount(0)
+
+  await page.locator('#calibration-profile-name').fill('Temporary profile')
+  await page.getByRole('button', { name: 'Save local profile' }).click()
+  await expect(page.locator('#calibration-profile-select')).toHaveValue(
+    'calibration-1',
+  )
+  await page.getByRole('button', { name: 'Delete local profiles' }).click()
+  await expect(page.locator('#calibration-profile-select')).toHaveValue('')
+  await expect(page.locator('#calibration-mode')).toHaveValue('off')
+  await expect(page.getByText('Ready', { exact: true })).toBeVisible()
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem('greygen.profile-state')),
+    )
+    .toBeNull()
 })
 
 test('corrupt profile storage recovers safely and stays silent', async ({
