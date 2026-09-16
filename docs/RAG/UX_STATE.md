@@ -28,7 +28,7 @@ Required primary controls:
 - calibration/profile entry point;
 - compact peak/RMS/headroom status.
 
-Advanced controls belong in a collapsible/secondary surface.
+Advanced controls belong in a collapsible/secondary surface. The analyzer/diagnostics panel is secondary, defaults closed for new/legacy state, and persists its open/closed presentation preference locally.
 
 ## Band behavior
 
@@ -111,7 +111,7 @@ Private/local by default:
 
 ### UiState
 
-Local only: open panels, visual preferences, analyzer visibility, and other non-audio presentation state.
+Local only: open panels, visual preferences, analyzer visibility, and other non-audio presentation state. UI schema v2 adds persisted analyzer visibility; v1 migrates deterministically with the analyzer closed.
 
 ## Persistence
 

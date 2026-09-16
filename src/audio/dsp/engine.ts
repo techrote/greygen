@@ -36,6 +36,7 @@ import {
   resolveSpectrumState,
 } from './spectra'
 
+export const DSP_ENGINE_VERSION = 1 as const
 export const DEFAULT_ENGINE_SEED = 0x4752_4559
 export const DEFAULT_ENGINE_PRESET: SpectralPresetId = 'grey'
 export const SOURCE_NORMALIZATION_GAIN_LINEAR = 1

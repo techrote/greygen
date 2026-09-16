@@ -33,7 +33,7 @@ npm ci
 npm run dev
 ```
 
-The development server prints the local URL. The primary generator exposes White/Pink/Brown/Grey selection, ten keyboard-operable band offsets, master digital level, **power-preserving stereo width/correlation**, deterministic **Drift/Breathe/Wander/Orbit spectral animation**, local named sound presets, and privacy-safe backend-free share links, plus lifecycle transport, digital Peak/RMS/headroom telemetry, and explicit runtime 16 kHz degradation state. Built-in colour presets own only spectral target fields; named user presets snapshot the complete generic SoundState. Normal share links use a compact versioned URL fragment containing sound settings only: private playback/calibration profiles, profile notes, local preset names, and UI preferences are excluded by construction.
+The development server prints the local URL. The primary generator exposes White/Pink/Brown/Grey selection, ten keyboard-operable band offsets, master digital level, **power-preserving stereo width/correlation**, deterministic **Drift/Breathe/Wander/Orbit spectral animation**, local named sound presets, and privacy-safe backend-free share links, plus lifecycle transport, digital Peak/RMS/headroom telemetry, an optional lazily loaded live spectrum/runtime diagnostics panel, and explicit runtime 16 kHz degradation state. Built-in colour presets own only spectral target fields; named user presets snapshot the complete generic SoundState. Normal share links use a compact versioned URL fragment containing sound settings only: private playback/calibration profiles, profile notes, local preset names, and UI preferences are excluded by construction.
 
 Animation has bounded depth/speed controls and optional mean-band-power normalization; it is seeded and sample-clocked rather than driven by wall time or random walks. Current sound, local user presets, private profiles, and UI preferences are versioned local documents. Reload or share import restores requested sound state but never restores Running: choose **Start audio** explicitly to create/resume the browser audio context and initialize the worklet. Playback calibration remains visibly disabled until its owning roadmap issues implement real behavior.
 
@@ -75,9 +75,10 @@ Start with:
 10. `docs/RAG/GENERATOR_UI.md`
 11. `docs/RAG/STATE_PERSISTENCE.md`
 12. `docs/RAG/PRESETS_SHARING.md`
-13. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
-14. `docs/RAG/UX_STATE.md`
-15. `docs/RAG/AGENT_PLAYBOOK.md`
-16. `docs/RAG/ROADMAP.md`
+13. `docs/RAG/ANALYZER_DIAGNOSTICS.md`
+14. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
+15. `docs/RAG/UX_STATE.md`
+16. `docs/RAG/AGENT_PLAYBOOK.md`
+17. `docs/RAG/ROADMAP.md`
 
 The GitHub issues are executable work packets. Each issue must be completed end-to-end: implementation, tests, documentation updates, PR, automated checks, review of failures, and merge only after required checks pass.

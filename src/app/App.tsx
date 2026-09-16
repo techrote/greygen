@@ -1,4 +1,12 @@
-import { type ChangeEvent, useEffect, useRef, useState } from 'react'
+import {
+  Suspense,
+  type ChangeEvent,
+  lazy,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import {
   ANIMATION_DEPTH_MAX_DB,
   ANIMATION_DEPTH_MIN_DB,
@@ -11,6 +19,7 @@ import {
   createAnimationState,
 } from '../audio/dsp/animation'
 import type {
+  AnalyzerSpectrumFrame,
   AudioEngine,
   AudioEngineSnapshot,
   AudioEngineStatus,
@@ -78,6 +87,8 @@ import type {
   StorageDiagnostic,
 } from './storage/AppStateRepository'
 import { createBrowserAppStateRepository } from './storage/browserStateRepository'
+
+const AnalyzerPanel = lazy(() => import('../features/analyzer/AnalyzerPanel'))
 
 const STEREO_WIDTH_STEP = 0.01
 const ANIMATION_DEPTH_STEP_DB = 0.5
@@ -176,12 +187,14 @@ function diagnosticsNotice(
 export interface GeneratorSurfaceProps {
   readonly audioSnapshot: AudioEngineSnapshot
   readonly spectrumState: SpectrumState
+  readonly soundState: SoundState
   readonly stereoWidth: number
   readonly animation: AnimationState
   readonly engineReady: boolean
   readonly controlError: string | null
   readonly storageNotice: string | null
   readonly futureFeaturesVisible: boolean
+  readonly analyzerVisible: boolean
   readonly profileCount: number
   readonly userPresets: readonly UserSoundPreset[]
   readonly matchedUserPresetName: string | null
@@ -200,6 +213,8 @@ export interface GeneratorSurfaceProps {
   readonly onAnimationSpeedChange: (speed: number) => void
   readonly onAnimationEnergyChange: (enabled: boolean) => void
   readonly onToggleFutureFeatures: () => void
+  readonly onToggleAnalyzer: () => void
+  readonly readAnalyzerFrame: () => AnalyzerSpectrumFrame | null
   readonly onResetSound: () => void
   readonly onDeleteProfiles: () => void
   readonly onSaveUserPreset: (name: string) => boolean
@@ -212,12 +227,14 @@ export interface GeneratorSurfaceProps {
 export function GeneratorSurface({
   audioSnapshot,
   spectrumState,
+  soundState,
   stereoWidth,
   animation,
   engineReady,
   controlError,
   storageNotice,
   futureFeaturesVisible,
+  analyzerVisible,
   profileCount,
   userPresets,
   matchedUserPresetName,
@@ -236,6 +253,8 @@ export function GeneratorSurface({
   onAnimationSpeedChange,
   onAnimationEnergyChange,
   onToggleFutureFeatures,
+  onToggleAnalyzer,
+  readAnalyzerFrame,
   onResetSound,
   onDeleteProfiles,
   onSaveUserPreset,
@@ -372,6 +391,42 @@ export function GeneratorSurface({
             </div>
           ) : null}
         </dl>
+      </section>
+
+      <section className="analyzer-card" aria-labelledby="analyzer-heading">
+        <div className="section-heading-row">
+          <div>
+            <p className="label">Inspect</p>
+            <h2 id="analyzer-heading">Analyzer &amp; diagnostics</h2>
+          </div>
+          <button
+            className="secondary-action panel-toggle"
+            type="button"
+            aria-expanded={analyzerVisible}
+            aria-controls="analyzer-panel-region"
+            onClick={onToggleAnalyzer}
+          >
+            {analyzerVisible ? 'Close analyzer' : 'Open analyzer'}
+          </button>
+        </div>
+        <p className="status-note">
+          Optional live digital spectrum plus runtime diagnostics. Opening this
+          panel does not change the sound.
+        </p>
+        {analyzerVisible ? (
+          <div id="analyzer-panel-region">
+            <Suspense
+              fallback={<p className="status-note">Loading analyzer…</p>}
+            >
+              <AnalyzerPanel
+                audioSnapshot={audioSnapshot}
+                soundState={soundState}
+                modified={modified}
+                readSpectrum={readAnalyzerFrame}
+              />
+            </Suspense>
+          </div>
+        ) : null}
       </section>
 
       <section className="generator-card" aria-labelledby="spectrum-heading">
@@ -1316,7 +1371,22 @@ export default function App() {
   }
 
   const handleToggleFutureFeatures = (): void => {
-    const next = createUiState(!uiState.futureFeaturesVisible)
+    const next = createUiState(
+      !uiState.futureFeaturesVisible,
+      uiState.analyzerVisible,
+    )
+    setUiState(next)
+    const repository = repositoryRef.current
+    if (repository) {
+      reportPersistenceResult(repository.saveUi(next))
+    }
+  }
+
+  const handleToggleAnalyzer = (): void => {
+    const next = createUiState(
+      uiState.futureFeaturesVisible,
+      !uiState.analyzerVisible,
+    )
     setUiState(next)
     const repository = repositoryRef.current
     if (repository) {
@@ -1357,6 +1427,12 @@ export default function App() {
     }
   }
 
+  const readAnalyzerFrame = useCallback(
+    (): AnalyzerSpectrumFrame | null =>
+      engineRef.current?.readAnalyzerFrame() ?? null,
+    [],
+  )
+
   const matchingUserPreset = findMatchingUserSoundPreset(
     userPresetState,
     soundState,
@@ -1370,12 +1446,14 @@ export default function App() {
     <GeneratorSurface
       audioSnapshot={audioSnapshot}
       spectrumState={spectrumState}
+      soundState={soundState}
       stereoWidth={soundState.stereoWidth}
       animation={soundState.animation}
       engineReady={engineReady}
       controlError={controlError}
       storageNotice={storageNotice}
       futureFeaturesVisible={uiState.futureFeaturesVisible}
+      analyzerVisible={uiState.analyzerVisible}
       profileCount={profileState.profiles.length}
       userPresets={userPresetState.presets}
       matchedUserPresetName={matchingUserPreset?.name ?? null}
@@ -1394,6 +1472,8 @@ export default function App() {
       onAnimationSpeedChange={handleAnimationSpeedChange}
       onAnimationEnergyChange={handleAnimationEnergyChange}
       onToggleFutureFeatures={handleToggleFutureFeatures}
+      onToggleAnalyzer={handleToggleAnalyzer}
+      readAnalyzerFrame={readAnalyzerFrame}
       onResetSound={handleResetSound}
       onDeleteProfiles={handleDeleteProfiles}
       onSaveUserPreset={handleSaveUserPreset}

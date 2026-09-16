@@ -35,7 +35,7 @@ import {
 export const APP_STORAGE_VERSION = 1 as const
 export const SOUND_STATE_SCHEMA_VERSION = 3 as const
 export const PROFILE_STATE_SCHEMA_VERSION = 1 as const
-export const UI_STATE_SCHEMA_VERSION = 1 as const
+export const UI_STATE_SCHEMA_VERSION = 2 as const
 export const PROFILE_RECORD_SCHEMA_VERSION = 1 as const
 
 export interface StorageManifest {
@@ -79,6 +79,7 @@ export interface ProfileState {
 export interface UiState {
   readonly schemaVersion: typeof UI_STATE_SCHEMA_VERSION
   readonly futureFeaturesVisible: boolean
+  readonly analyzerVisible: boolean
 }
 
 export type StateParseCode =
@@ -239,10 +240,7 @@ export function createDefaultProfileState(): ProfileState {
 }
 
 export function createDefaultUiState(): UiState {
-  return Object.freeze({
-    schemaVersion: UI_STATE_SCHEMA_VERSION,
-    futureFeaturesVisible: true,
-  })
+  return createUiState(true, false)
 }
 
 function normalizeSoundRecord(
@@ -666,10 +664,14 @@ export function parseProfileState(raw: string): StateParseResult<ProfileState> {
   }
 }
 
-export function createUiState(futureFeaturesVisible: boolean): UiState {
+export function createUiState(
+  futureFeaturesVisible: boolean,
+  analyzerVisible = false,
+): UiState {
   return Object.freeze({
     schemaVersion: UI_STATE_SCHEMA_VERSION,
     futureFeaturesVisible,
+    analyzerVisible,
   })
 }
 
@@ -697,6 +699,27 @@ export function parseUiState(raw: string): StateParseResult<UiState> {
       code: 'recovered',
       messages: Object.freeze([
         'UI state had no valid schema version; presentation defaults were used.',
+      ]),
+    }
+  }
+  if (value.schemaVersion === 1) {
+    if (
+      typeof value.futureFeaturesVisible !== 'boolean' ||
+      typeof value.analyzerVisible !== 'boolean'
+    ) {
+      return {
+        state: createDefaultUiState(),
+        code: 'recovered',
+        messages: Object.freeze([
+          'Invalid legacy UI preference was replaced with the default presentation.',
+        ]),
+      }
+    }
+    return {
+      state: createUiState(value.futureFeaturesVisible, false),
+      code: 'migrated',
+      messages: Object.freeze([
+        'UI state schema v1 was migrated to v2 with the analyzer closed.',
       ]),
     }
   }
@@ -730,7 +753,10 @@ export function parseUiState(raw: string): StateParseResult<UiState> {
   }
 
   return {
-    state: createUiState(value.futureFeaturesVisible),
+    state: createUiState(
+      value.futureFeaturesVisible,
+      value.analyzerVisible as boolean,
+    ),
     code: 'ok',
     messages: Object.freeze([]),
   }
@@ -753,5 +779,7 @@ export function serializeProfileState(state: ProfileState): string {
 }
 
 export function serializeUiState(state: UiState): string {
-  return JSON.stringify(createUiState(state.futureFeaturesVisible))
+  return JSON.stringify(
+    createUiState(state.futureFeaturesVisible, state.analyzerVisible),
+  )
 }

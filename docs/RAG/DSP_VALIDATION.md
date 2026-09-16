@@ -190,3 +190,7 @@ Any PR that changes a DSP threshold must:
 2. provide before/after measured evidence;
 3. update this document;
 4. avoid bundling a threshold relaxation solely to green a failing implementation.
+
+## Runtime analyzer validation
+
+The optional live analyzer must keep FFT/render work outside the AudioWorklet. Prefer native browser analysis, bound UI sampling, stop loops/listeners on unmount/hidden state, and retain textual numeric diagnostics. Analyzer instrumentation must not relax or replace deterministic offline DSP validation.

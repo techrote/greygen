@@ -6,6 +6,7 @@ import {
   default as App,
 } from '../src/app/App'
 import { createAnimationState } from '../src/audio/dsp/animation'
+import { createDefaultSoundState } from '../src/app/state/appState'
 import { createSpectrumState } from '../src/audio/dsp/spectra'
 import { AUDIO_PROTOCOL_VERSION } from '../src/audio/protocol'
 
@@ -15,12 +16,14 @@ function surfaceProps() {
   return {
     audioSnapshot: INITIAL_AUDIO_SNAPSHOT,
     spectrumState: createSpectrumState('grey'),
+    soundState: createDefaultSoundState(),
     stereoWidth: 0.5,
     animation: createAnimationState(),
     engineReady: true,
     controlError: null,
     storageNotice: null,
     futureFeaturesVisible: true,
+    analyzerVisible: false,
     profileCount: 0,
     userPresets: [],
     matchedUserPresetName: null,
@@ -39,6 +42,8 @@ function surfaceProps() {
     onAnimationSpeedChange: noop,
     onAnimationEnergyChange: noop,
     onToggleFutureFeatures: noop,
+    onToggleAnalyzer: noop,
+    readAnalyzerFrame: () => null,
     onResetSound: noop,
     onDeleteProfiles: noop,
     onSaveUserPreset: () => true,

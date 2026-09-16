@@ -166,3 +166,7 @@ No v0.1 release until:
 - personal calibration is excluded from normal share paths;
 - keyboard operation and stop/mute are reliable;
 - license/provenance audit finds no copied reference-site assets/data.
+
+### Implemented: issue #12 analyzer/diagnostics
+
+Native main-thread AnalyserNode spectrum, bounded/lazy diagnostics UI, reduced-motion/visibility lifecycle, and private-safe runtime diagnostics are implemented and test-gated.
