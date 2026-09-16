@@ -15,11 +15,18 @@ import {
   serializeStorageManifest,
   serializeUiState,
 } from '../state/appState'
+import {
+  type UserPresetLibraryState,
+  createDefaultUserPresetLibraryState,
+  parseUserPresetLibraryState,
+  serializeUserPresetLibraryState,
+} from '../state/userPresetState'
 
 export const STORAGE_MANIFEST_KEY = 'greygen.storage-manifest'
 export const SOUND_STATE_STORAGE_KEY = 'greygen.sound-state'
 export const PROFILE_STATE_STORAGE_KEY = 'greygen.profile-state'
 export const UI_STATE_STORAGE_KEY = 'greygen.ui-state'
+export const USER_PRESET_LIBRARY_STORAGE_KEY = 'greygen.user-presets'
 
 export interface StoragePort {
   getItem(key: string): string | null
@@ -27,7 +34,13 @@ export interface StoragePort {
   removeItem(key: string): void
 }
 
-export type StateDomain = 'manifest' | 'sound' | 'profiles' | 'ui' | 'storage'
+export type StateDomain =
+  | 'manifest'
+  | 'sound'
+  | 'presets'
+  | 'profiles'
+  | 'ui'
+  | 'storage'
 type PersistedDomain = Exclude<StateDomain, 'manifest' | 'storage'>
 
 export type StorageDiagnosticCode =
@@ -44,6 +57,7 @@ export interface StorageDiagnostic {
 
 export interface LoadedAppState {
   readonly sound: SoundState
+  readonly userPresets: UserPresetLibraryState
   readonly profiles: ProfileState
   readonly ui: UiState
   readonly diagnostics: readonly StorageDiagnostic[]
@@ -174,6 +188,7 @@ export class AppStateRepository {
         this.protectAllDomains('future-storage-version')
         return Object.freeze({
           sound: createDefaultSoundState(),
+          userPresets: createDefaultUserPresetLibraryState(),
           profiles: createDefaultProfileState(),
           ui: createDefaultUiState(),
           diagnostics: Object.freeze(diagnostics),
@@ -182,10 +197,12 @@ export class AppStateRepository {
     }
 
     const soundRead = this.read(SOUND_STATE_STORAGE_KEY, 'sound')
+    const presetRead = this.read(USER_PRESET_LIBRARY_STORAGE_KEY, 'presets')
     const profileRead = this.read(PROFILE_STATE_STORAGE_KEY, 'profiles')
     const uiRead = this.read(UI_STATE_STORAGE_KEY, 'ui')
     diagnostics.push(
       ...soundRead.diagnostics,
+      ...presetRead.diagnostics,
       ...profileRead.diagnostics,
       ...uiRead.diagnostics,
     )
@@ -194,6 +211,13 @@ export class AppStateRepository {
       ? parseSoundState(soundRead.value)
       : {
           state: createDefaultSoundState(),
+          code: 'ok' as const,
+          messages: Object.freeze([]),
+        }
+    const userPresets = presetRead.value
+      ? parseUserPresetLibraryState(presetRead.value)
+      : {
+          state: createDefaultUserPresetLibraryState(),
           code: 'ok' as const,
           messages: Object.freeze([]),
         }
@@ -213,17 +237,20 @@ export class AppStateRepository {
         }
 
     this.protectFutureDomain('sound', sound.code)
+    this.protectFutureDomain('presets', userPresets.code)
     this.protectFutureDomain('profiles', profiles.code)
     this.protectFutureDomain('ui', ui.code)
 
     diagnostics.push(
       ...parseDiagnostics('sound', sound.code, sound.messages),
+      ...parseDiagnostics('presets', userPresets.code, userPresets.messages),
       ...parseDiagnostics('profiles', profiles.code, profiles.messages),
       ...parseDiagnostics('ui', ui.code, ui.messages),
     )
 
     return Object.freeze({
       sound: sound.state,
+      userPresets: userPresets.state,
       profiles: profiles.state,
       ui: ui.state,
       diagnostics: Object.freeze(diagnostics),
@@ -235,6 +262,14 @@ export class AppStateRepository {
       SOUND_STATE_STORAGE_KEY,
       serializeSoundState(state),
       'sound',
+    )
+  }
+
+  saveUserPresets(state: UserPresetLibraryState): PersistenceResult {
+    return this.writeDomain(
+      USER_PRESET_LIBRARY_STORAGE_KEY,
+      serializeUserPresetLibraryState(state),
+      'presets',
     )
   }
 
@@ -262,6 +297,7 @@ export class AppStateRepository {
     code: 'future-version' | 'future-storage-version',
   ): void {
     this.writeProtection.set('sound', code)
+    this.writeProtection.set('presets', code)
     this.writeProtection.set('profiles', code)
     this.writeProtection.set('ui', code)
   }

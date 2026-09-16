@@ -1,13 +1,12 @@
 import { BAND_COUNT, NOMINAL_BAND_CENTERS_HZ } from '../../audio/dsp/filterBank'
 import {
-  SPECTRAL_PRESET_IDS,
   USER_BAND_OFFSET_MAX_DB,
   USER_BAND_OFFSET_MIN_DB,
   type SpectralPresetId,
   type SpectrumState,
   createSpectrumState,
-  getSpectralTarget,
 } from '../../audio/dsp/spectra'
+import { BUILT_IN_SOUND_PRESETS } from '../presets/soundPresets'
 
 export const BAND_STEP_DB = 1
 export const MASTER_STEP_DB = 1
@@ -15,6 +14,11 @@ export const MASTER_STEP_DB = 1
 export interface GeneratorBandDefinition {
   readonly index: number
   readonly frequencyHz: number
+  readonly label: string
+}
+
+export interface GeneratorPresetDefinition {
+  readonly id: SpectralPresetId
   readonly label: string
 }
 
@@ -40,15 +44,10 @@ if (GENERATOR_BANDS.length !== BAND_COUNT) {
   throw new Error('generator band model must match DSP band count')
 }
 
-export const GENERATOR_PRESETS = Object.freeze(
-  SPECTRAL_PRESET_IDS.map((id) => {
-    const target = getSpectralTarget(id)
-    return Object.freeze({
-      id,
-      label: target.label,
-    })
-  }),
-)
+export const GENERATOR_PRESETS: readonly GeneratorPresetDefinition[] =
+  Object.freeze(
+    BUILT_IN_SOUND_PRESETS.map(({ id, label }) => Object.freeze({ id, label })),
+  )
 
 export function applyNamedPreset(targetId: SpectralPresetId): SpectrumState {
   return createSpectrumState(targetId)

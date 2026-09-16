@@ -31,6 +31,11 @@ import {
   stereoWidthToCorrelation,
 } from '../audio/dsp/stereo'
 import {
+  createSoundShareUrl,
+  parseSoundShareUrl,
+  stripSoundShareFragment,
+} from '../features/sharing/shareState'
+import {
   BAND_STEP_DB,
   GENERATOR_BANDS,
   GENERATOR_PRESETS,
@@ -57,6 +62,16 @@ import {
   soundStateToAnimationState,
   soundStateToSpectrumState,
 } from './state/appState'
+import {
+  USER_PRESET_NAME_MAX_LENGTH,
+  type UserPresetLibraryState,
+  type UserSoundPreset,
+  createDefaultUserPresetLibraryState,
+  deleteUserSoundPreset,
+  findMatchingUserSoundPreset,
+  findUserSoundPreset,
+  saveUserSoundPreset,
+} from './state/userPresetState'
 import type {
   AppStateRepository,
   PersistenceResult,
@@ -168,6 +183,10 @@ export interface GeneratorSurfaceProps {
   readonly storageNotice: string | null
   readonly futureFeaturesVisible: boolean
   readonly profileCount: number
+  readonly userPresets: readonly UserSoundPreset[]
+  readonly matchedUserPresetName: string | null
+  readonly shareUrl: string
+  readonly shareNotice: string | null
   readonly onPrimaryAction: () => void
   readonly onStop: () => void
   readonly onPresetChange: (targetId: SpectralPresetId) => void
@@ -183,6 +202,11 @@ export interface GeneratorSurfaceProps {
   readonly onToggleFutureFeatures: () => void
   readonly onResetSound: () => void
   readonly onDeleteProfiles: () => void
+  readonly onSaveUserPreset: (name: string) => boolean
+  readonly onLoadUserPreset: (id: string) => void
+  readonly onDeleteUserPreset: (id: string) => void
+  readonly onCopyShareUrl: () => void
+  readonly onImportShareUrl: (href: string) => void
 }
 
 export function GeneratorSurface({
@@ -195,6 +219,10 @@ export function GeneratorSurface({
   storageNotice,
   futureFeaturesVisible,
   profileCount,
+  userPresets,
+  matchedUserPresetName,
+  shareUrl,
+  shareNotice,
   onPrimaryAction,
   onStop,
   onPresetChange,
@@ -210,9 +238,17 @@ export function GeneratorSurface({
   onToggleFutureFeatures,
   onResetSound,
   onDeleteProfiles,
+  onSaveUserPreset,
+  onLoadUserPreset,
+  onDeleteUserPreset,
+  onCopyShareUrl,
+  onImportShareUrl,
 }: GeneratorSurfaceProps) {
+  const [presetNameDraft, setPresetNameDraft] = useState('')
+  const [shareImportDraft, setShareImportDraft] = useState('')
   const telemetry = audioSnapshot.telemetry
-  const modified = isModifiedPreset(spectrumState)
+  const modified =
+    matchedUserPresetName === null && isModifiedPreset(spectrumState)
   const selectedPreset = GENERATOR_PRESETS.find(
     (preset) => preset.id === spectrumState.targetId,
   )
@@ -229,6 +265,12 @@ export function GeneratorSurface({
   const handlePresetChange = (event: ChangeEvent<HTMLSelectElement>): void => {
     if (isPresetId(event.currentTarget.value)) {
       onPresetChange(event.currentTarget.value)
+    }
+  }
+
+  const handleSavePreset = (): void => {
+    if (onSaveUserPreset(presetNameDraft)) {
+      setPresetNameDraft('')
     }
   }
 
@@ -339,8 +381,18 @@ export function GeneratorSurface({
             <h2 id="spectrum-heading">Ten-band shape</h2>
           </div>
           <div className="preset-state" aria-live="polite">
-            <strong>{selectedPreset?.label ?? spectrumState.targetId}</strong>
-            {modified ? <span>Modified</span> : <span>Preset</span>}
+            <strong>
+              {matchedUserPresetName ??
+                selectedPreset?.label ??
+                spectrumState.targetId}
+            </strong>
+            {matchedUserPresetName ? (
+              <span>Saved preset</span>
+            ) : modified ? (
+              <span>Modified</span>
+            ) : (
+              <span>Preset</span>
+            )}
           </div>
         </div>
 
@@ -427,6 +479,135 @@ export function GeneratorSurface({
             At {audioSnapshot.sampleRate?.toLocaleString() ?? 'this'} Hz, the
             16k control is a stable high shelf above about 11.3 kHz rather than
             a bounded 16 kHz band.
+          </p>
+        ) : null}
+      </section>
+
+      <section
+        className="preset-library-card"
+        aria-labelledby="preset-library-heading"
+      >
+        <div className="section-heading-row">
+          <div>
+            <p className="label">Library &amp; sharing</p>
+            <h2 id="preset-library-heading">Presets &amp; share links</h2>
+          </div>
+          <span className="profile-count">
+            {userPresets.length} saved{' '}
+            {userPresets.length === 1 ? 'preset' : 'presets'}
+          </span>
+        </div>
+
+        <form
+          className="preset-save-row"
+          onSubmit={(event) => {
+            event.preventDefault()
+            handleSavePreset()
+          }}
+        >
+          <label htmlFor="user-preset-name">
+            Save current sound
+            <input
+              id="user-preset-name"
+              type="text"
+              maxLength={USER_PRESET_NAME_MAX_LENGTH}
+              value={presetNameDraft}
+              disabled={controlsDisabled}
+              autoComplete="off"
+              onChange={(event) =>
+                setPresetNameDraft(event.currentTarget.value)
+              }
+            />
+          </label>
+          <button
+            className="secondary-action"
+            type="submit"
+            disabled={controlsDisabled || presetNameDraft.trim().length === 0}
+          >
+            Save preset
+          </button>
+        </form>
+
+        {userPresets.length > 0 ? (
+          <ul className="saved-preset-list" aria-label="Saved sound presets">
+            {userPresets.map((preset) => (
+              <li className="saved-preset-item" key={preset.id}>
+                <strong className="saved-preset-name">{preset.name}</strong>
+                <button
+                  className="secondary-action"
+                  type="button"
+                  disabled={controlsDisabled}
+                  onClick={() => onLoadUserPreset(preset.id)}
+                >
+                  Load
+                </button>
+                <button
+                  className="danger-action"
+                  type="button"
+                  aria-label={`Delete saved preset ${preset.name}`}
+                  onClick={() => onDeleteUserPreset(preset.id)}
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="status-note">No local sound presets saved yet.</p>
+        )}
+
+        <div className="share-copy-row">
+          <label htmlFor="share-url">
+            Current sound share link
+            <input id="share-url" type="text" readOnly value={shareUrl} />
+          </label>
+          <button
+            className="secondary-action"
+            type="button"
+            disabled={!engineReady || shareUrl.length === 0}
+            onClick={onCopyShareUrl}
+          >
+            Copy share link
+          </button>
+        </div>
+
+        <form
+          className="share-load-row"
+          onSubmit={(event) => {
+            event.preventDefault()
+            onImportShareUrl(shareImportDraft)
+          }}
+        >
+          <label htmlFor="share-import-url">
+            Load shared sound URL
+            <input
+              id="share-import-url"
+              type="text"
+              value={shareImportDraft}
+              disabled={controlsDisabled}
+              autoComplete="off"
+              onChange={(event) =>
+                setShareImportDraft(event.currentTarget.value)
+              }
+            />
+          </label>
+          <button
+            className="secondary-action"
+            type="submit"
+            disabled={controlsDisabled || shareImportDraft.trim().length === 0}
+          >
+            Load shared sound
+          </button>
+        </form>
+
+        <p className="share-privacy-note">
+          Normal share links contain only versioned sound settings. Local preset
+          names, playback/calibration profiles, profile notes, and UI
+          preferences are excluded. Loading a link never starts audio.
+        </p>
+        {shareNotice ? (
+          <p className="share-notice" role="status">
+            {shareNotice}
           </p>
         ) : null}
       </section>
@@ -673,19 +854,57 @@ export default function App() {
   const [profileState, setProfileState] = useState<ProfileState>(() =>
     createDefaultProfileState(),
   )
+  const [userPresetState, setUserPresetState] =
+    useState<UserPresetLibraryState>(() =>
+      createDefaultUserPresetLibraryState(),
+    )
   const [uiState, setUiState] = useState<UiState>(() => createDefaultUiState())
   const [controlError, setControlError] = useState<string | null>(null)
   const [storageNotice, setStorageNotice] = useState<string | null>(null)
+  const [shareNotice, setShareNotice] = useState<string | null>(null)
+  const [bootShare] = useState(() =>
+    typeof globalThis.location === 'undefined'
+      ? null
+      : parseSoundShareUrl(globalThis.location.href),
+  )
 
   useEffect(() => {
     let cancelled = false
     const repository = createBrowserAppStateRepository()
     repositoryRef.current = repository
     const loaded = repository.load()
-    setSoundState(loaded.sound)
+    let initialSound = loaded.sound
     setProfileState(loaded.profiles)
+    setUserPresetState(loaded.userPresets)
     setUiState(loaded.ui)
     setStorageNotice(diagnosticsNotice(loaded.diagnostics))
+
+    if (bootShare) {
+      if (bootShare.state) {
+        initialSound = bootShare.state
+        const detail =
+          bootShare.messages.length > 0
+            ? ` ${bootShare.messages.join(' ')}`
+            : ''
+        setShareNotice(
+          `Shared sound loaded. Audio remains Ready until you choose Start.${detail}`,
+        )
+        if (typeof globalThis.location !== 'undefined') {
+          try {
+            globalThis.history?.replaceState(
+              null,
+              '',
+              stripSoundShareFragment(globalThis.location.href),
+            )
+          } catch {
+            // URL cleanup is cosmetic; successful import remains authoritative.
+          }
+        }
+      } else if (bootShare.code !== 'absent') {
+        setShareNotice(bootShare.messages.join(' '))
+      }
+    }
+    setSoundState(initialSound)
 
     const engine = createBrowserAudioEngine()
     engineRef.current = engine
@@ -694,14 +913,17 @@ export default function App() {
 
     const bootstrap = async (): Promise<void> => {
       try {
-        await engine.resetSeed(loaded.sound.seed)
-        await engine.setSpectrumState(soundStateToSpectrumState(loaded.sound))
-        await engine.setMasterGainDb(loaded.sound.masterGainDb)
-        await engine.setStereoWidth(loaded.sound.stereoWidth)
-        await engine.setAnimationState(soundStateToAnimationState(loaded.sound))
+        await engine.resetSeed(initialSound.seed)
+        await engine.setSpectrumState(soundStateToSpectrumState(initialSound))
+        await engine.setMasterGainDb(initialSound.masterGainDb)
+        await engine.setStereoWidth(initialSound.stereoWidth)
+        await engine.setAnimationState(soundStateToAnimationState(initialSound))
 
-        if (loaded.diagnostics.some((entry) => entry.code === 'migrated')) {
-          const result = repository.saveSound(loaded.sound)
+        if (
+          initialSound !== loaded.sound ||
+          loaded.diagnostics.some((entry) => entry.code === 'migrated')
+        ) {
+          const result = repository.saveSound(initialSound)
           if (!result.ok && result.diagnostic && !cancelled) {
             setStorageNotice(result.diagnostic.message)
           }
@@ -721,14 +943,77 @@ export default function App() {
     }
     void bootstrap()
 
+    const handleShareHashChange = (): void => {
+      if (typeof globalThis.location === 'undefined') {
+        return
+      }
+      const shared = parseSoundShareUrl(globalThis.location.href)
+      if (shared.code === 'absent') {
+        return
+      }
+      if (!shared.state) {
+        if (!cancelled) {
+          setShareNotice(
+            shared.messages.join(' ') ||
+              'Shared sound payload could not be loaded safely.',
+          )
+        }
+        return
+      }
+
+      const next = shared.state
+      const detail =
+        shared.messages.length > 0 ? ` ${shared.messages.join(' ')}` : ''
+      setControlError(null)
+      setSoundState(next)
+      void Promise.all([
+        engine.resetSeed(next.seed),
+        engine.setSpectrumState(soundStateToSpectrumState(next)),
+        engine.setMasterGainDb(next.masterGainDb),
+        engine.setStereoWidth(next.stereoWidth),
+        engine.setAnimationState(soundStateToAnimationState(next)),
+      ])
+        .then(() => {
+          if (cancelled) {
+            return
+          }
+          const result = repository.saveSound(next)
+          if (!result.ok && result.diagnostic) {
+            setStorageNotice(result.diagnostic.message)
+          }
+          setShareNotice(
+            `Shared sound loaded. Loading did not start audio.${detail}`,
+          )
+          try {
+            globalThis.history?.replaceState(
+              null,
+              '',
+              stripSoundShareFragment(globalThis.location.href),
+            )
+          } catch {
+            // URL cleanup is cosmetic; successful import remains authoritative.
+          }
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setControlError(
+              `Shared sound state could not be applied: ${errorText(error)}`,
+            )
+          }
+        })
+    }
+
+    globalThis.addEventListener?.('hashchange', handleShareHashChange)
+
     return () => {
       cancelled = true
+      globalThis.removeEventListener?.('hashchange', handleShareHashChange)
       unsubscribe()
       repositoryRef.current = null
       engineRef.current = null
       void engine.dispose()
     }
-  }, [])
+  }, [bootShare])
 
   const reportControlFailure = (error: unknown): void => {
     setControlError(errorText(error))
@@ -739,6 +1024,13 @@ export default function App() {
       setStorageNotice(
         `${result.diagnostic.message} This session remains usable, but the change may not survive reload.`,
       )
+    }
+  }
+
+  const persistUserPresets = (next: UserPresetLibraryState): void => {
+    const repository = repositoryRef.current
+    if (repository) {
+      reportPersistenceResult(repository.saveUserPresets(next))
     }
   }
 
@@ -923,6 +1215,106 @@ export default function App() {
     )
   }
 
+  const applySoundSnapshot = (next: SoundState, notice: string): void => {
+    const engine = engineRef.current
+    if (!engine) {
+      return
+    }
+    setControlError(null)
+    setSoundState(next)
+    void Promise.all([
+      engine.resetSeed(next.seed),
+      engine.setSpectrumState(soundStateToSpectrumState(next)),
+      engine.setMasterGainDb(next.masterGainDb),
+      engine.setStereoWidth(next.stereoWidth),
+      engine.setAnimationState(soundStateToAnimationState(next)),
+    ])
+      .then(() => {
+        persistSound(next)
+        setShareNotice(notice)
+      })
+      .catch(reportControlFailure)
+  }
+
+  const handleSaveUserPreset = (name: string): boolean => {
+    try {
+      const saved = saveUserSoundPreset(userPresetState, name, soundState)
+      setUserPresetState(saved.state)
+      persistUserPresets(saved.state)
+      setShareNotice(`Saved local sound preset “${saved.preset.name}”.`)
+      return true
+    } catch (error) {
+      setShareNotice(errorText(error))
+      return false
+    }
+  }
+
+  const handleLoadUserPreset = (id: string): void => {
+    const preset = findUserSoundPreset(userPresetState, id)
+    if (!preset) {
+      setShareNotice('That saved preset is no longer available.')
+      return
+    }
+    applySoundSnapshot(
+      preset.sound,
+      `Loaded local sound preset “${preset.name}”. Loading did not start audio.`,
+    )
+  }
+
+  const handleDeleteUserPreset = (id: string): void => {
+    const preset = findUserSoundPreset(userPresetState, id)
+    const next = deleteUserSoundPreset(userPresetState, id)
+    setUserPresetState(next)
+    persistUserPresets(next)
+    if (preset) {
+      setShareNotice(`Deleted local sound preset “${preset.name}”.`)
+    }
+  }
+
+  const handleCopyShareUrl = (): void => {
+    if (typeof globalThis.location === 'undefined') {
+      return
+    }
+    const url = createSoundShareUrl(globalThis.location.href, soundState)
+    const clipboard = globalThis.navigator?.clipboard
+    if (!clipboard?.writeText) {
+      setShareNotice(
+        'Clipboard access is unavailable. Select and copy the visible share link manually.',
+      )
+      return
+    }
+    void clipboard
+      .writeText(url)
+      .then(() =>
+        setShareNotice('Share link copied. It contains sound settings only.'),
+      )
+      .catch(() =>
+        setShareNotice(
+          'Clipboard write was blocked. Select and copy the visible share link manually.',
+        ),
+      )
+  }
+
+  const handleImportShareUrl = (href: string): void => {
+    if (typeof globalThis.location === 'undefined') {
+      return
+    }
+    const parsed = parseSoundShareUrl(href, globalThis.location.href)
+    if (!parsed.state) {
+      setShareNotice(
+        parsed.messages.join(' ') ||
+          'No shared sound payload was found in that URL.',
+      )
+      return
+    }
+    const detail =
+      parsed.messages.length > 0 ? ` ${parsed.messages.join(' ')}` : ''
+    applySoundSnapshot(
+      parsed.state,
+      `Shared sound loaded. Loading did not start audio.${detail}`,
+    )
+  }
+
   const handleToggleFutureFeatures = (): void => {
     const next = createUiState(!uiState.futureFeaturesVisible)
     setUiState(next)
@@ -965,6 +1357,15 @@ export default function App() {
     }
   }
 
+  const matchingUserPreset = findMatchingUserSoundPreset(
+    userPresetState,
+    soundState,
+  )
+  const shareUrl =
+    typeof globalThis.location === 'undefined'
+      ? ''
+      : createSoundShareUrl(globalThis.location.href, soundState)
+
   return (
     <GeneratorSurface
       audioSnapshot={audioSnapshot}
@@ -976,6 +1377,10 @@ export default function App() {
       storageNotice={storageNotice}
       futureFeaturesVisible={uiState.futureFeaturesVisible}
       profileCount={profileState.profiles.length}
+      userPresets={userPresetState.presets}
+      matchedUserPresetName={matchingUserPreset?.name ?? null}
+      shareUrl={shareUrl}
+      shareNotice={shareNotice}
       onPrimaryAction={handlePrimaryAction}
       onStop={handleStop}
       onPresetChange={handlePresetChange}
@@ -991,6 +1396,11 @@ export default function App() {
       onToggleFutureFeatures={handleToggleFutureFeatures}
       onResetSound={handleResetSound}
       onDeleteProfiles={handleDeleteProfiles}
+      onSaveUserPreset={handleSaveUserPreset}
+      onLoadUserPreset={handleLoadUserPreset}
+      onDeleteUserPreset={handleDeleteUserPreset}
+      onCopyShareUrl={handleCopyShareUrl}
+      onImportShareUrl={handleImportShareUrl}
     />
   )
 }

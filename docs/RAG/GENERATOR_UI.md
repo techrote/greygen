@@ -1,10 +1,10 @@
 # Primary Generator UI Contract
 
-Status: canonical contract for the friendly ten-band generator surface, reconciled through issue #10 deterministic spectral animation.
+Status: canonical contract for the friendly ten-band generator surface, reconciled through issue #11 preset library and privacy-safe sharing.
 
 ## Purpose
 
-The primary Greygen screen is the usable product core, not a DSP-debug panel. It exposes lifecycle, spectral shape, digital level, spatial width, deterministic movement, and an immediate Stop path without leaking filter/worklet internals.
+The primary Greygen screen is the usable product core, not a DSP-debug panel. It exposes lifecycle, spectral shape, digital level, spatial width, deterministic movement, local sound presets, privacy-safe sharing, and an immediate Stop path without leaking filter/worklet internals.
 
 All sound changes go through typed `AudioEngine` / SoundState APIs. UI code does not own browser audio nodes or generate DSP trajectories.
 
@@ -15,21 +15,60 @@ The default screen contains:
 - explicit Start / Stop / Resume / Retry transport;
 - White, Pink, Brown / Red, and Grey (Practical) target selection;
 - ten bounded user band-offset controls with visible numeric dB readouts and neutral reset;
+- local named user sound preset save/load/delete;
+- current-sound share URL, copy action, and manual shared-URL import;
 - master digital level;
 - active power-preserving stereo width with Mono/Narrow/Normal/Wide, percentage, and target correlation;
 - active deterministic spectral animation with mode, depth, speed, and mean-band-power normalization controls;
 - Peak/RMS/safety/master telemetry and guard indication;
 - explicit runtime high-band degradation disclosure;
 - disabled playback-calibration/profile entry point with non-medical wording;
-- local-state controls that distinguish sound reset from private-profile deletion.
+- local-state controls that distinguish current-sound reset from private-profile deletion.
 
-Audio never starts from page load, preset/band/master/width/animation edits, reload, persistence restore, or migration. Start remains explicit.
+Audio never starts from page load, built-in/user preset selection, band/master/width/animation edits, reload, persistence restore, share import, or migration. Start remains explicit.
 
-## Spectrum and preset ownership
+## Built-in colour preset ownership
 
-Named colour presets own the base `SpectralPresetId`. Selecting a preset clears only user band offsets to neutral. Preset selection does **not** reset master, stereo width, animation, lifecycle, or future profile domains.
+Built-in White/Pink/Brown/Grey presets own exactly the spectral target plus ten user band offsets. Selecting one changes target and clears only those offsets to neutral.
 
-Any non-zero user band offset makes the visible preset state Modified. The accepted per-band range remains `[-24,+24] dB`.
+Built-in selection does **not** reset:
+
+- audio seed;
+- master level;
+- stereo width;
+- animation settings/seed;
+- lifecycle;
+- saved user presets;
+- private profiles;
+- UI preferences.
+
+Any non-zero user band offset makes the visible built-in preset state `Modified`. Unrelated master/stereo/animation changes do not, because those fields are outside built-in colour ownership.
+
+## User sound presets
+
+Saving a user preset snapshots the complete generic SoundState, including seed, target/bands, master, stereo, and animation. A current sound that exactly matches a saved snapshot displays the sanitized saved name and `Saved preset`; otherwise the UI falls back to the built-in target + Modified/Preset presentation.
+
+Saved-preset names are local metadata and never become HTML. Load applies the full snapshot through typed engine APIs; Delete removes only that library record. Reset sound and Delete local profiles do not delete saved presets.
+
+Full ownership, sanitation, persistence, and limits are defined by `PRESETS_SHARING.md`.
+
+## Sharing UI and privacy
+
+The primary surface exposes a selectable read-only share URL for current SoundState and a **Copy share link** action. Clipboard API failure is recoverable: the visible URL remains selectable and the user receives fallback text.
+
+The same surface accepts a shared URL for explicit manual load. Valid startup or manual share loads apply only SoundState. Malformed/future links report a visible error and do not replace usable local sound.
+
+UI privacy wording explicitly states normal share links exclude:
+
+- local user-preset names/library metadata;
+- playback/calibration profiles and profile notes;
+- UI preferences.
+
+Normal share/import never starts audio. `PRESETS_SHARING.md` owns the encoded format and privacy proof.
+
+## Spectrum and band behavior
+
+The accepted per-band user range remains `[-24,+24] dB`. Every band retains native keyboard adjustment, visible/readable numeric state, accessible naming, and neutral reset.
 
 ## Master level
 
@@ -43,16 +82,14 @@ Stereo width remains the native `[0,1]` range defined by `STEREO_WIDTH.md`, incl
 
 Animation semantics are defined by `SPECTRAL_ANIMATION.md`. The primary surface exposes native semantic controls:
 
-- Mode select: **Off, Drift, Breathe, Wander, Orbit**;
-- Depth range: `0 .. 12 dB`, UI step `0.5 dB`;
-- Speed range: `0.25 .. 4.0×`, UI step `0.25×`;
-- checkbox: **Preserve mean band power**.
+- Mode: **Off, Drift, Breathe, Wander, Orbit**;
+- Depth: `0..12 dB`, UI step `0.5 dB`;
+- Speed: `0.25..4.0×`, UI step `0.25×`;
+- **Preserve mean band power** checkbox.
 
-Mode/depth/speed/normalization changes are generic SoundState, persist across reload, and can be changed before or during playback. Editing them while Ready must not create an AudioContext.
+Mode/depth/speed/normalization are generic SoundState and can be saved/shared. Editing them while Ready must not create an AudioContext.
 
-The UI describes animation as seeded and bounded. It does not imply a random walk or claim exact perceived-loudness constancy. Energy normalization is visible/optional rather than a hidden AGC.
-
-Selecting Off preserves configured seed/depth/speed for later reuse while making the requested animation target neutral. The DSP smoothing path controls audible return to the base spectrum.
+Selecting Off preserves configured seed/depth/speed for later reuse while making the requested animation target neutral. DSP smoothing controls audible return to the base spectrum.
 
 ## Runtime 16 kHz semantics
 
@@ -60,15 +97,15 @@ Before Start, runtime sample rate/high-band mode are unknown. After worklet init
 
 ## Metering
 
-Peak/RMS are final post-master/post-guard digital telemetry. Stereo RMS represents average channel power and Peak the larger channel peak. Safety pre-gain and guard interventions remain visible independently from requested spectrum/animation so users can distinguish desired sound from protective attenuation.
+Peak/RMS are final post-master/post-guard digital telemetry. Stereo RMS represents average channel power and Peak the larger channel peak. Safety pre-gain and guard interventions remain visible independently from requested spectrum/animation.
 
 No meter uses SPL, phon, sone, or medical/hearing-threshold units.
 
 ## Accessibility and input
 
-Primary controls are native HTML inputs/selects/buttons with explicit labels, visible values, keyboard operation, and focus indication.
+Primary controls are native HTML inputs/selects/buttons with explicit labels, visible values, keyboard operation, and focus indication. Preset names are rendered as text nodes. Share URLs are selectable text inputs; importing does not require drag/drop or pointer-only interaction.
 
-Animation depth/speed provide `aria-valuetext` matching visible numeric outputs. Mode uses a labelled native select. Energy normalization is a labelled native checkbox. State is not communicated by colour alone.
+The dedicated accessibility/responsive audit remains issue #18; obvious semantic, keyboard, focus, and hit-target requirements are not deferred.
 
 ## Lifecycle and errors
 
@@ -81,42 +118,38 @@ Lifecycle presentation remains derived from `AudioEngine`:
 - recoverable Error -> Retry + actionable message;
 - Unsupported -> capability explanation + disabled Start.
 
-Control-message failures and persistence failures are visible and separate. Neither silently changes lifecycle state.
+Control-message, persistence, clipboard, preset, and share-import failures are surfaced visibly and do not silently alter lifecycle state.
 
 ## Future-feature area
 
-Stereo width and spectral animation are implemented and no longer placeholders. Playback calibration remains disabled until its owning issues implement real behaviour.
-
-The `futureFeaturesVisible` UI preference still collapses/expands the movement/calibration area. It has no audio meaning.
+Stereo width and spectral animation are implemented. Playback calibration remains disabled until its owning issues implement real behaviour. `futureFeaturesVisible` remains presentation-only UiState.
 
 ## Persistence boundary
 
-The primary generator restores:
+The app restores four local documents through `AppStateRepository`:
 
-- audio seed;
-- named target and ten user offsets;
-- master;
-- stereo width;
-- animation mode/seed/depth/speed/normalization;
-- presentation-only roadmap-panel visibility.
+- current SoundState;
+- local user sound-preset library;
+- private ProfileState;
+- UiState.
 
-Sound schema v3 migration is defined by `STATE_PERSISTENCE.md`. Pre-animation saved sounds migrate to animation Off. Reload after Running always returns Ready and silent.
+Sound schema v3 migration is defined by `STATE_PERSISTENCE.md`. Share format v1 is defined by `PRESETS_SHARING.md`.
 
-Sound reset returns generic sound fields, including animation, to first-run defaults. Private profiles survive sound reset and require their own explicit deletion action.
+Reload after Running always returns Ready and silent. Startup share import may replace the requested current SoundState for that boot, but it still preloads only while Ready with no AudioContext.
 
 ## Validation
 
 Automated UI/browser coverage includes:
 
-- Ready/no autoplay, including reload;
-- preset/band/master/stereo behaviour retained;
-- native animation mode selection;
-- keyboard depth/speed adjustment and pointer/range updates;
-- normalization toggle;
-- animation persistence across reload without autoplay;
-- real worklet animation changes while Running with meters/lifecycle intact;
-- malformed persisted sound recovery;
+- Ready/no autoplay, including reload and shared-URL startup;
+- built-in preset spectral-only ownership;
+- band/master/stereo/animation behavior retained;
+- Modified detection;
+- user preset sanitized save, full-state load, and delete;
+- current share-link generation;
+- manual and navigation-based share import;
+- malformed/future share failure without autoplay;
+- private profile fixture data absent from normal share payloads;
+- animation/stereo persistence and real worklet behavior;
 - suspend/resume/error/unsupported paths;
 - semantic controls and visible numeric state.
-
-The dedicated accessibility/responsive audit remains issue #18; obvious semantic, keyboard, focus, and hit-target requirements are not deferred.
