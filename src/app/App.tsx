@@ -1538,7 +1538,24 @@ export default function App() {
   }
 
   const handleDeleteProfiles = (): void => {
-    applyProfileState(createDefaultProfileState())
+    const engine = engineRef.current
+    if (!engine) {
+      return
+    }
+    const next = createDefaultProfileState()
+    setControlError(null)
+    void engine
+      .setCalibrationBandOffsetsDb(
+        resolveCalibrationRecordOffsetsDb(null, 'off'),
+      )
+      .then(() => {
+        setProfileState(next)
+        const repository = repositoryRef.current
+        if (repository) {
+          reportPersistenceResult(repository.deleteProfiles())
+        }
+      })
+      .catch(reportControlFailure)
   }
 
   const readAnalyzerFrame = useCallback(
