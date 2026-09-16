@@ -64,9 +64,21 @@ test('saves, loads, sanitizes, and deletes full user sound presets while built-i
   ).toBeVisible()
 })
 
-test('manual and startup share imports restore only sound state and never auto-start audio', async ({
+test('manual and direct share imports restore only sound state and never auto-start audio', async ({
   page,
 }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => {
+          ;(
+            globalThis as typeof globalThis & { __copiedGreygenShare?: string }
+          ).__copiedGreygenShare = text
+        },
+      },
+    })
+  })
   await page.goto('/')
   await page.evaluate(() => {
     localStorage.setItem(
@@ -110,6 +122,18 @@ test('manual and startup share imports restore only sound state and never auto-s
   expect(decoded).not.toContain('secret-profile')
   expect(decoded).not.toContain('calibration')
 
+  await page.getByRole('button', { name: 'Copy share link' }).click()
+  await expect(
+    page.getByText('Share link copied. It contains sound settings only.'),
+  ).toBeVisible()
+  const copiedShare = await page.evaluate(
+    () =>
+      (
+        globalThis as typeof globalThis & { __copiedGreygenShare?: string }
+      ).__copiedGreygenShare,
+  )
+  expect(copiedShare).toBe(shareUrl)
+
   await page.getByRole('button', { name: 'Reset sound settings' }).click()
   await expect(page.locator('#spectral-preset')).toHaveValue('grey')
 
@@ -140,9 +164,7 @@ test('manual and startup share imports restore only sound state and never auto-s
   await expect(page.getByText('Ready', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Start audio' })).toBeEnabled()
   await expect(
-    page.getByText('Audio remains Ready until you choose Start', {
-      exact: false,
-    }),
+    page.getByText('Loading did not start audio', { exact: false }),
   ).toBeVisible()
   expect(page.url()).not.toContain('#s=')
 })
