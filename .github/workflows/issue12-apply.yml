@@ -22,16 +22,15 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: python scripts/issue12_impl.py
-      - run: python scripts/issue12_fix1.py
+      - run: python scripts/issue12_fix2.py
       - run: npm run format
       - run: npm run typecheck
       - run: npm test
-      - name: Commit implementation
+      - name: Commit lifecycle fix
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md docs src tests e2e
-          git commit -m "feat: add bounded analyzer and diagnostics panel"
+          git add src
+          git commit -m "fix: tighten analyzer lifecycle cleanup"
           git push origin HEAD:issue-12-analyzer-diagnostics
