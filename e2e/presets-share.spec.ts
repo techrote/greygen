@@ -136,6 +136,25 @@ test('manual and direct share imports restore only sound state and never auto-st
   await page.getByRole('button', { name: 'Reset sound settings' }).click()
   await expect(page.locator('#spectral-preset')).toHaveValue('grey')
 
+  const directPage = await page.context().newPage()
+  await directPage.goto(shareUrl)
+  await expect(directPage.locator('#spectral-preset')).toHaveValue('pink')
+  await expect(directPage.locator('#band-2')).toHaveValue('1')
+  await expect(directPage.locator('#master-gain')).toHaveValue('-19')
+  await expect(directPage.locator('#stereo-width')).toHaveValue('0.91')
+  await expect(directPage.locator('#animation-mode')).toHaveValue('wander')
+  await expect(directPage.getByText('Ready', { exact: true })).toBeVisible()
+  await expect(
+    directPage.getByRole('button', { name: 'Start audio' }),
+  ).toBeEnabled()
+  await expect(
+    directPage.getByText('Audio remains Ready until you choose Start', {
+      exact: false,
+    }),
+  ).toBeVisible()
+  expect(directPage.url()).not.toContain('#s=')
+  await directPage.close()
+
   await page.locator('#share-import-url').fill(shareUrl)
   await page.getByRole('button', { name: 'Load shared sound' }).click()
   await expect(page.locator('#spectral-preset')).toHaveValue('pink')
