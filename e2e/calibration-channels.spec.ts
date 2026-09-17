@@ -6,7 +6,7 @@ async function startIndependentGuidedCalibration(
   await page.goto('/')
   await page.getByRole('button', { name: 'Start audio' }).click()
   await expect(page.getByText('Running', { exact: true })).toBeVisible()
-  await page.getByLabel('Independent left / right').check()
+  await page.getByRole('radio', { name: 'Independent left / right' }).check()
   await page.locator('#calibration-comfort-confirm').check()
   await page.getByRole('button', { name: 'Begin guided calibration' }).click()
 }
@@ -126,9 +126,12 @@ test('profile rename, duplicate, explicit personal export/import, and malformed 
   expect(decodedShare).not.toContain('Renamed private device note')
   expect(decodedShare).not.toContain('greygen-personal-calibration-profile')
 
+  const portabilityNotice = page.locator(
+    '.profile-portability-details .share-notice',
+  )
   await page.locator('#calibration-import-json').fill(exported)
   await page.getByRole('button', { name: 'Validate & import locally' }).click()
-  await expect(page.getByRole('status')).toContainText('Imported')
+  await expect(portabilityNotice).toContainText('Imported')
   await expect(
     page
       .getByRole('list', { name: 'Calibration profiles' })
@@ -142,7 +145,7 @@ test('profile rename, duplicate, explicit personal export/import, and malformed 
 
   await page.locator('#calibration-import-json').fill('{broken')
   await page.getByRole('button', { name: 'Validate & import locally' }).click()
-  await expect(page.getByRole('status')).toContainText('malformed')
+  await expect(portabilityNotice).toContainText('malformed')
   await expect(
     page
       .getByRole('list', { name: 'Calibration profiles' })
