@@ -10,10 +10,11 @@ import { GreygenDspEngine } from '../../src/audio/dsp/engine'
 describe('transient calibration stimulus', () => {
   it('is versioned, finite, and hard-bounded to the calibration correction range', () => {
     expect(createCalibrationStimulusState()).toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       mode: 'inactive',
       bandIndex: 5,
       levelOffsetDb: 0,
+      channel: 'both',
     })
     expect(CALIBRATION_STIMULUS_BASE_GAIN_DB).toBe(-18)
     expect(CALIBRATION_STIMULUS_TRANSITION_SECONDS).toBe(0.04)

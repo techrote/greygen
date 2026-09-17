@@ -92,7 +92,9 @@ describe('channel-aware calibration profiles', () => {
     })
     const duplicate = duplicateCalibrationProfileRecord(renamed, 'two')
     expect(renamed.name).toBe('Renamed')
-    expect(parseCalibrationProfileRecord(renamed).profile?.note).toBe('New note')
+    expect(parseCalibrationProfileRecord(renamed).profile?.note).toBe(
+      'New note',
+    )
     expect(duplicate.id).toBe('two')
     expect(duplicate.name).toBe('Renamed copy')
     expect(duplicate.payload).toEqual(renamed.payload)

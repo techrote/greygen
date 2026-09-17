@@ -25,7 +25,7 @@ function completedMeasurement() {
 }
 
 describe('guided calibration profile metadata', () => {
-  it('stores validated guided evidence in payload schema v2', () => {
+  it('stores validated guided evidence in payload schema v3', () => {
     const completed = completedMeasurement()
     const record = createCalibrationProfileRecord({
       id: 'guided-1',
@@ -76,7 +76,7 @@ describe('guided calibration profile metadata', () => {
       measurement: completed.measurement,
     })
     const payload = record.payload as Record<string, unknown>
-    const measurement = payload.measurement as Record<string, unknown>
+    const measurement = payload.linkedMeasurement as Record<string, unknown>
     const evidence = Array.from(
       measurement.bandEvidence as readonly Record<string, unknown>[],
       (entry) => ({ ...entry }),
@@ -86,7 +86,7 @@ describe('guided calibration profile metadata', () => {
       ...record,
       payload: {
         ...record.payload,
-        measurement: {
+        linkedMeasurement: {
           ...measurement,
           bandEvidence: evidence,
         } as never,

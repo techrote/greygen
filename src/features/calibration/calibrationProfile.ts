@@ -242,7 +242,8 @@ function measurementToJson(
 }
 
 function sanitizeText(value: string, maxLength: number): string {
-  const normalized = Array.from(value.normalize('NFKC'))
+  const normalizedWhitespace = value.normalize('NFKC').replace(/\s+/g, ' ')
+  const normalized = Array.from(normalizedWhitespace)
     .filter((character) => {
       const code = character.codePointAt(0) ?? 0
       return (

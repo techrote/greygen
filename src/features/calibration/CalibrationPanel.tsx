@@ -177,7 +177,7 @@ export default function CalibrationPanel({
     setEditName(activeRecord?.name ?? '')
     setEditNote(activeParsed?.note ?? '')
     setPendingDeleteId(null)
-  }, [activeRecord?.id, activeRecord?.name, activeParsed?.note])
+  }, [activeRecord?.name, activeParsed?.note])
 
   const setOffset = (
     side: 'left' | 'right',

@@ -200,7 +200,7 @@ export function guidedChannelCalibrationResult(
     throw new Error('channel calibration result is only available at review')
   }
   if (state.mode === 'linked') {
-    if (!state.linked || state.linked.stage !== 'review') {
+    if (state.linked?.stage !== 'review') {
       throw new Error('linked calibration result is incomplete')
     }
     const raw = guidedCalibrationRawOffsetsDb(state.linked)
@@ -215,12 +215,7 @@ export function guidedChannelCalibrationResult(
     })
   }
 
-  if (
-    !state.left ||
-    state.left.stage !== 'review' ||
-    !state.right ||
-    state.right.stage !== 'review'
-  ) {
+  if (state.left?.stage !== 'review' || state.right?.stage !== 'review') {
     throw new Error('independent calibration result is incomplete')
   }
   return Object.freeze({

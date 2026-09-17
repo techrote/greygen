@@ -237,7 +237,7 @@ export default function GuidedCalibrationWizard({
     channel: GuidedCalibrationChannel,
     bandIndex: number,
   ): void => {
-    if (!wizard || wizard.phase !== 'review') {
+    if (wizard?.phase !== 'review') {
       return
     }
     onRestoreSavedProfile()
@@ -248,7 +248,7 @@ export default function GuidedCalibrationWizard({
   }
 
   const changeAuditionMode = (mode: CalibrationApplicationMode): void => {
-    if (!wizard || wizard.phase !== 'review') {
+    if (wizard?.phase !== 'review') {
       return
     }
     const result = guidedChannelCalibrationResult(wizard)
@@ -257,11 +257,7 @@ export default function GuidedCalibrationWizard({
   }
 
   const save = (): void => {
-    if (
-      !wizard ||
-      wizard.phase !== 'review' ||
-      profileName.trim().length === 0
-    ) {
+    if (wizard?.phase !== 'review' || profileName.trim().length === 0) {
       return
     }
     const result = guidedChannelCalibrationResult(wizard)
