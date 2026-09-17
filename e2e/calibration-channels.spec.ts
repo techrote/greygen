@@ -87,7 +87,9 @@ test('profile rename, duplicate, explicit personal export/import, and malformed 
   )
 
   await page.locator('#active-calibration-name').fill('Portable L/R renamed')
-  await page.locator('#active-calibration-note').fill('Renamed private device note')
+  await page
+    .locator('#active-calibration-note')
+    .fill('Renamed private device note')
   await page.getByRole('button', { name: 'Save name / note' }).click()
   await expect(
     page.getByRole('list', { name: 'Calibration profiles' }),
@@ -95,7 +97,9 @@ test('profile rename, duplicate, explicit personal export/import, and malformed 
 
   await page.getByRole('button', { name: 'Duplicate profile' }).click()
   await expect(
-    page.getByRole('list', { name: 'Calibration profiles' }).getByRole('listitem'),
+    page
+      .getByRole('list', { name: 'Calibration profiles' })
+      .getByRole('listitem'),
   ).toHaveCount(2)
   await expect(page.locator('#calibration-profile-select')).toHaveValue(
     'calibration-1',
@@ -126,7 +130,9 @@ test('profile rename, duplicate, explicit personal export/import, and malformed 
   await page.getByRole('button', { name: 'Validate & import locally' }).click()
   await expect(page.getByRole('status')).toContainText('Imported')
   await expect(
-    page.getByRole('list', { name: 'Calibration profiles' }).getByRole('listitem'),
+    page
+      .getByRole('list', { name: 'Calibration profiles' })
+      .getByRole('listitem'),
   ).toHaveCount(3)
   await expect(page.locator('#calibration-profile-select')).toHaveValue(
     'calibration-1',
@@ -138,7 +144,9 @@ test('profile rename, duplicate, explicit personal export/import, and malformed 
   await page.getByRole('button', { name: 'Validate & import locally' }).click()
   await expect(page.getByRole('status')).toContainText('malformed')
   await expect(
-    page.getByRole('list', { name: 'Calibration profiles' }).getByRole('listitem'),
+    page
+      .getByRole('list', { name: 'Calibration profiles' })
+      .getByRole('listitem'),
   ).toHaveCount(3)
   await expect(page.getByText('Ready', { exact: true })).toBeVisible()
 
