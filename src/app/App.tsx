@@ -25,6 +25,7 @@ import type {
   AudioEngineStatus,
 } from '../audio/AudioEngine'
 import { createBrowserAudioEngine } from '../audio/browserAudioRuntime'
+import type { CalibrationStimulusChannel } from '../audio/dsp/calibrationStimulus'
 import { DEFAULT_ENGINE_PRESET } from '../audio/dsp/engine'
 import {
   DEFAULT_MASTER_GAIN_DB,
@@ -62,14 +63,20 @@ import {
 import CalibrationPanel, {
   type CalibrationDraft,
 } from '../features/calibration/CalibrationPanel'
-import type { GuidedCalibrationSaveDraft } from '../features/calibration/GuidedCalibrationWizard'
+import type {
+  GuidedCalibrationAuditionDraft,
+  GuidedCalibrationSaveDraft,
+} from '../features/calibration/GuidedCalibrationWizard'
 import {
   createCalibrationProfilePayload,
   createCalibrationProfileRecord,
+  duplicateCalibrationProfileRecord,
   findCalibrationProfile,
-  resolveCalibrationBandOffsetsDb,
-  resolveCalibrationRecordOffsetsDb,
+  resolveCalibrationChannelOffsetsDb,
+  resolveCalibrationRecordChannelOffsetsDb,
+  updateCalibrationProfileMetadata,
 } from '../features/calibration/calibrationProfile'
+import { parseCalibrationProfileExport } from '../features/calibration/profilePortability'
 import {
   type CalibrationApplicationMode,
   type ProfileState,
@@ -235,15 +242,22 @@ export interface GeneratorSurfaceProps {
   readonly onSelectCalibrationProfile?: (id: string | null) => void
   readonly onCalibrationModeChange?: (mode: CalibrationApplicationMode) => void
   readonly onDeleteCalibrationProfile?: (id: string) => void
+  readonly onDuplicateCalibrationProfile?: (id: string) => void
+  readonly onRenameCalibrationProfile?: (
+    id: string,
+    name: string,
+    note: string,
+  ) => boolean
+  readonly onImportCalibrationProfile?: (raw: string) => string
   readonly onGuidedStimulusBand?: (
     bandIndex: number,
     levelOffsetDb: number,
+    channel: CalibrationStimulusChannel,
   ) => void
   readonly onGuidedStimulusSilent?: () => void
   readonly onGuidedStimulusEnd?: () => void
   readonly onGuidedAuditionDraft?: (
-    rawBandOffsetsDb: readonly (number | null)[],
-    referenceBandIndex: number,
+    draft: GuidedCalibrationAuditionDraft,
     mode: CalibrationApplicationMode,
   ) => void
   readonly onGuidedRestoreSavedProfile?: () => void
@@ -293,6 +307,9 @@ export function GeneratorSurface({
   onSelectCalibrationProfile = () => {},
   onCalibrationModeChange = () => {},
   onDeleteCalibrationProfile = () => {},
+  onDuplicateCalibrationProfile = () => {},
+  onRenameCalibrationProfile = () => false,
+  onImportCalibrationProfile = () => 'Import is unavailable.',
   onGuidedStimulusBand = () => {},
   onGuidedStimulusSilent = () => {},
   onGuidedStimulusEnd = () => {},
@@ -893,6 +910,9 @@ export function GeneratorSurface({
               onSelect={onSelectCalibrationProfile}
               onModeChange={onCalibrationModeChange}
               onDelete={onDeleteCalibrationProfile}
+              onDuplicate={onDuplicateCalibrationProfile}
+              onRenameNote={onRenameCalibrationProfile}
+              onImport={onImportCalibrationProfile}
               onGuidedStimulusBand={onGuidedStimulusBand}
               onGuidedStimulusSilent={onGuidedStimulusSilent}
               onGuidedStimulusEnd={onGuidedStimulusEnd}
@@ -1028,11 +1048,14 @@ export default function App() {
           loaded.profiles.profiles,
           loaded.profiles.activeProfileId,
         )
-        await engine.setCalibrationBandOffsetsDb(
-          resolveCalibrationRecordOffsetsDb(
+        const initialChannelCalibration =
+          resolveCalibrationRecordChannelOffsetsDb(
             initialCalibration,
             loaded.profiles.calibrationMode,
-          ),
+          )
+        await engine.setCalibrationChannelOffsetsDb(
+          initialChannelCalibration.leftBandOffsetsDb,
+          initialChannelCalibration.rightBandOffsetsDb,
         )
 
         if (
@@ -1171,9 +1194,14 @@ export default function App() {
     }
     const active = findCalibrationProfile(next.profiles, next.activeProfileId)
     setControlError(null)
+    const offsets = resolveCalibrationRecordChannelOffsetsDb(
+      active,
+      next.calibrationMode,
+    )
     void engine
-      .setCalibrationBandOffsetsDb(
-        resolveCalibrationRecordOffsetsDb(active, next.calibrationMode),
+      .setCalibrationChannelOffsetsDb(
+        offsets.leftBandOffsetsDb,
+        offsets.rightBandOffsetsDb,
       )
       .then(() => {
         setProfileState(next)
@@ -1513,10 +1541,15 @@ export default function App() {
       profileState.profiles,
       profileState.activeProfileId,
     )
+    const offsets = resolveCalibrationRecordChannelOffsetsDb(
+      active,
+      profileState.calibrationMode,
+    )
     setControlError(null)
     void engine
-      .setCalibrationBandOffsetsDb(
-        resolveCalibrationRecordOffsetsDb(active, profileState.calibrationMode),
+      .setCalibrationChannelOffsetsDb(
+        offsets.leftBandOffsetsDb,
+        offsets.rightBandOffsetsDb,
       )
       .catch(reportControlFailure)
   }
@@ -1524,10 +1557,11 @@ export default function App() {
   const handleGuidedStimulusBand = (
     bandIndex: number,
     levelOffsetDb: number,
+    channel: CalibrationStimulusChannel,
   ): void => {
     setControlError(null)
     void engineRef.current
-      ?.setCalibrationStimulusBand(bandIndex, levelOffsetDb)
+      ?.setCalibrationStimulusBand(bandIndex, levelOffsetDb, channel)
       .catch(reportControlFailure)
   }
 
@@ -1544,8 +1578,7 @@ export default function App() {
   }
 
   const handleGuidedAuditionDraft = (
-    rawBandOffsetsDb: readonly (number | null)[],
-    referenceBandIndex: number,
+    draft: GuidedCalibrationAuditionDraft,
     mode: CalibrationApplicationMode,
   ): void => {
     const engine = engineRef.current
@@ -1555,14 +1588,18 @@ export default function App() {
     try {
       const profile = createCalibrationProfilePayload({
         sampleRateHz: audioSnapshot.sampleRate,
-        referenceBandIndex,
-        rawBandOffsetsDb,
+        referenceBandIndex: draft.referenceBandIndex,
+        channelMode: draft.channelMode,
+        leftRawBandOffsetsDb: draft.leftRawBandOffsetsDb,
+        rightRawBandOffsetsDb: draft.rightRawBandOffsetsDb,
       })
+      const offsets = resolveCalibrationChannelOffsetsDb(profile, mode)
       setControlError(null)
       void Promise.all([
         engine.endCalibrationStimulus(),
-        engine.setCalibrationBandOffsetsDb(
-          resolveCalibrationBandOffsetsDb(profile, mode),
+        engine.setCalibrationChannelOffsetsDb(
+          offsets.leftBandOffsetsDb,
+          offsets.rightBandOffsetsDb,
         ),
       ]).catch(reportControlFailure)
     } catch (error) {
@@ -1583,8 +1620,13 @@ export default function App() {
         name: draft.name,
         sampleRateHz: audioSnapshot.sampleRate,
         referenceBandIndex: draft.referenceBandIndex,
-        rawBandOffsetsDb: draft.rawBandOffsetsDb,
-        measurement: draft.measurement,
+        channelMode: draft.channelMode,
+        leftRawBandOffsetsDb: draft.leftRawBandOffsetsDb,
+        rightRawBandOffsetsDb: draft.rightRawBandOffsetsDb,
+        note: draft.note,
+        measurement: draft.linkedMeasurement,
+        leftMeasurement: draft.leftMeasurement,
+        rightMeasurement: draft.rightMeasurement,
       })
       handleGuidedStimulusEnd()
       applyProfileState(
@@ -1612,7 +1654,10 @@ export default function App() {
         name: draft.name,
         sampleRateHz: audioSnapshot.sampleRate,
         referenceBandIndex: draft.referenceBandIndex,
-        rawBandOffsetsDb: draft.rawBandOffsetsDb,
+        channelMode: draft.channelMode,
+        leftRawBandOffsetsDb: draft.leftRawBandOffsetsDb,
+        rightRawBandOffsetsDb: draft.rightRawBandOffsetsDb,
+        note: draft.note,
       })
       applyProfileState(
         createProfileState(
@@ -1648,6 +1693,89 @@ export default function App() {
     )
   }
 
+  const nextCalibrationProfileId = (): string => {
+    let suffix = profileState.profiles.length + 1
+    let id = `calibration-${suffix}`
+    while (profileState.profiles.some((profile) => profile.id === id)) {
+      suffix += 1
+      id = `calibration-${suffix}`
+    }
+    return id
+  }
+
+  const handleRenameCalibrationProfile = (
+    id: string,
+    name: string,
+    note: string,
+  ): boolean => {
+    const existing = profileState.profiles.find((profile) => profile.id === id)
+    if (!existing) {
+      setControlError('That calibration profile is no longer available.')
+      return false
+    }
+    try {
+      const replacement = updateCalibrationProfileMetadata(existing, {
+        name,
+        note,
+      })
+      const next = createProfileState(
+        profileState.profiles.map((profile) =>
+          profile.id === id ? replacement : profile,
+        ),
+        profileState.activeProfileId,
+        profileState.calibrationMode,
+      )
+      setProfileState(next)
+      persistProfiles(next)
+      setControlError(null)
+      return true
+    } catch (error) {
+      setControlError(errorText(error))
+      return false
+    }
+  }
+
+  const handleDuplicateCalibrationProfile = (id: string): void => {
+    const existing = profileState.profiles.find((profile) => profile.id === id)
+    if (!existing) {
+      return
+    }
+    try {
+      const duplicate = duplicateCalibrationProfileRecord(
+        existing,
+        nextCalibrationProfileId(),
+      )
+      const next = createProfileState(
+        [...profileState.profiles, duplicate],
+        profileState.activeProfileId,
+        profileState.calibrationMode,
+      )
+      setProfileState(next)
+      persistProfiles(next)
+      setControlError(null)
+    } catch (error) {
+      setControlError(errorText(error))
+    }
+  }
+
+  const handleImportCalibrationProfile = (raw: string): string => {
+    const result = parseCalibrationProfileExport(
+      raw,
+      nextCalibrationProfileId(),
+    )
+    if (!result.record) {
+      return result.messages.join(' ') || 'Personal calibration import failed.'
+    }
+    const next = createProfileState(
+      [...profileState.profiles, result.record],
+      profileState.activeProfileId,
+      profileState.calibrationMode,
+    )
+    setProfileState(next)
+    persistProfiles(next)
+    return `Imported “${result.record.name}” locally. It was not selected and audio was not started.`
+  }
+
   const handleDeleteCalibrationProfile = (id: string): void => {
     const profiles = profileState.profiles.filter(
       (profile) => profile.id !== id,
@@ -1669,9 +1797,11 @@ export default function App() {
     }
     const next = createDefaultProfileState()
     setControlError(null)
+    const neutral = resolveCalibrationRecordChannelOffsetsDb(null, 'off')
     void engine
-      .setCalibrationBandOffsetsDb(
-        resolveCalibrationRecordOffsetsDb(null, 'off'),
+      .setCalibrationChannelOffsetsDb(
+        neutral.leftBandOffsetsDb,
+        neutral.rightBandOffsetsDb,
       )
       .then(() => {
         setProfileState(next)
@@ -1737,6 +1867,9 @@ export default function App() {
       onSelectCalibrationProfile={handleSelectCalibrationProfile}
       onCalibrationModeChange={handleCalibrationModeChange}
       onDeleteCalibrationProfile={handleDeleteCalibrationProfile}
+      onDuplicateCalibrationProfile={handleDuplicateCalibrationProfile}
+      onRenameCalibrationProfile={handleRenameCalibrationProfile}
+      onImportCalibrationProfile={handleImportCalibrationProfile}
       onGuidedStimulusBand={handleGuidedStimulusBand}
       onGuidedStimulusSilent={handleGuidedStimulusSilent}
       onGuidedStimulusEnd={handleGuidedStimulusEnd}

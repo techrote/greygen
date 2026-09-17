@@ -1,38 +1,60 @@
 import { type KeyboardEvent, useState } from 'react'
 import type { AudioEngineStatus } from '../../audio/AudioEngine'
+import type { CalibrationStimulusChannel } from '../../audio/dsp/calibrationStimulus'
 import { NOMINAL_BAND_CENTERS_HZ } from '../../audio/dsp/filterBank'
 import type { CalibrationApplicationMode } from '../../app/state/appState'
-import type { CalibrationMeasurementMetadata } from './calibrationProfile'
+import {
+  CALIBRATION_PROFILE_NAME_MAX_LENGTH,
+  CALIBRATION_PROFILE_NOTE_MAX_LENGTH,
+  type CalibrationChannelMode,
+  type CalibrationMeasurementMetadata,
+} from './calibrationProfile'
+import {
+  activeGuidedCalibrationState,
+  createGuidedChannelCalibrationState,
+  guidedChannelCalibrationResult,
+  guidedChannelOverallProgress,
+  retestGuidedChannelBand,
+  skipGuidedChannelBand,
+  submitGuidedChannelJudgement,
+  type GuidedCalibrationChannel,
+  type GuidedChannelCalibrationResult,
+  type GuidedChannelCalibrationState,
+} from './guidedChannelCalibration'
 import {
   type CalibrationJudgement,
-  createGuidedCalibrationMeasurement,
-  createGuidedCalibrationState,
   currentGuidedCalibrationCorrectionDb,
-  guidedCalibrationProgress,
-  guidedCalibrationRawOffsetsDb,
-  retestCalibrationBand,
-  skipCurrentCalibrationBand,
-  submitCalibrationJudgement,
-  type GuidedCalibrationState,
 } from './guidedCalibration'
 
-export interface GuidedCalibrationSaveDraft {
-  readonly name: string
+export interface GuidedCalibrationAuditionDraft {
   readonly referenceBandIndex: number
-  readonly rawBandOffsetsDb: readonly (number | null)[]
-  readonly measurement: CalibrationMeasurementMetadata
+  readonly channelMode: CalibrationChannelMode
+  readonly leftRawBandOffsetsDb: readonly (number | null)[]
+  readonly rightRawBandOffsetsDb: readonly (number | null)[]
+}
+
+export interface GuidedCalibrationSaveDraft
+  extends GuidedCalibrationAuditionDraft {
+  readonly name: string
+  readonly note: string
+  readonly linkedMeasurement: CalibrationMeasurementMetadata | null
+  readonly leftMeasurement: CalibrationMeasurementMetadata | null
+  readonly rightMeasurement: CalibrationMeasurementMetadata | null
 }
 
 export interface GuidedCalibrationWizardProps {
   readonly audioStatus: AudioEngineStatus
   readonly seed: number
   readonly disabled: boolean
-  readonly onStimulusBand: (bandIndex: number, levelOffsetDb: number) => void
+  readonly onStimulusBand: (
+    bandIndex: number,
+    levelOffsetDb: number,
+    channel: CalibrationStimulusChannel,
+  ) => void
   readonly onStimulusSilent: () => void
   readonly onStimulusEnd: () => void
   readonly onAuditionDraft: (
-    rawBandOffsetsDb: readonly (number | null)[],
-    referenceBandIndex: number,
+    draft: GuidedCalibrationAuditionDraft,
     mode: CalibrationApplicationMode,
   ) => void
   readonly onRestoreSavedProfile: () => void
@@ -59,6 +81,34 @@ function isTextEntryTarget(target: EventTarget | null): boolean {
   return tag === 'input' || tag === 'textarea' || tag === 'select'
 }
 
+function channelLabel(channel: GuidedCalibrationChannel): string {
+  switch (channel) {
+    case 'linked':
+      return 'Linked / both channels'
+    case 'left':
+      return 'Left channel only'
+    case 'right':
+      return 'Right channel only'
+  }
+}
+
+function stimulusChannel(
+  channel: GuidedCalibrationChannel,
+): CalibrationStimulusChannel {
+  return channel === 'linked' ? 'both' : channel
+}
+
+function auditionDraft(
+  result: GuidedChannelCalibrationResult,
+): GuidedCalibrationAuditionDraft {
+  return {
+    referenceBandIndex: result.referenceBandIndex,
+    channelMode: result.mode,
+    leftRawBandOffsetsDb: result.leftRawBandOffsetsDb,
+    rightRawBandOffsetsDb: result.rightRawBandOffsetsDb,
+  }
+}
+
 export default function GuidedCalibrationWizard({
   audioStatus,
   seed,
@@ -71,7 +121,11 @@ export default function GuidedCalibrationWizard({
   onSave,
 }: GuidedCalibrationWizardProps) {
   const [comfortableConfirmed, setComfortableConfirmed] = useState(false)
-  const [wizard, setWizard] = useState<GuidedCalibrationState | null>(null)
+  const [channelMode, setChannelMode] =
+    useState<CalibrationChannelMode>('linked')
+  const [wizard, setWizard] = useState<GuidedChannelCalibrationState | null>(
+    null,
+  )
   const [heardReference, setHeardReference] = useState(false)
   const [heardTest, setHeardTest] = useState(false)
   const [lastAudition, setLastAudition] = useState<'reference' | 'test' | null>(
@@ -80,6 +134,7 @@ export default function GuidedCalibrationWizard({
   const [auditionMode, setAuditionMode] =
     useState<CalibrationApplicationMode>('off')
   const [profileName, setProfileName] = useState('')
+  const [profileNote, setProfileNote] = useState('')
 
   const resetAuditionFlags = (): void => {
     setHeardReference(false)
@@ -92,9 +147,10 @@ export default function GuidedCalibrationWizard({
       return
     }
     onStimulusSilent()
-    setWizard(createGuidedCalibrationState(seed))
+    setWizard(createGuidedChannelCalibrationState(seed, channelMode))
     setAuditionMode('off')
     setProfileName('')
+    setProfileNote('')
     resetAuditionFlags()
   }
 
@@ -104,101 +160,123 @@ export default function GuidedCalibrationWizard({
     setWizard(null)
     setAuditionMode('off')
     setProfileName('')
+    setProfileNote('')
     setComfortableConfirmed(false)
     resetAuditionFlags()
   }
 
-  const enterReviewIfNeeded = (next: GuidedCalibrationState): void => {
-    if (next.stage === 'review') {
-      const raw = guidedCalibrationRawOffsetsDb(next)
-      onStimulusEnd()
-      onAuditionDraft(raw, next.referenceBandIndex, 'off')
-      setAuditionMode('off')
+  const enterReviewIfNeeded = (next: GuidedChannelCalibrationState): void => {
+    if (next.phase !== 'review') {
+      return
     }
+    const result = guidedChannelCalibrationResult(next)
+    onStimulusEnd()
+    onAuditionDraft(auditionDraft(result), 'off')
+    setAuditionMode('off')
   }
 
   const submitJudgement = (judgement: CalibrationJudgement): void => {
-    if (wizard?.stage !== 'matching' || !heardReference || !heardTest) {
+    const active = wizard ? activeGuidedCalibrationState(wizard) : null
+    if (
+      !wizard ||
+      active?.stage !== 'matching' ||
+      !heardReference ||
+      !heardTest
+    ) {
       return
     }
     onStimulusSilent()
-    const next = submitCalibrationJudgement(wizard, judgement)
+    const next = submitGuidedChannelJudgement(wizard, judgement)
     setWizard(next)
     resetAuditionFlags()
     enterReviewIfNeeded(next)
   }
 
   const skip = (): void => {
-    if (wizard?.stage !== 'matching') {
+    const active = wizard ? activeGuidedCalibrationState(wizard) : null
+    if (!wizard || active?.stage !== 'matching') {
       return
     }
     onStimulusSilent()
-    const next = skipCurrentCalibrationBand(wizard)
+    const next = skipGuidedChannelBand(wizard)
     setWizard(next)
     resetAuditionFlags()
     enterReviewIfNeeded(next)
   }
 
   const alternateStimulus = (): void => {
-    if (!wizard?.current || audioStatus !== 'running') {
+    if (!wizard || wizard.phase === 'review' || audioStatus !== 'running') {
       return
     }
+    const active = activeGuidedCalibrationState(wizard)
+    if (!active?.current) {
+      return
+    }
+    const channel = stimulusChannel(wizard.phase)
     if (lastAudition === 'reference') {
-      const correction = currentGuidedCalibrationCorrectionDb(wizard) ?? 0
-      onStimulusBand(wizard.current.bandIndex, correction)
+      const correction = currentGuidedCalibrationCorrectionDb(active) ?? 0
+      onStimulusBand(active.current.bandIndex, correction, channel)
       setHeardTest(true)
       setLastAudition('test')
       return
     }
-    onStimulusBand(wizard.referenceBandIndex, 0)
+    onStimulusBand(active.referenceBandIndex, 0, channel)
     setHeardReference(true)
     setLastAudition('reference')
   }
 
   const silence = (): void => {
-    if (wizard?.stage !== 'matching') {
+    if (!wizard || wizard.phase === 'review') {
       return
     }
     onStimulusSilent()
     setLastAudition(null)
   }
 
-  const startRetest = (bandIndex: number): void => {
-    if (wizard?.stage !== 'review') {
+  const startRetest = (
+    channel: GuidedCalibrationChannel,
+    bandIndex: number,
+  ): void => {
+    if (wizard?.phase !== 'review') {
       return
     }
     onRestoreSavedProfile()
     onStimulusSilent()
-    setWizard(retestCalibrationBand(wizard, bandIndex))
+    setWizard(retestGuidedChannelBand(wizard, channel, bandIndex))
     setAuditionMode('off')
     resetAuditionFlags()
   }
 
   const changeAuditionMode = (mode: CalibrationApplicationMode): void => {
-    if (wizard?.stage !== 'review') {
+    if (wizard?.phase !== 'review') {
       return
     }
-    const raw = guidedCalibrationRawOffsetsDb(wizard)
-    onAuditionDraft(raw, wizard.referenceBandIndex, mode)
+    const result = guidedChannelCalibrationResult(wizard)
+    onAuditionDraft(auditionDraft(result), mode)
     setAuditionMode(mode)
   }
 
   const save = (): void => {
-    if (wizard?.stage !== 'review' || profileName.trim().length === 0) {
+    if (wizard?.phase !== 'review' || profileName.trim().length === 0) {
       return
     }
+    const result = guidedChannelCalibrationResult(wizard)
     onStimulusEnd()
     onSave({
+      ...auditionDraft(result),
       name: profileName,
-      referenceBandIndex: wizard.referenceBandIndex,
-      rawBandOffsetsDb: guidedCalibrationRawOffsetsDb(wizard),
-      measurement: createGuidedCalibrationMeasurement(
-        wizard,
-      ) as CalibrationMeasurementMetadata,
+      note: profileNote,
+      linkedMeasurement:
+        result.linkedMeasurement as CalibrationMeasurementMetadata | null,
+      leftMeasurement:
+        result.leftMeasurement as CalibrationMeasurementMetadata | null,
+      rightMeasurement:
+        result.rightMeasurement as CalibrationMeasurementMetadata | null,
     })
     setWizard(null)
     setAuditionMode('off')
     setProfileName('')
+    setProfileNote('')
     setComfortableConfirmed(false)
     resetAuditionFlags()
   }
@@ -212,29 +290,27 @@ export default function GuidedCalibrationWizard({
       abort()
       return
     }
-    if (isTextEntryTarget(event.target)) {
+    if (isTextEntryTarget(event.target) || wizard.phase === 'review') {
       return
     }
-    if (wizard.stage === 'matching') {
-      if (event.key === ' ') {
-        event.preventDefault()
-        alternateStimulus()
-      } else if (event.key.toLowerCase() === 's') {
-        event.preventDefault()
-        silence()
-      } else if (event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        skip()
-      } else if (event.key === 'ArrowLeft') {
-        event.preventDefault()
-        submitJudgement('quieter')
-      } else if (event.key === 'ArrowDown') {
-        event.preventDefault()
-        submitJudgement('equal')
-      } else if (event.key === 'ArrowRight') {
-        event.preventDefault()
-        submitJudgement('louder')
-      }
+    if (event.key === ' ') {
+      event.preventDefault()
+      alternateStimulus()
+    } else if (event.key.toLowerCase() === 's') {
+      event.preventDefault()
+      silence()
+    } else if (event.key.toLowerCase() === 'k') {
+      event.preventDefault()
+      skip()
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      submitJudgement('quieter')
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      submitJudgement('equal')
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      submitJudgement('louder')
     }
   }
 
@@ -246,6 +322,35 @@ export default function GuidedCalibrationWizard({
           Match narrow-band noise against a 1 kHz reference. Results describe
           your current listener + playback chain; this is not a medical hearing
           test or an acoustic level measurement.
+        </p>
+        <fieldset className="calibration-channel-mode" disabled={disabled}>
+          <legend>Channel mode</legend>
+          <label>
+            <input
+              type="radio"
+              name="guided-channel-mode"
+              value="linked"
+              checked={channelMode === 'linked'}
+              onChange={() => setChannelMode('linked')}
+            />
+            Linked / symmetric
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="guided-channel-mode"
+              value="independent"
+              checked={channelMode === 'independent'}
+              onChange={() => setChannelMode('independent')}
+            />
+            Independent left / right
+          </label>
+        </fieldset>
+        <p className="status-note">
+          Independent mode measures each playback channel separately. A left /
+          right difference may come from the listener, transducer, fit,
+          coupling, room, or device and is not interpreted as hearing loss.
+          Linked mode is always available as the conservative fallback.
         </p>
         <ul className="calibration-safety-list">
           <li>Set a comfortable listening level before beginning.</li>
@@ -291,24 +396,31 @@ export default function GuidedCalibrationWizard({
     )
   }
 
-  const progress = guidedCalibrationProgress(wizard)
+  const progress = guidedChannelOverallProgress(wizard)
+  const active = activeGuidedCalibrationState(wizard)
 
-  if (wizard.stage === 'matching' && wizard.current) {
-    const correction = currentGuidedCalibrationCorrectionDb(wizard) ?? 0
-    const frequency = NOMINAL_BAND_CENTERS_HZ[wizard.current.bandIndex]
+  if (
+    wizard.phase !== 'review' &&
+    active?.stage === 'matching' &&
+    active.current
+  ) {
+    const correction = currentGuidedCalibrationCorrectionDb(active) ?? 0
+    const frequency = NOMINAL_BAND_CENTERS_HZ[active.current.bandIndex]
     const extreme =
-      wizard.current.bandIndex === 0 ||
-      wizard.current.bandIndex === NOMINAL_BAND_CENTERS_HZ.length - 1
+      active.current.bandIndex === 0 ||
+      active.current.bandIndex === NOMINAL_BAND_CENTERS_HZ.length - 1
     const canJudge = heardReference && heardTest
     return (
       <section
         className="guided-calibration guided-calibration-active"
         aria-labelledby="guided-heading"
+        data-channel={wizard.phase}
       >
         <div className="section-heading-row">
           <div>
             <p className="label">
-              Match {Math.min(progress.completed + 1, progress.total)} of{' '}
+              {channelLabel(wizard.phase)} · Match{' '}
+              {Math.min(progress.completed + 1, progress.total)} of{' '}
               {progress.total}
             </p>
             <h4 id="guided-heading">{frequencyLabel(frequency)} test band</h4>
@@ -316,9 +428,10 @@ export default function GuidedCalibrationWizard({
           <output aria-live="polite">{formatCorrection(correction)}</output>
         </div>
         <p>
-          Space alternates reference/test. After hearing both, choose how the
-          test sounds relative to the 1 kHz reference. The probe is bounded to
-          ±24 dB and the master control is never changed automatically.
+          Space alternates reference/test in{' '}
+          {channelLabel(wizard.phase).toLowerCase()}. After hearing both, choose
+          how the test sounds relative to the 1 kHz reference. The probe is
+          bounded to ±24 dB and master is never changed automatically.
         </p>
         {extreme ? (
           <p className="calibration-caveat" role="note">
@@ -396,10 +509,16 @@ export default function GuidedCalibrationWizard({
     )
   }
 
-  const raw = guidedCalibrationRawOffsetsDb(wizard)
-  const resultsByBand = new Map(
-    wizard.results.map((result) => [result.bandIndex, result]),
+  const result = guidedChannelCalibrationResult(wizard)
+  const leftResults = new Map(
+    wizard.mode === 'linked'
+      ? wizard.linked?.results.map((entry) => [entry.bandIndex, entry])
+      : wizard.left?.results.map((entry) => [entry.bandIndex, entry]),
   )
+  const rightResults = new Map(
+    wizard.right?.results.map((entry) => [entry.bandIndex, entry]) ?? [],
+  )
+
   return (
     <section
       className="guided-calibration guided-calibration-active"
@@ -410,36 +529,63 @@ export default function GuidedCalibrationWizard({
           <p className="label">Review before saving</p>
           <h4 id="guided-heading">Guided calibration result</h4>
         </div>
-        <span>{progress.total} bands completed</span>
+        <span>{result.mode === 'linked' ? 'Linked' : 'Independent L/R'}</span>
       </div>
       <p>
         These are relative digital corrections from this listener + playback
-        chain. Skipped bands remain unknown and will not be fabricated. Nothing
-        is saved until you explicitly save below.
+        chain. Skipped bands remain unknown and will not be fabricated. L/R
+        asymmetry is not a diagnosis. Nothing is saved until you explicitly save
+        below.
       </p>
       <ul className="calibration-review-grid">
         {NOMINAL_BAND_CENTERS_HZ.map((frequency, bandIndex) => {
-          const result = resultsByBand.get(bandIndex)
-          const isReference = bandIndex === wizard.referenceBandIndex
+          const isReference = bandIndex === result.referenceBandIndex
+          const leftEvidence = leftResults.get(bandIndex)
+          const rightEvidence = rightResults.get(bandIndex)
           return (
             <li className="calibration-review-band" key={frequency}>
               <strong>{frequencyLabel(frequency)}</strong>
-              <span>{formatCorrection(raw[bandIndex])}</span>
+              {result.mode === 'linked' ? (
+                <span>
+                  {formatCorrection(result.leftRawBandOffsetsDb[bandIndex])}
+                </span>
+              ) : (
+                <span>
+                  L {formatCorrection(result.leftRawBandOffsetsDb[bandIndex])} ·
+                  R {formatCorrection(result.rightRawBandOffsetsDb[bandIndex])}
+                </span>
+              )}
               <small>
                 {isReference
                   ? 'Reference'
-                  : result
-                    ? `${result.confidence} confidence · ${result.retests} retest${result.retests === 1 ? '' : 's'}`
-                    : 'No result'}
+                  : result.mode === 'linked'
+                    ? `${leftEvidence?.confidence ?? 'unknown'} confidence · ${leftEvidence?.retests ?? 0} retests`
+                    : `L ${leftEvidence?.confidence ?? 'unknown'} · R ${rightEvidence?.confidence ?? 'unknown'}`}
               </small>
               {!isReference ? (
-                <button
-                  type="button"
-                  className="secondary-action"
-                  onClick={() => startRetest(bandIndex)}
-                >
-                  Retest
-                </button>
+                <div className="calibration-review-actions">
+                  <button
+                    type="button"
+                    className="secondary-action"
+                    onClick={() =>
+                      startRetest(
+                        result.mode === 'linked' ? 'linked' : 'left',
+                        bandIndex,
+                      )
+                    }
+                  >
+                    Retest {result.mode === 'linked' ? '' : 'L'}
+                  </button>
+                  {result.mode === 'independent' ? (
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      onClick={() => startRetest('right', bandIndex)}
+                    >
+                      Retest R
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
             </li>
           )
@@ -463,7 +609,7 @@ export default function GuidedCalibrationWizard({
       </label>
       <p className="status-note">
         Balanced uses the locked conservative transform. Full is explicit and
-        still bounded by the correction/headroom safety pipeline.
+        still bounded by correction, inter-channel, and headroom safety.
       </p>
       <label htmlFor="guided-profile-name">
         Local profile name
@@ -471,8 +617,18 @@ export default function GuidedCalibrationWizard({
           id="guided-profile-name"
           type="text"
           value={profileName}
-          maxLength={120}
+          maxLength={CALIBRATION_PROFILE_NAME_MAX_LENGTH}
           onChange={(event) => setProfileName(event.currentTarget.value)}
+        />
+      </label>
+      <label htmlFor="guided-profile-note">
+        Device / headphone / speaker note (optional)
+        <input
+          id="guided-profile-note"
+          type="text"
+          value={profileNote}
+          maxLength={CALIBRATION_PROFILE_NOTE_MAX_LENGTH}
+          onChange={(event) => setProfileNote(event.currentTarget.value)}
         />
       </label>
       <div className="calibration-exit-row">

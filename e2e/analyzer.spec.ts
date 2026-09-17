@@ -15,7 +15,7 @@ test('analyzer opens lazily, reports deterministic diagnostics, and closes clean
   await page.getByRole('button', { name: 'Open analyzer' }).click()
   await expect(page.locator('.analyzer-panel')).toBeVisible()
   await expect(
-    page.getByRole('definition').filter({ hasText: 'v5' }).first(),
+    page.getByRole('definition').filter({ hasText: 'v6' }).first(),
   ).toBeVisible()
   await expect(
     page.getByText(

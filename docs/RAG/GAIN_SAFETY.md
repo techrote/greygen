@@ -1,146 +1,164 @@
 # Gain Safety, Smoothing, and Digital Metering
 
-Status: canonical contract for issue #6 gain staging, deterministic headroom, smoothing, final guard, and output telemetry, updated for implemented animation and calibration layers including guided stimulus playback.
+Status: canonical contract for issue #6 gain staging, deterministic headroom, smoothing, final guard, and output telemetry, updated for animation plus linked/independent calibration and guided stimulus playback.
 
 ## Signal order
 
-Greygen's pure `GreygenDspEngine` owns the complete level path. The normal requested path is:
+Greygen's pure `GreygenDspEngine` owns the complete level path. Conceptually the current stereo path is:
 
 1. seeded bipolar source normalization (`1.0` linear);
-2. nominal preset / target realization;
-3. user band offsets from `SpectrumState`;
+2. nominal target realization;
+3. user band offsets;
 4. bounded spectral-animation offsets;
-5. bounded calibration correction;
-6. deterministic safety pre-gain;
-7. master gain;
-8. final emergency full-scale guard;
-9. post-guard peak/RMS metering.
+5. stereo-width component mixing;
+6. **per-output-channel calibration correction**;
+7. deterministic safety pre-gain;
+8. master gain;
+9. final emergency full-scale guard;
+10. post-guard peak/RMS metering.
 
-The main thread does not apply a second gain stage and does not process audio blocks. `AudioEngine` sends typed state to the worklet and receives bounded telemetry only.
+The main thread never applies a second output gain stage and never processes audio blocks. `AudioEngine` sends typed state to the worklet and receives bounded telemetry only.
 
-Nominal requested shaping and safety attenuation remain separate values. A preset, animation trajectory, calibration correction, or guided calibration probe never mutates the reported safety pre-gain; it changes the deterministic response estimate from which safety attenuation is derived.
+Requested shaping and protective attenuation remain separate values. A target, animation trajectory, calibration curve, or guided calibration probe changes the deterministic response estimate from which safety attenuation is derived; it does not hide or rewrite the reported safety pre-gain.
 
-## Gain-state schema and bounds
+## Gain-state and calibration ownership
 
-`GainStageState` schema version `1` contains:
+`GainStageState` schema version 1 still owns:
 
-- `masterGainDb` in `[-60, 0] dB`;
-- ten animation offsets, each in `[-12, +12] dB`;
-- ten calibration offsets, each in `[-24, +24] dB`.
+- `masterGainDb` in `[-60,0] dB`;
+- ten animation offsets, each in `[-12,+12] dB`;
+- a legacy linked ten-value calibration field retained for protocol/state compatibility.
 
-The issue #6 placeholders are now owned by implemented layers. Spectral animation generates bounded deterministic animation offsets. Calibration profiles resolve Off/Balanced/Full into bounded calibration offsets; `CALIBRATION_PROFILES.md` is canonical for that transform. Both continue to use the original gain-stage accounting boundary.
+Issue #15 introduces versioned `ChannelCalibrationState` as the canonical real-time calibration owner:
 
-User band offsets remain owned by `SpectrumState` and are bounded to `[-24, +24] dB` by the spectral-target contract.
+- ten left applied offsets;
+- ten right applied offsets;
+- each offset inside the existing global `[-24,+24] dB` calibration bound;
+- per-band applied L/R difference additionally limited by the engineering safeguard documented in `CALIBRATION_PROFILES.md`.
 
-The default master value is `20*log10(0.05)`, approximately `-26.0206 dB`. Digital gain values are not acoustic level measurements.
+The legacy one-curve API maps the same correction to both channels. It exists so historical callers remain linked/symmetric; it is not the representation for independent L/R playback.
+
+User band offsets remain owned by `SpectrumState` and bounded to `[-24,+24] dB`.
+
+The default master is `20*log10(0.05)`, approximately `-26.0206 dB`. These are digital gain units, not acoustic SPL.
 
 ## Deterministic safety pre-gain
 
-Safety pre-gain is derived from requested state, not from recent stochastic peaks. Greygen deliberately does **not** implement a fast automatic-gain-control loop.
+Safety is derived from accepted requested state rather than recent stochastic peaks. Greygen deliberately does **not** implement fast automatic gain control.
 
-For each accepted state, `gainSafety.ts` evaluates the actual complementary ten-band digital transfer function at 512 deterministic frequencies from DC through Nyquist using the runtime sample rate and current requested component gains. The maximum sampled magnitude is the shaped-signal spectral peak estimate.
+For each accepted normal state, the engine evaluates the actual complementary ten-band transfer function at 512 deterministic frequencies from DC through Nyquist using runtime sample rate and requested component gains. Issue #15 evaluates the response **separately for the requested left and right output-channel calibration curves** and uses the larger peak estimate.
 
 Headroom calculation then applies:
 
 - `+0.5 dB` response-estimation margin;
-- a target shaped peak of `-0.5 dBFS`;
+- target shaped peak `-0.5 dBFS`;
 - safety pre-gain `min(1, target / (estimate * margin))`.
 
-For neutral White reconstruction the estimated transfer magnitude is exactly unity to numerical precision, producing approximately `-1 dB` safety pre-gain from the target plus margin. Positive user/calibration/animation layers automatically produce more attenuation.
+For neutral White reconstruction the estimated transfer magnitude is unity to numerical precision, producing approximately `-1 dB` safety pre-gain from target plus margin. Positive user/animation/calibration demand produces more attenuation. If only one calibrated output channel is demanding, that channel still determines the shared safety target.
 
-Calibration therefore cannot consume headroom invisibly: its resolved offsets are part of the response estimate before safety pre-gain. Full calibration remains bounded to ±24 dB and Balanced to ±12 dB even before this protective attenuation.
+Full profile correction remains bounded to ±24 dB, Balanced to ±12 dB, and independent application is further constrained by the versioned inter-channel guard before safety estimation.
 
-### Guided calibration transient
+## Guided calibration transient
 
-Issue #14 adds a runtime-only narrow-band `CalibrationStimulusState`. It is not persisted as `GainStageState`, SoundState, or ProfileState. The selected probe has a fixed `-18 dB` component base and a relative adjustment bounded to `[-24,+24] dB`.
+Guided stimulus state is runtime-only and is not persisted as SoundState/ProfileState.
 
-While the transient owns output, safety pre-gain conservatively uses the sum of:
+Current contract:
 
-- the normal requested-response peak estimate; and
-- the currently requested bounded stimulus gain.
+- fixed selected-component base `-18 dB`;
+- relative probe `[-24,+24] dB`;
+- mode `inactive | silent | band`;
+- channel `both | left | right`.
 
-The normal path and stimulus are crossfaded rather than summed at full scale, so this sum intentionally overestimates the crossfade demand. Positive probe adjustment therefore produces additional attenuation rather than silently borrowing headroom. The guided workflow never increases master gain to compensate for a difficult/inaudible band.
+While stimulus mode owns output, safety pre-gain conservatively reserves the sum of normal requested-response demand plus bounded probe demand. Because normal/stimulus are actually crossfaded rather than simultaneously summed at full strength, this intentionally overestimates transition demand.
 
-This response estimate is deterministic and sample-rate-aware, but is not claimed to be an absolute time-domain bound for every possible transient. The final sample-domain guard below remains the last invariant that output cannot escape legal digital range.
+Issue #15 adds smoothed per-output-channel masks. Independent guided calibration can therefore present left-only or right-only material without a hard pan step. The non-target channel fades toward silence; master is never auto-raised.
+
+The deterministic frequency-domain estimate is not claimed to be an absolute sample-domain bound for every stochastic transient. The final sample guard remains the last output invariant.
 
 ## Smoothing
 
-Audible control changes are never written directly into the sample path.
+Audible state changes are never written directly into the sample path.
 
-Current smoothing constants:
+Current constants:
 
-- normal band/component gains: `40 ms` one-pole time constant;
-- guided stimulus band gains: `40 ms` one-pole time constant;
-- normal↔guided stimulus ownership crossfade: `40 ms` one-pole time constant;
-- master gain: `40 ms` one-pole time constant;
+- normal spectral/component gains: `40 ms` one-pole;
+- left calibration-band gains: `40 ms` one-pole;
+- right calibration-band gains: `40 ms` one-pole;
+- guided stimulus selected-band gain: `40 ms` one-pole;
+- normal↔stimulus ownership: `40 ms` one-pole;
+- guided left/right channel masks: `40 ms` one-pole;
+- master: `40 ms` one-pole;
 - safety attenuation attack: `5 ms`;
 - safety attenuation release: `150 ms`.
 
-User offsets, animation offsets, and calibration offsets all converge through the component-gain smoothing path. Switching profile or Off/Balanced/Full therefore does not hard-step filter gain targets. Guided reference/test/silence transitions likewise move through preallocated 40 ms smoothers, including an explicit fade to calibration silence.
+Profile select, Off/Balanced/Full, linked/independent correction, channel routing, reference/test changes, and calibration silence therefore do not hard-step audible gains.
 
-The shorter safety attack reduces exposure to a newly demanding state while remaining continuous. The final guard covers the short attack interval. Slower release avoids a sudden level rise when requested boosts are removed.
+The shorter safety attack reduces exposure to newly demanding state while remaining continuous. The final guard covers the attack interval. Slower release avoids sudden level rise after boosts disappear.
 
-Startup is also smoothed: spectral/safety state is initialized deterministically, while master gain rises from silence toward the saved/default master target through the same 40 ms follower.
-
-All time constants use runtime sample rate through `OnePoleSmoother`; no hard-coded samples-per-transition assumption is allowed.
+All time constants derive samples from runtime sample rate.
 
 ## Final guard
 
-The final guard is intentionally simple and emergency-only:
+The final guard is emergency-only:
 
-- finite samples are clamped to `[-0.999, +0.999]`;
-- a non-finite sample is converted to zero;
-- every intervention is counted in the current telemetry window.
+- finite samples clamp to `[-0.999,+0.999]`;
+- non-finite samples become zero;
+- every intervention is counted in telemetry.
 
-This is not a loudness maximizer, compressor, or normal tone-shaping stage. Ordinary White/Pink/Brown/Grey deterministic reference fixtures at `0 dB` master must produce zero guard interventions in validation. If a normal requested state begins relying on the guard materially, gain staging must be redesigned rather than treating clipping as normal behavior.
+It is not a compressor, limiter-as-loudness-tool, or normal shaping stage. Ordinary deterministic White/Pink/Brown/Grey fixtures at 0 dB master must continue to produce zero guard interventions. If normal states rely materially on the guard, headroom design must be fixed rather than normalizing clipping.
 
 ## Meter stage and units
 
-`MeterAccumulator` measures the **final post-master, post-guard digital output**. Each telemetry window reports:
+`MeterAccumulator` measures final post-master/post-guard digital output. Telemetry reports:
 
 - frame count;
 - peak dBFS;
 - RMS dBFS;
-- applied safety pre-gain dB;
-- target safety pre-gain dB;
+- applied and target safety pre-gain dB;
 - applied master dB;
-- final-guard intervention count.
+- final-guard intervention count;
+- stereo width/correlation state where applicable.
 
-The worklet emits telemetry at a bounded nominal rate of 10 updates per second. It does not post a message every render quantum. Meter accumulation uses primitive numeric state in the real-time path and allocates only when a telemetry snapshot is consumed.
+Worklet telemetry remains bounded at nominally 10 updates/s. Per-sample metering uses primitive preallocated state; an object is allocated only when a telemetry snapshot is consumed.
 
-`dBFS` means level relative to digital full scale. No Greygen digital meter is labelled dB SPL, phon, sone, hearing threshold, or any other acoustic/clinical unit.
+`dBFS` means digital full scale. It is never labelled SPL, phon, sone, hearing threshold, or clinical level.
 
 ## Protocol history and current control use
 
-Issue #6 introduced worklet protocol v2 with serialized spectral/gain-stage state, `set-gain-stage`, and bounded telemetry. Later issues advanced the overall protocol for stereo, animation, and diagnostics. Issue #14 advances it to **v5** with `set-calibration-stimulus`, a request-scoped transient command carrying only validated stimulus mode/band/relative probe state.
+Issue #6 introduced protocol v2. Stereo/animation/analyzer/calibration work advanced the shared typed protocol subsequently.
 
-`AudioEngine.setCalibrationBandOffsetsDb()` continues to preserve current master and animation state and sends a validated `set-gain-stage` update for saved-profile correction. Guided stimulus control is separate by design because it is transient, non-persistent playback state. Control acknowledgements remain request-scoped.
+Issue #15 advances it to **v6**:
+
+- initialize includes explicit versioned channel-calibration state;
+- `set-channel-calibration` updates validated L/R correction;
+- calibration stimulus schema v2 includes `both | left | right` targeting;
+- acknowledgements remain request-scoped.
+
+`AudioEngine.setCalibrationChannelOffsetsDb(left,right)` is the explicit independent-channel API. `setCalibrationBandOffsetsDb(values)` remains a linked compatibility facade and maps `values` to both output channels.
 
 ## Real-time constraints
 
-The per-sample render path performs seeded source generation, complementary filter-bank processing, preallocated normal/stimulus smoother updates, scalar gain multiplication/crossfade, final finite/clamp checks, and primitive meter accumulation. It performs no logging, DOM/storage/URL/network access, Promise work, MessagePort traffic, or deliberate per-sample allocation.
+The audio callback performs seeded source generation, complementary filter-bank component processing, stereo component mixing, preallocated normal/calibration/stimulus smoothers, scalar gain/crossfade, final finite/clamp checks, and primitive meter accumulation.
 
-Frequency-response/stimulus headroom estimation occurs only when accepted state changes, outside the per-sample loop.
+It performs no DOM/storage/URL/network access, Promise work, logging, locks, or deliberate per-sample allocation. Response/headroom estimation occurs only when accepted control state changes.
 
 ## Validation invariants
 
 Validation covers:
 
-- neutral White response estimate at 44.1, 48, and 96 kHz;
-- all user bands at maximum accepted offset;
-- maximum animation and calibration offsets;
-- positive calibration correction causing stronger safety attenuation than neutral state;
-- maximum guided probe causing stronger safety attenuation than neutral state;
-- guided silence converging smoothly to effectively zero output;
-- guided stimulus exit returning to finite normal output;
-- master at maximum `0 dB`;
-- pathological-state output finite and inside the final guard at 44.1, 48, and 96 kHz;
-- rapid alternating extreme controls;
-- same-seed transition regression for smoothing;
-- applied safety pre-gain matching reported telemetry;
-- known-vector peak/RMS math;
-- ordinary White/Pink/Brown/Grey long fixtures producing zero final-guard interventions at `0 dB` master;
-- real Chromium receiving post-worklet dBFS telemetry before clean Stop/close;
-- real Chromium guided calibration preserving explicit master level and normal Stop authority.
+- neutral White response at 44.1/48/96 kHz;
+- maximum accepted user/animation/calibration demand;
+- real L/R output-channel correction rather than relabelling decorrelation streams;
+- linked legacy construction output-equivalent to explicit linked channel state;
+- worst-demanding output channel driving safety pre-gain;
+- applied L/R correction difference respecting the versioned inter-channel guard;
+- positive calibration/probe demand producing stronger safety attenuation;
+- channel-routed guided stimulus and smooth explicit silence;
+- rapid state changes remaining finite;
+- master at maximum 0 dB;
+- final output inside guard for pathological accepted states;
+- telemetry matching actual applied safety/master state;
+- ordinary presets not relying on guard;
+- real Chromium retaining explicit Start/Stop authority and master-level invariance through calibration.
 
-Thresholds are part of the repository validation contract and must not be weakened merely to make a regression pass.
+Do not weaken gain-safety, calibration, or DSP thresholds merely to make a regression pass.

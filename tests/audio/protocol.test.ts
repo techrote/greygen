@@ -1,17 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { createAnimationState } from '../../src/audio/dsp/animation'
+import { createChannelCalibrationState } from '../../src/audio/dsp/channelCalibration'
 import { createGainStageState } from '../../src/audio/dsp/gainSafety'
 import { createSpectrumState } from '../../src/audio/dsp/spectra'
 import { createStereoWidthState } from '../../src/audio/dsp/stereo'
 import {
   AUDIO_PROTOCOL_VERSION,
   deserializeAnimationState,
+  deserializeChannelCalibrationState,
   deserializeGainStageState,
   deserializeSpectrumState,
   deserializeStereoWidthState,
   parseMainToWorkletMessage,
   parseWorkletToMainMessage,
   serializeAnimationState,
+  serializeChannelCalibrationState,
   serializeGainStageState,
   serializeSpectrumState,
   serializeStereoWidthState,
@@ -24,6 +27,7 @@ describe('AudioWorklet protocol', () => {
     offsets[7] = -4.25
     const source = createSpectrumState('pink', offsets)
     const gainStage = createGainStageState(-18, offsets, offsets)
+    const channelCalibration = createChannelCalibrationState(offsets, offsets)
     const stereoWidth = createStereoWidthState(0.73)
     const animation = createAnimationState('orbit', 77, 7.5, 2, true)
 
@@ -32,6 +36,9 @@ describe('AudioWorklet protocol', () => {
     ) as unknown
     const serializedGain = JSON.parse(
       JSON.stringify(serializeGainStageState(gainStage)),
+    ) as unknown
+    const serializedChannelCalibration = JSON.parse(
+      JSON.stringify(serializeChannelCalibrationState(channelCalibration)),
     ) as unknown
     const serializedStereo = JSON.parse(
       JSON.stringify(serializeStereoWidthState(stereoWidth)),
@@ -46,6 +53,7 @@ describe('AudioWorklet protocol', () => {
       seed: 1234,
       spectrum: serializedSpectrum,
       gainStage: serializedGain,
+      channelCalibration: serializedChannelCalibration,
       stereoWidth: serializedStereo,
       animation: serializedAnimation,
     })
@@ -56,6 +64,9 @@ describe('AudioWorklet protocol', () => {
     }
     expect(deserializeSpectrumState(parsed.spectrum)).toEqual(source)
     expect(deserializeGainStageState(parsed.gainStage)).toEqual(gainStage)
+    expect(
+      deserializeChannelCalibrationState(parsed.channelCalibration),
+    ).toEqual(channelCalibration)
     expect(deserializeStereoWidthState(parsed.stereoWidth)).toEqual(stereoWidth)
     expect(deserializeAnimationState(parsed.animation)).toEqual(animation)
   })

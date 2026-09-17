@@ -1,176 +1,162 @@
 # Presets and Privacy-Safe Sharing
 
-Status: canonical contract for built-in preset ownership, local user sound presets, and backend-free share URLs.
+Status: canonical contract for built-in preset ownership, local user sound presets, backend-free normal share URLs, and their separation from personal calibration portability.
 
 ## Purpose
 
-Greygen has two different preset concepts and they deliberately own different fields:
+Greygen has two sound-preset concepts with deliberately different ownership:
 
 1. **Built-in colour presets** (`White`, `Pink`, `Brown / Red`, `Grey (Practical)`) describe only the spectral target layer.
-2. **User sound presets** are explicit local snapshots of the complete generic/shareable `SoundState`.
+2. **User sound presets** are explicit local snapshots of complete generic/shareable `SoundState`.
 
-This distinction prevents selecting a noise colour from unexpectedly resetting master level, stereo width, animation, deterministic source identity, calibration/profile state, or UI preferences.
+This prevents selecting a colour from unexpectedly resetting master, stereo, animation, deterministic source identity, private calibration/profile state, or UI preferences.
 
 ## Built-in colour preset ownership
 
 Built-in colour presets own exactly:
 
 - `targetId`;
-- the ten `userBandOffsetsDb` values.
+- ten `userBandOffsetsDb` values.
 
-Selecting a built-in colour preset sets its target and returns those ten user offsets to neutral `0 dB` through the existing smoothed engine path. It preserves:
+Selecting one sets its target and returns those ten user offsets to neutral 0 dB through the existing smoothed path. It preserves seed, master, stereo width, animation, all private profiles, local user-preset library, and UI preferences.
 
-- audio-noise seed;
-- master digital level;
-- stereo width;
-- animation mode/seed/depth/speed/normalization;
-- all private profiles;
-- local user-preset library;
-- all UI preferences.
-
-A built-in preset is displayed as `Modified` when one or more of its owned band offsets is non-zero. Unrelated master/stereo/animation changes do not make a colour preset Modified because those fields are not owned by the colour preset.
+A built-in preset is `Modified` only when its owned spectral offsets are non-zero.
 
 ## User sound presets
 
-A user sound preset snapshots the complete generic `SoundState`:
+A user sound preset snapshots complete generic `SoundState`:
 
 - audio-noise seed;
 - target id;
 - ten user band offsets;
 - master digital level;
 - stereo width;
-- generic deterministic animation state.
+- deterministic animation state.
 
-User presets do **not** contain `ProfileState`, profile identifiers, calibration curves, device names/notes, or `UiState`.
+User sound presets do **not** contain ProfileState, calibration curves, channel-calibration mode, guided evidence, profile ids/names/notes, or UiState.
 
-The local library uses its own versioned document at `greygen.user-presets` with schema v1. It is logically part of the sound domain but is separate from the current `greygen.sound-state` document, so resetting current sound does not delete saved presets.
-
-The initial implementation is bounded to 64 saved presets. Stable ids are generated monotonically (`user-0001`, `user-0002`, ...), avoiding random identity requirements in this local library.
+The local library is versioned separately at `greygen.user-presets`. Resetting current sound does not delete saved user presets. The current library bound is 64 presets with monotonic local ids (`user-0001`, ...).
 
 ### Name handling
 
-Preset names are local display metadata. Before storage/display Greygen:
-
-- applies Unicode NFKC normalization;
-- removes ASCII control characters and angle brackets;
-- collapses whitespace;
-- trims leading/trailing whitespace;
-- limits the result to 80 characters;
-- rejects names with no visible text after sanitization.
-
-React renders names as text, never injected HTML. The sanitized name is never part of ordinary share payloads.
+Preset names are local display metadata. Before storage/display Greygen applies NFKC normalization, strips control characters/angle brackets, collapses whitespace, trims, limits to 80 characters, and rejects empty results. React renders names as text; names never enter normal share payloads.
 
 ## Matching and visible state
 
-If current `SoundState` exactly equals a saved user preset snapshot, the primary surface shows that saved preset name and `Saved preset`.
+If current SoundState exactly equals a saved user preset snapshot, the UI shows its saved name. Otherwise it falls back to built-in target plus spectral-only Modified semantics.
 
-Otherwise the surface falls back to the built-in colour target and its spectral-only Modified semantics. Saving the current modified sound therefore creates a named local baseline and removes the transient `Modified` presentation while the complete sound still matches that saved snapshot.
+## Normal share format v1
 
-## Share format v1
-
-Normal sharing is backend-free. The current sound is encoded into a compact versioned payload stored in the URL fragment:
+Normal sharing is backend-free. Current sound is encoded into the URL fragment:
 
 ```text
 #s=<base64url payload>
 ```
 
-A fragment is used rather than a query parameter so normal HTTP requests do not transmit the sound payload to the static host.
-
-The decoded v1 payload is a fixed-order JSON tuple containing only:
+The decoded fixed-order v1 tuple contains only:
 
 1. share-format version;
-2. `SoundState` schema version;
+2. SoundState schema version;
 3. audio-noise seed;
-4. compact built-in target code;
-5. ten band offsets;
-6. master digital level;
+4. compact target code;
+5. ten user offsets;
+6. master level;
 7. stereo width;
-8. compact animation-mode code;
+8. compact animation mode;
 9. animation seed;
 10. animation depth;
 11. animation speed;
 12. energy-preserving flag.
 
-No user-preset name or library metadata is included.
+Equal canonical SoundState values serialize deterministically to equal payloads.
 
-The tuple ordering is canonical, so equal canonical `SoundState` values serialize deterministically to the same payload.
+## Normal-share privacy boundary
 
-## Privacy boundary
+The normal share API accepts **SoundState only**. It never accepts/reads ProfileState, UserPresetLibraryState, or UiState.
 
-The normal share API accepts `SoundState` only. It never accepts or reads `ProfileState`, `UserPresetLibraryState`, or `UiState`.
+Normal share links therefore exclude by construction:
 
-Consequently normal share links exclude by construction:
-
-- calibration/playback curves;
+- linked or independent calibration curves;
+- calibration channel mode;
+- guided measurement evidence;
 - profile ids;
 - profile names;
-- profile/device notes;
-- saved user-preset names;
-- local library contents;
-- local presentation preferences.
+- device/headphone/speaker notes;
+- personal calibration export metadata;
+- saved user-preset names/library;
+- UI preferences.
 
-An intentional private-profile export, if later implemented, must use a separate user action and format. It must not extend normal sound sharing implicitly.
+Issue #15 deliberately does **not** extend this format.
 
-## Defensive import
+## Personal calibration export is a separate product surface
 
-Share import is bounded and versioned:
+Private playback profiles can now be exported intentionally, but only through the explicit **Personal profile export / import** calibration UI and a different envelope.
 
-- encoded payloads over 2048 characters are rejected before decoding;
-- invalid base64url, JSON, tuple shape, field types, or unsupported old format are rejected;
-- unknown future share-format versions are rejected clearly;
-- unknown future sound-state schemas are rejected clearly;
-- finite numeric values outside current SoundState ranges pass through the canonical SoundState parser and are clamped/recovered with diagnostics;
-- no malformed share payload can reach DSP objects directly.
+That envelope identifies itself as:
 
-Share v1 explicitly records the SoundState schema version so a later share-format migration can make an explicit compatibility decision rather than guessing.
+- kind `greygen-personal-calibration-profile`;
+- data class `personal-playback-calibration`;
+- its own export schema version.
 
-## Import lifecycle and URL behavior
+It may contain the profile name, optional device note, linked/independent correction data, and guided evidence because those are the data the user explicitly chose to export. Local record ids are omitted.
 
-Opening a valid share URL:
+This serializer is not callable through normal SoundState sharing and its output is never inserted into the `#s=` fragment.
 
-1. loads normal local documents;
+Personal profile import validates envelope/payload schema and bounds, creates a new local profile identity, then leaves it **unselected and unapplied**. It never creates/resumes an AudioContext. Selection remains an explicit later user action.
+
+## Defensive normal-share import
+
+Normal sound-share import remains bounded/versioned:
+
+- encoded payloads over 2048 characters rejected before decode;
+- invalid base64url/JSON/tuple/type rejected;
+- future share-format or SoundState schema rejected clearly;
+- finite out-of-range SoundState numbers pass canonical validation/clamping;
+- malformed share data never reaches DSP objects directly.
+
+## Normal-share lifecycle and URL behavior
+
+Opening a valid normal share URL:
+
+1. loads local documents;
 2. validates the share fragment;
-3. uses the imported SoundState as the requested current sound for that boot;
+3. uses imported SoundState for current sound;
 4. preloads it into `AudioEngine` while no AudioContext/worklet exists;
-5. persists the accepted current sound locally;
-6. consumes/removes the `s` fragment from the visible URL;
-7. remains `Ready` and silent until the user explicitly selects **Start audio**.
+5. persists accepted current sound;
+6. removes the consumed fragment;
+7. remains `Ready`/silent until explicit **Start audio**.
 
-A malformed/future share leaves the local sound untouched and shows an actionable notice.
-
-The primary surface also exposes a manual `Load shared sound URL` control. Loading while Ready does not start audio. Loading while audio is already running is an explicit user action that updates the existing engine; it does not create a new autoplay path.
+Malformed/future normal shares leave local sound untouched and show a notice. Manual shared-URL load while Ready likewise remains silent.
 
 ## Share/copy UI
 
-The primary surface always exposes the current sound's share link in a selectable read-only input.
+The primary surface exposes the normal sound share link in a read-only input. Clipboard failure leaves the link selectable and shows a fallback message.
 
-`Copy share link` uses the Clipboard API when allowed. If browser permissions block clipboard writes, the visible URL remains selectable and the UI explains the fallback rather than failing silently.
+Personal calibration export text appears only inside the calibration/privacy surface and is labelled as personal playback/calibration data.
 
 ## Reset and deletion semantics
 
-- **Reset sound settings** resets only current SoundState. Saved user presets remain available.
-- **Delete local profiles** deletes only private ProfileState. User presets and current sound remain available.
-- **Delete saved preset** deletes only that local sound-preset record.
+- **Reset sound settings:** current SoundState only.
+- **Delete local profiles:** private ProfileState only, including calibration profiles.
+- **Delete saved preset:** one local sound-preset record.
+- **Delete calibration profile:** one private profile, using deliberate confirmation; active-profile deletion bypasses correction safely.
+- Import/duplicate never implicitly replace or select the active profile.
 
-These operations are deliberately separate.
+These actions remain separate by design.
 
 ## Validation invariants
 
-Automated coverage includes:
+Coverage includes:
 
-- explicit built-in owned-field definitions;
-- built-in selection preserving seed/master/stereo/animation;
-- built-in Modified detection;
-- user preset save/load/delete and deterministic ids;
-- display-name sanitization/no HTML element injection;
-- local preset-library round trip and domain isolation;
-- sound reset/profile deletion preserving saved presets;
-- future preset-library schema write protection;
-- deterministic share round trip;
-- malformed, truncated, oversized, and future share rejection;
-- bounded recovery/clamping for finite imported numeric values;
-- private profile fixture strings absent from normal share payloads/URLs;
-- manual shared-URL load remaining Ready;
-- startup shared-URL navigation overriding local sound while remaining Ready/silent;
-- future share versions failing visibly without replacing local sound;
-- all pre-existing lifecycle, stereo, animation, and persistence tests remaining green.
+- built-in ownership and Modified semantics;
+- user preset save/load/delete/domain isolation;
+- name sanitization/no HTML injection;
+- deterministic normal share round trip;
+- malformed/oversized/future normal-share rejection;
+- private profile names/notes/ids/evidence/corrections absent from normal share payloads;
+- normal share navigation/import remaining Ready when stopped;
+- explicit personal calibration export carrying only canonical personal-profile data and omitting local id;
+- personal import roundtrip plus malformed/future rejection;
+- personal import remaining unselected and non-autoplaying;
+- sound/profile/preset resets remaining independently scoped;
+- lifecycle, stereo, animation, analyzer, and calibration regressions remaining green.

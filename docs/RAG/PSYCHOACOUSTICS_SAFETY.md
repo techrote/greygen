@@ -1,6 +1,6 @@
 # Psychoacoustics and Safety
 
-Status: canonical product language and safety constraints.
+Status: canonical product language and psychoacoustic safety constraints.
 
 ## Core distinction
 
@@ -8,7 +8,7 @@ Greygen can measure and compensate **relative perceived level through the user's
 
 The relevant chain is approximately:
 
-`digital output -> DAC/device gain -> amplifier -> headphones/speakers -> coupling/room -> listener hearing`
+`digital output -> DAC/device gain -> amplifier -> headphones/speakers -> coupling/room -> listener perception`
 
 A calibration profile can therefore be useful while remaining non-clinical.
 
@@ -17,98 +17,99 @@ A calibration profile can therefore be useful while remaining non-clinical.
 Preferred terms:
 
 - perceived-level calibration;
-- relative equal-loudness profile;
-- playback profile;
+- relative equal-loudness/playback profile;
+- playback-chain correction;
 - correction curve;
-- listener + device compensation.
+- listener + device compensation;
+- linked/symmetric calibration;
+- independent left/right playback calibration.
 
-Avoid in ordinary product UI unless carefully qualified:
+Avoid ordinary product claims that imply:
 
 - audiogram;
-- hearing test;
-- hearing loss measurement;
+- diagnostic hearing test;
+- hearing-loss measurement;
 - dB HL;
-- dB SPL;
-- medical/diagnostic claims.
+- calibrated dB SPL;
+- medical/clinical accuracy.
+
+Independent-channel differences must not be described as left/right hearing loss or as evidence about pathology. A measured asymmetry may come from transducer mismatch, fit, seal/coupling, room geometry, routing, device electronics/gain, listener perception, temporary conditions, or the subjective procedure itself.
 
 ## Equal-loudness references
 
 ISO 226:2023 defines normal equal-loudness-level contours for pure tones under specific conditions, including binaural listening in a free progressive field with young otologically normal listeners. Its public abstract covers one-third-octave preferred frequencies from 20 Hz through 12.5 kHz.
 
-Greygen may cite the standard as conceptual background. Do **not** transcribe paid/copyrighted numerical tables into the codebase unless a documented license/reuse basis exists.
+Greygen may cite the standard as conceptual background. Do **not** transcribe paid/copyrighted numerical tables unless a documented reuse basis exists.
 
-A generic Grey preset must therefore be an original practical curve with documented provenance/rationale, not labelled as an ISO-226 reproduction.
+The built-in Grey target is therefore an original practical curve, not an ISO-226 reproduction.
 
-## Calibration stimulus
+## Guided calibration stimulus
 
-Greygen's implemented guided workflow uses narrow-band noise rather than pure sine tones because it better resembles the generated material and reduces dependence on a single exact sinusoidal resonance. A future advanced mode may expose other stimuli.
+Greygen uses narrow-band noise from its own ten-band filter bank rather than pure sine tones for the default workflow. This better resembles generated material and reduces dependence on a single exact sinusoidal resonance.
 
-Issue #14 implements the default workflow as:
+Current workflow:
 
-1. user explicitly starts audio, chooses a comfortable overall level, and confirms that level before the wizard can begin;
-2. the 1 kHz ten-band component acts as the fixed reference;
-3. the other nine bands are tested in deterministic seeded non-monotonic order;
-4. reference and test are alternated, and the user judges the test as quieter, about equal, or louder;
-5. a bounded 0.5 dB-grid binary search converges in at most seven judgements per search;
-6. uncertain/extreme bands can be skipped rather than chased;
-7. completed bands can be retested from review;
-8. the raw result can be auditioned Off/Balanced/Full without being saved;
-9. only an explicit final Save creates a named local playback profile, defaulting to Balanced.
+1. user explicitly starts audio;
+2. user chooses and acknowledges a comfortable overall level;
+3. user chooses linked/symmetric or independent L/R calibration;
+4. 1 kHz is the fixed reference;
+5. the remaining nine bands are tested in deterministic seeded non-monotonic order;
+6. reference/test are alternated and judged quieter/about-equal/louder;
+7. a bounded 0.5 dB-grid binary search terminates in at most seven judgements per band;
+8. difficult/extreme bands may be skipped;
+9. completed bands may be retested;
+10. raw result is reviewed and can be auditioned Off/Balanced/Full without persistence;
+11. only explicit Save creates a private named local profile, defaulting to Balanced.
 
-The wizard has explicit calibration silence and Abort controls, while the normal global Stop transport remains authoritative. It never auto-increases master gain.
+Linked mode presents both output channels together. Independent mode presents the complete left-channel pass, then the complete right-channel pass, with clear channel labelling and the non-target output faded to silence. Channel switching is smoothed.
+
+The wizard never auto-increases master. Calibration silence, Abort, and normal global Stop remain available.
 
 ## Extreme low/high bands
 
-31 Hz and 16 kHz are especially likely to be limited by playback hardware, room/coupling, age/hearing, or sample-rate constraints.
+31 Hz and 16 kHz are particularly likely to be limited by playback hardware, room/coupling, age/listener factors, and sample-rate constraints.
 
 Rules:
 
-- never encourage indefinite gain increase until a band becomes audible;
-- show a clear “skip / cannot match” path;
+- never encourage indefinite gain increase until a band appears;
+- provide `Skip / cannot comfortably match`;
 - cap test/correction gain;
-- reduce global pre-gain as correction/probe boosts increase;
-- warn that inability to match may reflect transducer/room limitations as much as listener factors;
-- do not extrapolate skipped bands into a medical conclusion.
+- increase protective digital attenuation as correction/probe demand rises;
+- explain that inability to match may reflect playback/environment limitations;
+- retain skipped values as unknown rather than inventing data;
+- never derive a medical conclusion from a skipped/bounded result on either channel.
 
-The guided UI displays this caveat on both extreme-band steps and preserves a skip as `null` rather than inventing a value.
-
-## Balanced vs full correction
+## Balanced, Full, and Off
 
 Calibration application supports:
 
-- **Balanced**: deterministic conservative scaled/smoothed form of the measured correction, default;
-- **Full**: applies the measured relative correction within safety bounds, explicit opt-in;
-- **Off**: stored profile retained but not applied.
+- **Balanced:** deterministic conservative scaled/smoothed correction; default;
+- **Full:** measured relative correction within software bounds; explicit opt-in;
+- **Off:** profile remains stored/selected but correction is bypassed.
 
-The precise Balanced transform is canonical in `CALIBRATION_PROFILES.md` and locked by tests; it is not a hidden subjective tweak. The guided review may audition all three modes before saving, but a saved guided result activates in Balanced mode.
+The exact transform is canonical in `CALIBRATION_PROFILES.md` and locked by tests.
 
-## Left/right calibration
+For independent profiles, both channels are transformed independently and then pass the explicit inter-channel software safeguard. That safeguard is an engineering bound on applied browser-channel gain, **not a clinical threshold** and not a statement about what hearing asymmetry is normal/safe.
 
-Independent-ear/headphone-channel correction can be useful but carries more risk of large asymmetry. It is not part of the current guided workflow; the current transient stimulus is centred and produces one shared profile curve.
-
-When independent-channel calibration is introduced:
-
-- calibrate channels independently with clear channel indication;
-- cap inter-channel correction difference;
-- offer linked/symmetric fallback;
-- do not interpret asymmetry diagnostically;
-- preserve a quick reset/bypass.
+Linked/symmetric application remains available as the conservative conceptual fallback.
 
 ## Gain and exposure safety
 
-Digital full scale is not acoustic loudness. The application cannot enforce a universal safe listening level because device gain and transducer sensitivity are unknown.
+Digital full scale is not acoustic loudness. Greygen cannot enforce a universal safe listening level because downstream gain and transducer sensitivity are unknown.
 
-Nevertheless it must reduce avoidable risk:
+It must nevertheless reduce avoidable risk:
 
-- start at conservative digital level;
-- require explicit user start;
-- require comfortable-level acknowledgement before guided matching;
-- do not surprise the user with a large level jump when applying profiles/presets;
-- use smoothing for all audible level/stimulus changes;
-- automatically compensate digital headroom for positive correction/probe demand;
-- provide visible master level and immediate calibration silence plus quick global stop;
-- never auto-increase master level to compensate for an inaudible test band;
-- persist the user's chosen master level cautiously and consider a startup ceiling if later user testing justifies it.
+- conservative startup digital level;
+- explicit user Start;
+- explicit comfortable-level acknowledgement before guided matching;
+- no automatic master increase for an inaudible/difficult band;
+- bounded probe/correction values;
+- smoothing for profile/channel/stimulus changes;
+- deterministic headroom reservation for positive demand;
+- worst-demanding L/R channel determines safety attenuation;
+- visible master plus calibration silence and global Stop;
+- linked fallback and quick bypass;
+- no surprise autoplay from persistence, share, profile import, or profile management.
 
 ## Metering language
 
@@ -117,49 +118,57 @@ Allowed examples:
 - Peak: -8.2 dBFS
 - RMS: -23.1 dBFS
 - Safety pre-gain: -6 dB
-- limiter/guard activity
+- guard activity
 
-Do not label digital meters as SPL, phon, sones, or hearing threshold unless the underlying measurement actually supports that unit.
+Do not label digital meters as SPL, phon, sone, or hearing threshold unless an actual measurement supports that unit.
 
 ## Profile metadata
 
-A profile may record:
+A private calibration profile may record:
 
-- name;
-- engine/schema version;
-- sample rate during calibration;
+- sanitized name;
+- optional sanitized device/headphone/speaker/playback note;
+- payload/schema version;
+- sample-rate context;
+- channel mode;
 - reference band;
-- raw relative offsets;
+- raw linked or left/right relative offsets;
 - deterministic guided method/version/seed;
 - randomized test order;
-- per-band confidence, judgement, retest, and skip markers;
-- application mode (Balanced/Full/Off).
+- per-band confidence, judgement, retest, and skip markers.
 
-The current guided workflow deliberately does **not** collect age, diagnosis, demographic data, hearing history, or other unnecessary health information.
+Greygen deliberately does not collect age, diagnosis, demographic data, hearing history, or unnecessary health information.
 
-## Privacy
+## Privacy and portability
 
-Calibration profiles are personal local data. Default behavior:
+Calibration profiles are personal local data by default:
 
-- local-only storage;
-- excluded from normal share URLs and normal sound presets;
-- guided measurement evidence remains in the private profile payload;
-- exports omit calibration unless explicitly requested;
-- deletion/reset available;
-- no telemetry upload in the core project.
+- local-only ProfileState storage;
+- excluded from normal share URLs;
+- excluded from normal sound presets;
+- names/notes/evidence/correction curves remain private-profile data;
+- no backend upload in the core product;
+- deletion/bypass controls available.
+
+Issue #15 adds a **separate explicit personal calibration export/import** path. Export UI must say that the serialized data contains personal playback/calibration information. This is not the normal sound-share mechanism.
+
+Import must validate before persistence, allocate a new local identity, remain unselected/unapplied, and never create/resume audio. The user explicitly selects a profile before it can affect playback.
 
 ## UX warning copy requirements
 
-Calibration screens must communicate, in concise form:
+Calibration surfaces must communicate concisely:
 
 - use a comfortable level;
 - this is not a medical hearing test;
-- results include the playback device/environment;
-- skip frequencies you cannot comfortably match;
-- never turn the system up aggressively to force an inaudible band to appear.
+- results include playback device/environment/listener effects;
+- independent L/R differences are not diagnostic;
+- skip frequencies that cannot be matched comfortably;
+- never turn the system up aggressively to force an inaudible band to appear;
+- linked/symmetric mode is available;
+- personal profile export is distinct from ordinary sound sharing.
 
 ## Reference URLs
 
 - https://www.iso.org/standard/83117.html — ISO 226:2023 public abstract/scope.
 - https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API — browser audio platform background.
-- https://mynoise.net/calibration.php — product-class reference for listener/equipment/environment compensation; use for conceptual comparison only, not source/preset copying.
+- https://mynoise.net/calibration.php — product-class conceptual reference only; do not copy source/assets/preset data.

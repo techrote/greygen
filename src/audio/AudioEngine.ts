@@ -1,5 +1,9 @@
 import { type AnimationState, createAnimationState } from './dsp/animation'
 import {
+  type ChannelCalibrationState,
+  createChannelCalibrationState,
+} from './dsp/channelCalibration'
+import {
   type CalibrationStimulusState,
   createCalibrationStimulusState,
 } from './dsp/calibrationStimulus'
@@ -28,6 +32,7 @@ import {
   parseWorkletToMainMessage,
   serializeAnimationState,
   serializeCalibrationStimulusState,
+  serializeChannelCalibrationState,
   serializeGainStageState,
   serializeSpectrumState,
   serializeStereoWidthState,
@@ -231,6 +236,15 @@ function canonicalGainStage(state: GainStageState): GainStageState {
   )
 }
 
+function canonicalChannelCalibration(
+  state: ChannelCalibrationState,
+): ChannelCalibrationState {
+  return createChannelCalibrationState(
+    state.leftBandOffsetsDb,
+    state.rightBandOffsetsDb,
+  )
+}
+
 function canonicalStereoWidth(state: StereoWidthState): StereoWidthState {
   return createStereoWidthState(state.width)
 }
@@ -252,6 +266,7 @@ function canonicalCalibrationStimulus(
     state.mode,
     state.bandIndex,
     state.levelOffsetDb,
+    state.channel,
   )
 }
 
@@ -268,6 +283,7 @@ export class AudioEngine {
   private seedValue: number
   private spectrumValue: SerializedSpectrumState
   private gainStageValue: GainStageState
+  private channelCalibrationValue: ChannelCalibrationState
   private stereoWidthValue: StereoWidthState
   private animationValue: AnimationState
 
@@ -281,6 +297,9 @@ export class AudioEngine {
       DEFAULT_STEREO_WIDTH,
     ),
     animationState: AnimationState = createAnimationState(),
+    channelCalibrationState: ChannelCalibrationState = createChannelCalibrationState(
+      gainStageState.calibrationBandOffsetsDb,
+    ),
   ) {
     if (!isAudioSeed(seed)) {
       throw new RangeError('seed must be an unsigned 32-bit integer')
@@ -289,6 +308,9 @@ export class AudioEngine {
     this.seedValue = seed
     this.spectrumValue = canonicalSpectrum(spectrumState)
     this.gainStageValue = canonicalGainStage(gainStageState)
+    this.channelCalibrationValue = canonicalChannelCalibration(
+      channelCalibrationState,
+    )
     this.stereoWidthValue = canonicalStereoWidth(stereoWidthState)
     this.animationValue = canonicalAnimation(animationState)
     const capability = initialCapability(runtime)
@@ -418,6 +440,9 @@ export class AudioEngine {
           seed: this.seedValue,
           spectrum: this.spectrumValue,
           gainStage: serializeGainStageState(this.gainStageValue),
+          channelCalibration: serializeChannelCalibrationState(
+            this.channelCalibrationValue,
+          ),
           stereoWidth: serializeStereoWidthState(this.stereoWidthValue),
           animation: serializeAnimationState(this.animationValue),
         },
@@ -583,12 +608,40 @@ export class AudioEngine {
   }
 
   async setCalibrationBandOffsetsDb(values: ArrayLike<number>): Promise<void> {
-    await this.setGainStageState(
-      createGainStageState(
-        this.gainStageValue.masterGainDb,
-        this.gainStageValue.animationBandOffsetsDb,
-        values,
-      ),
+    await this.setCalibrationChannelOffsetsDb(values, values)
+  }
+
+  async setChannelCalibrationState(
+    state: ChannelCalibrationState,
+  ): Promise<void> {
+    const canonical = canonicalChannelCalibration(state)
+    this.channelCalibrationValue = canonical
+    if (!this.node) {
+      return
+    }
+    const response = await this.request(
+      {
+        version: AUDIO_PROTOCOL_VERSION,
+        type: 'set-channel-calibration',
+        requestId: this.allocateRequestId(),
+        channelCalibration: serializeChannelCalibrationState(canonical),
+      },
+      'ack',
+    )
+    if (
+      response.type !== 'ack' ||
+      response.command !== 'set-channel-calibration'
+    ) {
+      throw new Error('Unexpected set-channel-calibration acknowledgement')
+    }
+  }
+
+  async setCalibrationChannelOffsetsDb(
+    leftBandOffsetsDb: ArrayLike<number>,
+    rightBandOffsetsDb: ArrayLike<number>,
+  ): Promise<void> {
+    await this.setChannelCalibrationState(
+      createChannelCalibrationState(leftBandOffsetsDb, rightBandOffsetsDb),
     )
   }
 
@@ -680,9 +733,10 @@ export class AudioEngine {
   async setCalibrationStimulusBand(
     bandIndex: number,
     levelOffsetDb: number,
+    channel: CalibrationStimulusState['channel'] = 'both',
   ): Promise<void> {
     await this.setCalibrationStimulusState(
-      createCalibrationStimulusState('band', bandIndex, levelOffsetDb),
+      createCalibrationStimulusState('band', bandIndex, levelOffsetDb, channel),
     )
   }
 

@@ -1,3 +1,4 @@
+import { limitInterchannelCorrectionDifference } from '../../audio/dsp/channelCalibration'
 import { BAND_COUNT } from '../../audio/dsp/filterBank'
 import { CALIBRATION_BAND_OFFSET_LIMIT_DB } from '../../audio/dsp/gainSafety'
 import type {
@@ -6,16 +7,19 @@ import type {
   LocalProfileRecord,
 } from '../../app/state/appState'
 
-export const CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION = 2 as const
+export const CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION = 3 as const
 export const LEGACY_CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION = 1 as const
+export const LEGACY_CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION_2 = 2 as const
 export const DEFAULT_CALIBRATION_REFERENCE_BAND_INDEX = 5
 export const BALANCED_CALIBRATION_SCALE = 0.6
 export const BALANCED_CALIBRATION_LIMIT_DB = 12
 export const CALIBRATION_PROFILE_NAME_MAX_LENGTH = 120
+export const CALIBRATION_PROFILE_NOTE_MAX_LENGTH = 300
 export const GUIDED_CALIBRATION_MEASUREMENT_METHOD =
   'guided-narrow-band-v1' as const
 export const GUIDED_CALIBRATION_MEASUREMENT_VERSION = 1 as const
 
+export type CalibrationChannelMode = 'linked' | 'independent'
 export type CalibrationMeasurementOutcome =
   | 'equal'
   | 'converged'
@@ -47,8 +51,20 @@ export interface CalibrationMeasurementMetadata {
 export interface CalibrationProfilePayload {
   readonly sampleRateHz: number | null
   readonly referenceBandIndex: number
+  readonly channelMode: CalibrationChannelMode
+  readonly leftRawBandOffsetsDb: readonly (number | null)[]
+  readonly rightRawBandOffsetsDb: readonly (number | null)[]
+  readonly note: string
+  readonly linkedMeasurement: CalibrationMeasurementMetadata | null
+  readonly leftMeasurement: CalibrationMeasurementMetadata | null
+  readonly rightMeasurement: CalibrationMeasurementMetadata | null
   readonly rawBandOffsetsDb: readonly (number | null)[]
   readonly measurement: CalibrationMeasurementMetadata | null
+}
+
+export interface CalibrationChannelOffsets {
+  readonly leftBandOffsetsDb: readonly number[]
+  readonly rightBandOffsetsDb: readonly number[]
 }
 
 export interface CalibrationProfileParseResult {
@@ -112,6 +128,12 @@ function isMeasurementConfidence(
     value === 'low' ||
     value === 'skipped'
   )
+}
+
+function isCalibrationChannelMode(
+  value: unknown,
+): value is CalibrationChannelMode {
+  return value === 'linked' || value === 'independent'
 }
 
 function canonicalMeasurement(
@@ -219,9 +241,9 @@ function measurementToJson(
   }
 }
 
-export function sanitizeCalibrationProfileName(value: string): string {
-  let normalized = value.normalize('NFKC')
-  normalized = Array.from(normalized)
+function sanitizeText(value: string, maxLength: number): string {
+  const normalizedWhitespace = value.normalize('NFKC').replace(/\s+/g, ' ')
+  const normalized = Array.from(normalizedWhitespace)
     .filter((character) => {
       const code = character.codePointAt(0) ?? 0
       return (
@@ -231,31 +253,19 @@ export function sanitizeCalibrationProfileName(value: string): string {
     .join('')
     .replace(/\s+/g, ' ')
     .trim()
-  return normalized.slice(0, CALIBRATION_PROFILE_NAME_MAX_LENGTH)
+  return normalized.slice(0, maxLength)
 }
 
-export function createCalibrationProfilePayload(input: {
-  readonly sampleRateHz?: number | null
-  readonly referenceBandIndex?: number
-  readonly rawBandOffsetsDb: readonly (number | null)[]
-  readonly measurement?: CalibrationMeasurementMetadata | null
-}): CalibrationProfilePayload {
-  if (input.rawBandOffsetsDb.length !== BAND_COUNT) {
-    throw new RangeError(
-      `rawBandOffsetsDb must contain exactly ${BAND_COUNT} values`,
-    )
-  }
-  const referenceBandIndex =
-    input.referenceBandIndex ?? DEFAULT_CALIBRATION_REFERENCE_BAND_INDEX
-  if (
-    !Number.isInteger(referenceBandIndex) ||
-    referenceBandIndex < 0 ||
-    referenceBandIndex >= BAND_COUNT
-  ) {
-    throw new RangeError('referenceBandIndex is outside the ten-band model')
-  }
+export function sanitizeCalibrationProfileName(value: string): string {
+  return sanitizeText(value, CALIBRATION_PROFILE_NAME_MAX_LENGTH)
+}
 
-  const sampleRateHz = input.sampleRateHz ?? null
+export function sanitizeCalibrationProfileNote(value: string): string {
+  return sanitizeText(value, CALIBRATION_PROFILE_NOTE_MAX_LENGTH)
+}
+
+function canonicalSampleRate(value: number | null | undefined): number | null {
+  const sampleRateHz = value ?? null
   if (
     sampleRateHz !== null &&
     (!Number.isFinite(sampleRateHz) ||
@@ -266,13 +276,35 @@ export function createCalibrationProfilePayload(input: {
       'sampleRateHz must be null or a plausible finite sample rate',
     )
   }
+  return sampleRateHz
+}
 
-  const rawBandOffsetsDb = input.rawBandOffsetsDb.map((value, index) => {
+function canonicalReferenceBand(value: number | undefined): number {
+  const referenceBandIndex = value ?? DEFAULT_CALIBRATION_REFERENCE_BAND_INDEX
+  if (
+    !Number.isInteger(referenceBandIndex) ||
+    referenceBandIndex < 0 ||
+    referenceBandIndex >= BAND_COUNT
+  ) {
+    throw new RangeError('referenceBandIndex is outside the ten-band model')
+  }
+  return referenceBandIndex
+}
+
+function canonicalRawOffsets(
+  values: readonly (number | null)[],
+  referenceBandIndex: number,
+  label: string,
+): readonly (number | null)[] {
+  if (values.length !== BAND_COUNT) {
+    throw new RangeError(`${label} must contain exactly ${BAND_COUNT} values`)
+  }
+  const result = values.map((value, index) => {
     if (value === null) {
       return null
     }
     if (!Number.isFinite(value)) {
-      throw new RangeError(`rawBandOffsetsDb[${index}] must be finite or null`)
+      throw new RangeError(`${label}[${index}] must be finite or null`)
     }
     return clamp(
       value,
@@ -280,21 +312,71 @@ export function createCalibrationProfilePayload(input: {
       CALIBRATION_BAND_OFFSET_LIMIT_DB,
     )
   })
-
-  if (rawBandOffsetsDb[referenceBandIndex] === null) {
-    throw new RangeError('the reference band cannot be skipped')
+  if (result[referenceBandIndex] === null) {
+    throw new RangeError(`${label} reference band cannot be skipped`)
   }
+  return freezeOffsets(result)
+}
 
-  const measurement = canonicalMeasurement(
-    input.measurement ?? null,
+export function createCalibrationProfilePayload(input: {
+  readonly sampleRateHz?: number | null
+  readonly referenceBandIndex?: number
+  readonly channelMode?: CalibrationChannelMode
+  readonly rawBandOffsetsDb?: readonly (number | null)[]
+  readonly leftRawBandOffsetsDb?: readonly (number | null)[]
+  readonly rightRawBandOffsetsDb?: readonly (number | null)[]
+  readonly note?: string
+  readonly measurement?: CalibrationMeasurementMetadata | null
+  readonly leftMeasurement?: CalibrationMeasurementMetadata | null
+  readonly rightMeasurement?: CalibrationMeasurementMetadata | null
+}): CalibrationProfilePayload {
+  const referenceBandIndex = canonicalReferenceBand(input.referenceBandIndex)
+  const channelMode = input.channelMode ?? 'linked'
+  if (!isCalibrationChannelMode(channelMode)) {
+    throw new RangeError('channelMode must be linked or independent')
+  }
+  const linkedRaw = input.rawBandOffsetsDb ?? input.leftRawBandOffsetsDb
+  if (!linkedRaw) {
+    throw new RangeError('calibration profile requires band-offset data')
+  }
+  const leftRawBandOffsetsDb = canonicalRawOffsets(
+    input.leftRawBandOffsetsDb ?? linkedRaw,
     referenceBandIndex,
+    'leftRawBandOffsetsDb',
+  )
+  const rightRawBandOffsetsDb = canonicalRawOffsets(
+    channelMode === 'linked'
+      ? leftRawBandOffsetsDb
+      : (input.rightRawBandOffsetsDb ?? linkedRaw),
+    referenceBandIndex,
+    'rightRawBandOffsetsDb',
   )
 
+  const linkedMeasurement =
+    channelMode === 'linked'
+      ? canonicalMeasurement(input.measurement ?? null, referenceBandIndex)
+      : null
+  const leftMeasurement =
+    channelMode === 'independent'
+      ? canonicalMeasurement(input.leftMeasurement ?? null, referenceBandIndex)
+      : null
+  const rightMeasurement =
+    channelMode === 'independent'
+      ? canonicalMeasurement(input.rightMeasurement ?? null, referenceBandIndex)
+      : null
+
   return Object.freeze({
-    sampleRateHz,
+    sampleRateHz: canonicalSampleRate(input.sampleRateHz),
     referenceBandIndex,
-    rawBandOffsetsDb: freezeOffsets(rawBandOffsetsDb),
-    measurement,
+    channelMode,
+    leftRawBandOffsetsDb,
+    rightRawBandOffsetsDb,
+    note: sanitizeCalibrationProfileNote(input.note ?? ''),
+    linkedMeasurement,
+    leftMeasurement,
+    rightMeasurement,
+    rawBandOffsetsDb: leftRawBandOffsetsDb,
+    measurement: linkedMeasurement,
   })
 }
 
@@ -303,8 +385,14 @@ export function createCalibrationProfileRecord(input: {
   readonly name: string
   readonly sampleRateHz?: number | null
   readonly referenceBandIndex?: number
-  readonly rawBandOffsetsDb: readonly (number | null)[]
+  readonly channelMode?: CalibrationChannelMode
+  readonly rawBandOffsetsDb?: readonly (number | null)[]
+  readonly leftRawBandOffsetsDb?: readonly (number | null)[]
+  readonly rightRawBandOffsetsDb?: readonly (number | null)[]
+  readonly note?: string
   readonly measurement?: CalibrationMeasurementMetadata | null
+  readonly leftMeasurement?: CalibrationMeasurementMetadata | null
+  readonly rightMeasurement?: CalibrationMeasurementMetadata | null
 }): LocalProfileRecord {
   const name = sanitizeCalibrationProfileName(input.name)
   if (name.length === 0) {
@@ -323,23 +411,30 @@ export function createCalibrationProfileRecord(input: {
     payload: Object.freeze({
       sampleRateHz: profile.sampleRateHz,
       referenceBandIndex: profile.referenceBandIndex,
-      rawBandOffsetsDb: profile.rawBandOffsetsDb,
-      measurement: measurementToJson(profile.measurement),
+      channelMode: profile.channelMode,
+      note: profile.note,
+      leftRawBandOffsetsDb: profile.leftRawBandOffsetsDb,
+      rightRawBandOffsetsDb: profile.rightRawBandOffsetsDb,
+      linkedMeasurement: measurementToJson(profile.linkedMeasurement),
+      leftMeasurement: measurementToJson(profile.leftMeasurement),
+      rightMeasurement: measurementToJson(profile.rightMeasurement),
     }),
   })
+}
+
+function jsonOffsets(value: unknown): readonly (number | null)[] | null {
+  if (!Array.isArray(value)) {
+    return null
+  }
+  return value.map((entry) =>
+    entry === null ? null : typeof entry === 'number' ? entry : Number.NaN,
+  )
 }
 
 export function parseCalibrationProfileRecord(
   record: LocalProfileRecord,
 ): CalibrationProfileParseResult {
-  if (
-    record.kind !== 'calibration' ||
-    (record.payloadSchemaVersion !==
-      LEGACY_CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION &&
-      record.payloadSchemaVersion !==
-        CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION) ||
-    !isRecord(record.payload)
-  ) {
+  if (record.kind !== 'calibration' || !isRecord(record.payload)) {
     return {
       profile: null,
       messages: Object.freeze([
@@ -348,18 +443,61 @@ export function parseCalibrationProfileRecord(
     }
   }
   const payload = record.payload
-  if (!Array.isArray(payload.rawBandOffsetsDb)) {
-    return {
-      profile: null,
-      messages: Object.freeze([
-        'Calibration profile band data is missing or malformed.',
-      ]),
-    }
-  }
+  const version = record.payloadSchemaVersion
   try {
-    const raw = payload.rawBandOffsetsDb.map((value) =>
-      value === null ? null : typeof value === 'number' ? value : Number.NaN,
-    )
+    if (
+      version === LEGACY_CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION ||
+      version === LEGACY_CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION_2
+    ) {
+      const raw = jsonOffsets(payload.rawBandOffsetsDb)
+      if (!raw) {
+        throw new RangeError(
+          'Calibration profile band data is missing or malformed.',
+        )
+      }
+      const profile = createCalibrationProfilePayload({
+        sampleRateHz:
+          payload.sampleRateHz === null ||
+          typeof payload.sampleRateHz === 'number'
+            ? payload.sampleRateHz
+            : null,
+        referenceBandIndex:
+          typeof payload.referenceBandIndex === 'number'
+            ? payload.referenceBandIndex
+            : DEFAULT_CALIBRATION_REFERENCE_BAND_INDEX,
+        channelMode: 'linked',
+        rawBandOffsetsDb: raw,
+        measurement:
+          version === LEGACY_CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION_2
+            ? (payload.measurement as CalibrationMeasurementMetadata | null)
+            : null,
+      })
+      return {
+        profile,
+        messages: Object.freeze([
+          `Calibration payload v${version} migrated in memory to linked channel mode.`,
+        ]),
+      }
+    }
+
+    if (version !== CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION) {
+      return {
+        profile: null,
+        messages: Object.freeze([
+          'Profile is not a supported calibration payload.',
+        ]),
+      }
+    }
+    if (!isCalibrationChannelMode(payload.channelMode)) {
+      throw new RangeError('Calibration channel mode is missing or malformed.')
+    }
+    const left = jsonOffsets(payload.leftRawBandOffsetsDb)
+    const right = jsonOffsets(payload.rightRawBandOffsetsDb)
+    if (!left || !right) {
+      throw new RangeError(
+        'Calibration profile channel band data is missing or malformed.',
+      )
+    }
     const profile = createCalibrationProfilePayload({
       sampleRateHz:
         payload.sampleRateHz === null ||
@@ -370,23 +508,18 @@ export function parseCalibrationProfileRecord(
         typeof payload.referenceBandIndex === 'number'
           ? payload.referenceBandIndex
           : DEFAULT_CALIBRATION_REFERENCE_BAND_INDEX,
-      rawBandOffsetsDb: raw,
+      channelMode: payload.channelMode,
+      leftRawBandOffsetsDb: left,
+      rightRawBandOffsetsDb: right,
+      note: typeof payload.note === 'string' ? payload.note : '',
       measurement:
-        record.payloadSchemaVersion ===
-        LEGACY_CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION
-          ? null
-          : (payload.measurement as CalibrationMeasurementMetadata | null),
+        payload.linkedMeasurement as CalibrationMeasurementMetadata | null,
+      leftMeasurement:
+        payload.leftMeasurement as CalibrationMeasurementMetadata | null,
+      rightMeasurement:
+        payload.rightMeasurement as CalibrationMeasurementMetadata | null,
     })
-    return {
-      profile,
-      messages:
-        record.payloadSchemaVersion ===
-        LEGACY_CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION
-          ? Object.freeze([
-              'Calibration payload v1 loaded without guided measurement evidence.',
-            ])
-          : Object.freeze([]),
-    }
+    return { profile, messages: Object.freeze([]) }
   } catch (error) {
     return {
       profile: null,
@@ -400,14 +533,15 @@ export function parseCalibrationProfileRecord(
 }
 
 function normalizedFullOffsets(
-  profile: CalibrationProfilePayload,
+  values: readonly (number | null)[],
+  referenceBandIndex: number,
 ): readonly (number | null)[] {
-  const reference = profile.rawBandOffsetsDb[profile.referenceBandIndex]
+  const reference = values[referenceBandIndex]
   if (reference === null) {
     return Object.freeze(Array(BAND_COUNT).fill(null))
   }
   return Object.freeze(
-    profile.rawBandOffsetsDb.map((value) =>
+    values.map((value) =>
       value === null
         ? null
         : clamp(
@@ -444,23 +578,23 @@ function smoothKnown(
   )
 }
 
-export function resolveCalibrationBandOffsetsDb(
-  profile: CalibrationProfilePayload | null,
+function resolveOneChannelOffsetsDb(
+  values: readonly (number | null)[],
+  referenceBandIndex: number,
   mode: CalibrationApplicationMode,
 ): readonly number[] {
-  if (!profile || mode === 'off') {
+  if (mode === 'off') {
     return Object.freeze(Array(BAND_COUNT).fill(0))
   }
-  const full = normalizedFullOffsets(profile)
+  const full = normalizedFullOffsets(values, referenceBandIndex)
   if (mode === 'full') {
     return Object.freeze(full.map((value) => value ?? 0))
   }
-
   const scaled = full.map((value) =>
     value === null ? null : value * BALANCED_CALIBRATION_SCALE,
   )
   const smoothed = smoothKnown(scaled)
-  const reference = smoothed[profile.referenceBandIndex]
+  const reference = smoothed[referenceBandIndex]
   const anchor = typeof reference === 'number' ? reference : 0
   return Object.freeze(
     smoothed.map((value) =>
@@ -475,15 +609,66 @@ export function resolveCalibrationBandOffsetsDb(
   )
 }
 
+export function resolveCalibrationChannelOffsetsDb(
+  profile: CalibrationProfilePayload | null,
+  mode: CalibrationApplicationMode,
+): CalibrationChannelOffsets {
+  if (!profile || mode === 'off') {
+    const neutral = Object.freeze(Array(BAND_COUNT).fill(0))
+    return Object.freeze({
+      leftBandOffsetsDb: neutral,
+      rightBandOffsetsDb: neutral,
+    })
+  }
+  const left = resolveOneChannelOffsetsDb(
+    profile.leftRawBandOffsetsDb,
+    profile.referenceBandIndex,
+    mode,
+  )
+  const rightRequested =
+    profile.channelMode === 'linked'
+      ? left
+      : resolveOneChannelOffsetsDb(
+          profile.rightRawBandOffsetsDb,
+          profile.referenceBandIndex,
+          mode,
+        )
+  const [leftLimited, rightLimited] = limitInterchannelCorrectionDifference(
+    left,
+    rightRequested,
+  )
+  return Object.freeze({
+    leftBandOffsetsDb: leftLimited,
+    rightBandOffsetsDb: rightLimited,
+  })
+}
+
+export function resolveCalibrationBandOffsetsDb(
+  profile: CalibrationProfilePayload | null,
+  mode: CalibrationApplicationMode,
+): readonly number[] {
+  return resolveCalibrationChannelOffsetsDb(profile, mode).leftBandOffsetsDb
+}
+
+export function resolveCalibrationRecordChannelOffsetsDb(
+  record: LocalProfileRecord | null,
+  mode: CalibrationApplicationMode,
+): CalibrationChannelOffsets {
+  if (!record) {
+    return resolveCalibrationChannelOffsetsDb(null, mode)
+  }
+  return resolveCalibrationChannelOffsetsDb(
+    parseCalibrationProfileRecord(record).profile,
+    mode,
+  )
+}
+
 export function resolveCalibrationRecordOffsetsDb(
   record: LocalProfileRecord | null,
   mode: CalibrationApplicationMode,
 ): readonly number[] {
-  if (!record) {
-    return resolveCalibrationBandOffsetsDb(null, mode)
-  }
-  const parsed = parseCalibrationProfileRecord(record)
-  return resolveCalibrationBandOffsetsDb(parsed.profile, mode)
+  return resolveCalibrationRecordChannelOffsetsDb(record, mode)
+    .leftBandOffsetsDb
 }
 
 export function findCalibrationProfile(
@@ -498,6 +683,65 @@ export function findCalibrationProfile(
     return null
   }
   return parseCalibrationProfileRecord(record).profile ? record : null
+}
+
+export function calibrationProfileIsGuided(
+  profile: CalibrationProfilePayload,
+): boolean {
+  return (
+    profile.linkedMeasurement !== null ||
+    profile.leftMeasurement !== null ||
+    profile.rightMeasurement !== null
+  )
+}
+
+export function updateCalibrationProfileMetadata(
+  record: LocalProfileRecord,
+  input: { readonly name: string; readonly note: string },
+): LocalProfileRecord {
+  const parsed = parseCalibrationProfileRecord(record)
+  if (!parsed.profile) {
+    throw new RangeError('cannot edit an invalid calibration profile')
+  }
+  const profile = parsed.profile
+  return createCalibrationProfileRecord({
+    id: record.id,
+    name: input.name,
+    sampleRateHz: profile.sampleRateHz,
+    referenceBandIndex: profile.referenceBandIndex,
+    channelMode: profile.channelMode,
+    leftRawBandOffsetsDb: profile.leftRawBandOffsetsDb,
+    rightRawBandOffsetsDb: profile.rightRawBandOffsetsDb,
+    note: input.note,
+    measurement: profile.linkedMeasurement,
+    leftMeasurement: profile.leftMeasurement,
+    rightMeasurement: profile.rightMeasurement,
+  })
+}
+
+export function duplicateCalibrationProfileRecord(
+  record: LocalProfileRecord,
+  id: string,
+  name = `${record.name} copy`,
+): LocalProfileRecord {
+  const parsed = parseCalibrationProfileRecord(record)
+  if (!parsed.profile) {
+    throw new RangeError('cannot duplicate an invalid calibration profile')
+  }
+  const profile = parsed.profile
+  return createCalibrationProfileRecord({
+    id,
+    name,
+    sampleRateHz: profile.sampleRateHz,
+    referenceBandIndex: profile.referenceBandIndex,
+    channelMode: profile.channelMode,
+    leftRawBandOffsetsDb: profile.leftRawBandOffsetsDb,
+    rightRawBandOffsetsDb: profile.rightRawBandOffsetsDb,
+    note: profile.note,
+    measurement: profile.linkedMeasurement,
+    leftMeasurement: profile.leftMeasurement,
+    rightMeasurement: profile.rightMeasurement,
+  })
 }
 
 export function isCalibrationApplicationMode(
