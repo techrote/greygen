@@ -2,14 +2,15 @@ import { expect, test } from '@playwright/test'
 
 async function startGuidedCalibration(page: import('@playwright/test').Page) {
   await page.goto('/')
+  const guided = page.locator('.guided-calibration').first()
   await expect(
     page.getByRole('heading', { name: 'Guided perceived-level calibration' }),
   ).toBeVisible()
   await expect(
-    page.getByText('this is not a medical hearing test', { exact: false }),
+    guided.getByText('this is not a medical hearing test', { exact: false }),
   ).toBeVisible()
   await expect(
-    page.getByText('never turn the system up aggressively', { exact: false }),
+    guided.getByText('never turn the system up aggressively', { exact: false }),
   ).toBeVisible()
 
   const begin = page.getByRole('button', { name: 'Begin guided calibration' })
