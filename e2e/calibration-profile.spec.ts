@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('saves, applies, persists, bypasses, and deletes a private calibration profile without autoplay', async ({
+test('saves, applies, persists, bypasses, and deliberately deletes a private calibration profile without autoplay', async ({
   page,
 }) => {
   await page.goto('/')
@@ -11,9 +11,10 @@ test('saves, applies, persists, bypasses, and deletes a private calibration prof
   ).toBeVisible()
 
   await page.locator('#calibration-profile-name').fill('Desk headphones')
-  await page.locator('#calibration-band-2').fill('10')
-  await page.locator('#calibration-band-4').fill('-6')
-  await page.locator('#calibration-band-7').fill('')
+  await page.locator('#calibration-profile-note').fill('USB DAC private note')
+  await page.locator('#calibration-left-band-2').fill('10')
+  await page.locator('#calibration-left-band-4').fill('-6')
+  await page.locator('#calibration-left-band-7').fill('')
   await page.getByRole('button', { name: 'Save local profile' }).click()
 
   await expect(page.locator('#calibration-profile-select')).toHaveValue(
@@ -23,6 +24,9 @@ test('saves, applies, persists, bypasses, and deletes a private calibration prof
   await expect(
     page.getByRole('list', { name: 'Calibration profiles' }),
   ).toContainText('Desk headphones')
+  await expect(
+    page.getByRole('list', { name: 'Calibration profiles' }),
+  ).toContainText('USB DAC private note')
   await expect(page.getByText('Ready', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Start audio' })).toBeEnabled()
 
@@ -31,6 +35,7 @@ test('saves, applies, persists, bypasses, and deletes a private calibration prof
   )
   expect(stored).not.toBeNull()
   expect(stored).toContain('Desk headphones')
+  expect(stored).toContain('USB DAC private note')
   expect(stored).toContain('"calibrationMode":"balanced"')
   expect(stored).toContain('null')
 
@@ -42,6 +47,7 @@ test('saves, applies, persists, bypasses, and deletes a private calibration prof
     return atob(value.replace(/-/g, '+').replace(/_/g, '/') + padding)
   }, shareUrl)
   expect(decodedShare).not.toContain('Desk headphones')
+  expect(decodedShare).not.toContain('USB DAC private note')
   expect(decodedShare).not.toContain('calibration-1')
   expect(decodedShare).not.toContain('calibrationMode')
 
@@ -57,13 +63,21 @@ test('saves, applies, persists, bypasses, and deletes a private calibration prof
   await expect(page.locator('#calibration-mode')).toHaveValue('full')
   await expect(page.getByRole('button', { name: 'Start audio' })).toBeEnabled()
 
-  await page.locator('#calibration-mode').selectOption('off')
+  await page.getByRole('button', { name: 'Bypass profile' }).click()
   await expect(page.locator('#calibration-mode')).toHaveValue('off')
   await expect(page.getByText('Ready', { exact: true })).toBeVisible()
 
   await page
     .getByRole('button', {
       name: 'Delete calibration profile Desk headphones',
+    })
+    .click()
+  await expect(page.locator('#calibration-profile-select')).toHaveValue(
+    'calibration-1',
+  )
+  await page
+    .getByRole('button', {
+      name: 'Confirm delete calibration profile Desk headphones',
     })
     .click()
   await expect(page.locator('#calibration-profile-select')).toHaveValue('')
