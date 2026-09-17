@@ -1,0 +1,52 @@
+name: Issue 14 warning cleanup
+
+on:
+  push:
+    branches:
+      - issue-14-guided-calibration-wizard
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: issue-14-guided-calibration-wizard
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Apply optional-chain cleanup
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/features/calibration/GuidedCalibrationWizard.tsx')
+          text = p.read_text()
+          replacements = {
+              "if (!wizard || wizard.stage !== 'matching') {": "if (wizard?.stage !== 'matching') {",
+              "if (!wizard || wizard.stage !== 'review') {": "if (wizard?.stage !== 'review') {",
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'missing warning cleanup pattern: {old}')
+              text = text.replace(old, new, 1)
+          p.write_text(text)
+          PY
+      - run: npm run format
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Commit cleanup
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/features/calibration/GuidedCalibrationWizard.tsx
+          git commit -m "style: clean guided calibration lint warnings"
+          git push origin HEAD:issue-14-guided-calibration-wizard
