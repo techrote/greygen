@@ -33,9 +33,9 @@ npm ci
 npm run dev
 ```
 
-The development server prints the local URL. The primary generator exposes White/Pink/Brown/Grey selection, ten keyboard-operable band offsets, master digital level, **power-preserving stereo width/correlation**, deterministic **Drift/Breathe/Wander/Orbit spectral animation**, local named sound presets, privacy-safe backend-free share links, private local playback-calibration profiles with Off/Balanced/Full application, lifecycle transport, digital Peak/RMS/headroom telemetry, an optional lazily loaded live spectrum/runtime diagnostics panel, and explicit runtime 16 kHz degradation state. Built-in colour presets own only spectral target fields; named user presets snapshot the complete generic SoundState. Normal share links use a compact versioned URL fragment containing sound settings only: private playback/calibration profiles, profile notes, local preset names, and UI preferences are excluded by construction.
+The development server prints the local URL. The primary generator exposes White/Pink/Brown/Grey selection, ten keyboard-operable band offsets, master digital level, **power-preserving stereo width/correlation**, deterministic **Drift/Breathe/Wander/Orbit spectral animation**, local named sound presets, privacy-safe backend-free share links, private local playback-calibration profiles with Off/Balanced/Full application, a **guided relative perceived-level calibration wizard**, lifecycle transport, digital Peak/RMS/headroom telemetry, an optional lazily loaded live spectrum/runtime diagnostics panel, and explicit runtime 16 kHz degradation state. Built-in colour presets own only spectral target fields; named user presets snapshot the complete generic SoundState. Normal share links use a compact versioned URL fragment containing sound settings only: private playback/calibration profiles, guided measurement evidence, profile notes, local preset names, and UI preferences are excluded by construction.
 
-Animation has bounded depth/speed controls and optional mean-band-power normalization; it is seeded and sample-clocked rather than driven by wall time or random walks. Calibration correction is a private ProfileState layer before deterministic safety pre-gain: Balanced applies a conservative deterministic transform, Full is bounded explicit opt-in, and Off retains the profile while bypassing correction. The current UI includes a manual ten-band profile editor for pipeline validation; the guided perceived-level measurement wizard remains a later roadmap issue. Current sound, local user presets, private profiles, and UI preferences are versioned local documents. Reload, profile application, or share import never restores Running: choose **Start audio** explicitly to create/resume the browser audio context and initialize the worklet.
+Animation has bounded depth/speed controls and optional mean-band-power normalization; it is seeded and sample-clocked rather than driven by wall time or random walks. Calibration correction is a private ProfileState layer before deterministic safety pre-gain: Balanced applies a conservative deterministic transform, Full is bounded explicit opt-in, and Off retains the profile while bypassing correction. The guided workflow uses bounded narrow-band noise against a 1 kHz reference, deterministic non-monotonic test ordering, explicit skip/retest/review, and saves only after the user names and confirms the result; saved guided results default to Balanced. The wizard requires audio to have been started explicitly and a comfortable-level acknowledgement, never raises master automatically, offers immediate calibration silence/abort plus the normal Stop transport, and makes no medical/audiogram/SPL claims. The manual ten-band profile editor remains available as an advanced path. Current sound, local user presets, private profiles, and UI preferences are versioned local documents. Reload, profile application, wizard review, or share import never restores Running: choose **Start audio** explicitly to create/resume the browser audio context and initialize the worklet.
 
 ### Verification commands
 
@@ -76,10 +76,11 @@ Start with:
 11. `docs/RAG/STATE_PERSISTENCE.md`
 12. `docs/RAG/PRESETS_SHARING.md`
 13. `docs/RAG/CALIBRATION_PROFILES.md`
-14. `docs/RAG/ANALYZER_DIAGNOSTICS.md`
-15. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
-16. `docs/RAG/UX_STATE.md`
-17. `docs/RAG/AGENT_PLAYBOOK.md`
-18. `docs/RAG/ROADMAP.md`
+14. `docs/RAG/GUIDED_CALIBRATION.md`
+15. `docs/RAG/ANALYZER_DIAGNOSTICS.md`
+16. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
+17. `docs/RAG/UX_STATE.md`
+18. `docs/RAG/AGENT_PLAYBOOK.md`
+19. `docs/RAG/ROADMAP.md`
 
 The GitHub issues are executable work packets. Each issue must be completed end-to-end: implementation, tests, documentation updates, PR, automated checks, review of failures, and merge only after required checks pass.
