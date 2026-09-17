@@ -1,6 +1,6 @@
 # Calibration Profiles and Correction Pipeline
 
-Status: canonical contract for issues #13-#14 calibration profile state, bounded correction application, guided-measurement metadata, privacy, and safety integration.
+Status: canonical contract for issues #13-#15 calibration profile state, bounded correction application, guided measurement, independent L/R correction, personal portability, privacy, and safety integration.
 
 ## Product boundary
 
@@ -8,162 +8,202 @@ Greygen calibration profiles describe **relative perceived-level correction for 
 
 The profile layer is local/private `ProfileState`. It is intentionally outside `SoundState`, user sound presets, and normal share URLs.
 
-Issue #13 established the profile model and real correction pipeline. Issue #14 adds the guided narrow-band measurement workflow that produces the same bounded profile type. The guided stimulus/state machine is documented separately in `GUIDED_CALIBRATION.md`.
+Issue #13 established the private profile model and correction pipeline. Issue #14 added deterministic guided narrow-band measurement. Issue #15 adds technically real linked/symmetric and independent left/right correction plus explicit personal-profile management/export/import.
 
-## State ownership
+## State ownership and schema history
 
-`ProfileState` schema v2 contains:
+`ProfileState` schema v2 remains the application envelope:
 
-- an array of versioned local profile records;
+- versioned local profile records;
 - `activeProfileId`, or `null`;
-- calibration application mode `off | balanced | full`.
+- application mode `off | balanced | full`.
 
-Schema v1 ProfileState migrates with no active profile and mode Off. This preserves pre-calibration renderer behavior and prevents an upgrade from applying correction unexpectedly.
+Independent-channel support does **not** require another `ProfileState` envelope version because each generic `LocalProfileRecord` already owns a versioned payload.
 
-A calibration record uses the generic `LocalProfileRecord` envelope with:
+Calibration payload history:
 
-- `kind: calibration`;
-- calibration payload schema v2 for newly created profiles;
-- local id and sanitized local name;
-- optional sample rate context;
-- reference-band index;
-- exactly ten raw relative offsets, each finite or `null` for skipped/unknown;
-- optional validated guided-measurement evidence.
+- **v1:** one linked ten-band raw curve, no guided evidence;
+- **v2:** one linked ten-band raw curve plus optional guided evidence;
+- **v3:** explicit `channelMode: linked | independent`, left/right raw curves, optional sanitized device/playback note, and linked or per-channel guided evidence.
 
-Calibration payload schema v1 remains readable. It has the same sample-rate/reference/raw-offset fields but no guided measurement evidence; it is interpreted as `measurement: null` rather than rewritten or rejected.
+Payload v1/v2 remains readable and migrates **in memory** to v3 linked mode. Greygen does not reinterpret historical linked data as independent-ear data. Unsupported future payload versions are rejected rather than guessed.
 
-The default reference is the 1 kHz nominal band, index 5 in the ten-band model.
+The default reference is the 1 kHz nominal band, index 5.
 
-## Guided measurement metadata
+## Raw profile data
 
-A v2 payload may contain private guided evidence produced by `guided-narrow-band-v1`:
+Each channel curve contains exactly ten raw relative offsets. A known value is finite and clamped to `[-24,+24] dB`; a non-reference band may be `null` for skipped/unknown. The reference band must be known.
 
-- wizard schema/version;
+Linked mode stores one effective measurement symmetrically: right raw data is canonicalized to the left raw data. Independent mode retains distinct left and right raw measurements.
+
+A skipped/unknown band remains `null` in personal profile data and contributes **0 dB correction** when applied. Greygen does not fabricate an interpolation or diagnostic inference.
+
+Optional profile notes are intended for playback-chain context such as headphones, speakers, DAC, fit, or room. Names and notes are normalized/sanitized as plain text data, length-bounded, and never interpreted as HTML.
+
+## Guided evidence
+
+Guided evidence uses method `guided-narrow-band-v1` and records only data needed to make the result reproducible/auditable:
+
+- wizard version;
 - deterministic unsigned seed;
-- actual randomized nine-band test order;
-- for every non-reference band: judgement count, retest count, outcome, confidence, and skipped flag.
+- actual randomized nine-band order;
+- judgement count;
+- retest count;
+- outcome;
+- confidence;
+- skipped flag.
 
-The evidence is validated structurally before use. Its band order must contain each non-reference band exactly once; evidence must cover that order exactly; skip/outcome/confidence flags must be internally consistent. Malformed evidence causes the calibration record to be rejected safely rather than partially trusted.
-
-No age, diagnosis, medical history, demographic data, or other unnecessary health information is collected by the core guided workflow.
-
-## Bounds and skipped values
-
-Raw known offsets are clamped to the existing global calibration layer bound of `[-24,+24] dB`. The reference band must be known. Other bands may be `null`.
-
-A skipped/unknown band remains unknown in stored profile data and contributes **0 dB correction** when applied. Greygen does not silently invent an interpolated measurement for a skipped band.
-
-This is particularly important at the extreme low/high regions, where transducer, room/coupling, sample-rate, and listener factors can make matching unreliable.
+Linked profiles may hold `linkedMeasurement`. Independent profiles may hold separate `leftMeasurement` and `rightMeasurement`. Evidence is structurally validated before use. No demographic, diagnosis, medical-history, or unnecessary health data is collected.
 
 ## Application modes
 
+The existing transforms apply **per channel**.
+
 ### Off
 
-The profile is retained but all ten applied calibration offsets are zero.
+The profile remains stored/selected but both applied channel curves are ten zeros.
 
 ### Full
 
-Full is explicit opt-in. For each known band:
+For each channel independently:
 
-1. subtract the stored reference-band raw offset so the reference is 0 dB;
-2. clamp the resulting relative correction to `[-24,+24] dB`;
-3. map skipped bands to 0 dB for the applied DSP vector.
+1. subtract that channel's stored reference-band value so its reference is 0 dB;
+2. clamp known relative values to `[-24,+24] dB`;
+3. map skipped bands to applied 0 dB.
 
-Full never escapes the global gain-stage calibration bound.
+Full is explicit opt-in.
 
 ### Balanced
 
-Balanced is the default for a newly saved/selected calibration profile and is deliberately conservative. It is deterministic:
+For each channel independently:
 
-1. compute the Full relative curve above, retaining skipped bands as unknown during the transform;
+1. compute Full while retaining unknowns through the transform;
 2. multiply known values by **0.60**;
-3. apply one local smoothing pass using center weight `0.50` and immediate-neighbor weights `0.25 / 0.25`;
-4. omit unknown neighbors and renormalize the weights that remain;
-5. keep an unknown center band unknown rather than filling it;
-6. re-anchor the transformed reference band to 0 dB;
-7. clamp known applied values to `[-12,+12] dB`;
-8. map skipped bands to 0 dB in the final applied DSP vector.
+3. perform one local smoothing pass with center weight `0.50` and neighbor weights `0.25 / 0.25`;
+4. omit unknown neighbors and renormalize remaining weights;
+5. leave an unknown center unknown rather than filling it;
+6. re-anchor the transformed reference to 0 dB;
+7. clamp known values to `[-12,+12] dB`;
+8. map unknowns to applied 0 dB.
 
-The constants and exact transform are locked by unit tests. Changes require an explicit calibration behavior/version decision rather than silent retuning.
+Balanced remains the default for newly saved/selected profiles.
 
-## DSP placement and smoothing
+## Independent-channel safeguard
 
-Saved calibration correction is the real stage 5 in Greygen's level path:
+Independent measurements can contain large left/right differences for many reasons: transducer mismatch, fit/coupling, room geometry, device routing, temporary conditions, listener perception, or measurement uncertainty. Greygen does not know which cause applies and does not interpret asymmetry diagnostically.
 
-1. source normalization;
+Issue #15 therefore adds a separate **versioned engineering safeguard** at the applied-correction boundary:
+
+`MAX_INTERCHANNEL_CORRECTION_DIFFERENCE_DB = 20*log10(2) = 6.020599913... dB`
+
+For each band, applied left/right correction may differ by at most 6.0206 dB — a maximum **2:1 amplitude-gain ratio**. If a requested transformed pair exceeds that span, the pair is symmetrically contracted around its midpoint and remains subject to the global ±24 dB calibration bound.
+
+This number is **not** a medical safety threshold and is not evidence that a 6 dB hearing asymmetry is safe, normal, abnormal, or clinically meaningful. It is a conservative software guard against allowing one browser output channel to receive arbitrarily more correction than the other from an uncertain subjective procedure. Changing it requires an explicit versioned engineering decision plus validation.
+
+Linked/symmetric mode remains available at all times as the conservative fallback.
+
+## DSP placement
+
+Independent correction is applied to **actual output-channel band components**, not to Greygen's decorrelation source streams.
+
+At stereo width > 0 Greygen internally uses two deterministic decorrelated source/filter-bank streams. Those streams are not ears. For every band the engine first forms the normal left/right stereo mixture, then multiplies the left output-band component by the left calibration gain and the right output-band component by the right calibration gain.
+
+The level path is therefore conceptually:
+
+1. seeded source normalization;
 2. nominal target;
 3. user band offsets;
-4. animation offsets;
-5. **calibration correction**;
-6. deterministic safety pre-gain;
-7. master;
-8. final guard.
+4. spectral animation offsets;
+5. stereo width/component mixing;
+6. **per-output-channel calibration correction**;
+7. deterministic safety pre-gain;
+8. master;
+9. final guard/metering.
 
-The existing `GainStageState.calibrationBandOffsetsDb` is the sole DSP input for saved/profile correction. `AudioEngine.setCalibrationBandOffsetsDb()` updates it through the versioned `set-gain-stage` worklet command.
+Linked correction uses identical channel gains, preserving the previous linked spectral intent. Legacy `AudioEngine.setCalibrationBandOffsetsDb()` remains a compatibility API and maps one curve to both channels. The explicit API is `setCalibrationChannelOffsetsDb(left, right)` through protocol v6 `set-channel-calibration`.
 
-Calibration profile changes inherit the existing 40 ms component-gain smoothing, so profile/mode switches do not hard-step filter gains.
+## Smoothing and headroom
 
-Issue #14 additionally introduces a transient runtime-only calibration-stimulus command for narrow-band reference/test playback. That transient state is not saved as profile/sound state; see `GUIDED_CALIBRATION.md`.
+Left and right calibration gains use the same 40 ms one-pole control smoothing as other audible gain components. Profile selection, Off/Balanced/Full, linked/independent changes, and bypass do not hard-step output-band gains.
 
-## Headroom behavior
+Deterministic safety pre-gain evaluates both requested output-channel response curves and uses the **more demanding channel**. Positive correction therefore reduces shared safety gain before master rather than silently consuming digital headroom in one ear. The final sample guard remains emergency-only.
 
-Saved calibration boosts participate in the same deterministic transfer-function response estimate as user and animation offsets **before** safety pre-gain is chosen. Therefore positive correction causes additional protective attenuation rather than silently consuming headroom.
+The guided calibration stimulus is runtime-only. Protocol v6 can route it to `both`, `left`, or `right`; channel masks and normal/stimulus wet transitions are smoothed over 40 ms. In independent guided mode the non-target output channel is faded to silence during the test. The user master is never changed automatically.
 
-The transient guided stimulus also participates in conservative safety accounting while active. Full correction and guided probes must never bypass or compensate away safety attenuation. Greygen never raises the master control automatically to make an inaudible band appear.
+## Profile management
 
-The final sample-domain guard remains emergency-only.
+The calibration surface supports:
 
-## UI behavior
+- select a local profile;
+- Off/Balanced/Full and explicit Bypass;
+- linked or independent guided calibration;
+- linked or independent manual profile creation;
+- optional device/headphone/speaker note;
+- rename/update note without changing DSP measurement data;
+- duplicate without auto-selecting the copy;
+- deliberate two-step delete (`Delete…` then `Confirm delete`);
+- bulk local-profile deletion through the existing separate privacy/reset control.
 
-The calibration surface now provides two paths over the same private profile model:
+Deleting the active profile bypasses correction safely. Sound reset remains distinct and never deletes profiles.
 
-- guided relative perceived-level calibration from issue #14;
-- the issue #13 manual ten-band editor as an advanced/manual path.
+## Explicit personal export/import
 
-Common profile controls allow:
+Ordinary sound sharing remains profile-free. Issue #15 adds a separate explicit portability envelope:
 
-- choose an active local profile;
-- choose Off / Balanced / Full;
-- delete profiles;
-- show non-medical/private-local language.
+- envelope schema version 1;
+- kind `greygen-personal-calibration-profile`;
+- data class `personal-playback-calibration`;
+- profile name;
+- canonical calibration payload.
 
-The guided workflow requires explicit running audio plus a comfortable-level acknowledgement, supports skip/retest/review and unsaved Off/Balanced/Full audition, and writes a profile only after explicit Save. A newly saved guided result activates in Balanced mode. Manual saving likewise defaults to Balanced.
+Preparing an export is an intentional UI action and is labelled as personal playback/calibration data. Local record ids are not exported. Export canonicalizes readable historical payloads to the current v3 shape.
 
-Profile application, reload, migration, wizard review, or share import never starts audio. The normal explicit Start lifecycle remains authoritative.
+Import:
+
+- parses JSON defensively;
+- requires the known envelope kind/data class/schema;
+- rejects future envelope versions;
+- rejects malformed/future calibration payloads;
+- canonicalizes/migrates valid historical payloads;
+- allocates a new local id;
+- stores the imported profile locally;
+- does **not** select/apply it;
+- does **not** create/resume an AudioContext.
+
+The user must explicitly select the imported profile before it can affect a running engine.
 
 ## Privacy
 
-Calibration data is private local state by default:
+Calibration profiles are personal local data by default:
 
-- stored under the ProfileState persistence document;
-- guided measurement evidence remains inside that private profile payload;
-- excluded from normal SoundState serialization;
-- excluded from normal user sound presets;
-- excluded from normal share URL fragments;
+- stored under `ProfileState`;
+- guided evidence and optional device notes remain inside the private profile payload;
+- excluded from `SoundState`;
+- excluded from named sound presets;
+- excluded from ordinary share URL fragments;
 - no backend upload in the core product;
-- deletion/bypass controls remain available.
-
-Tests use unique private fixture strings and verify normal sound sharing does not contain profile ids/names or calibration state.
+- export only through the clearly separate personal-profile path;
+- delete/bypass controls remain available.
 
 ## Validation invariants
 
-Across issues #13-#14 validation covers:
+Issue #15 extends the existing #13/#14 gate with:
 
-- profile payload creation/parsing and name sanitation;
-- ProfileState v1 -> v2 migration with correction Off;
-- calibration payload v1 compatibility and v2 guided-evidence validation;
-- invalid active-profile/mode recovery to safe bypass;
-- exact Full transform;
-- exact locked Balanced transform;
-- global and Balanced correction bounds;
-- skipped/unknown behavior;
-- Off neutral behavior;
-- positive calibration boosts causing stronger deterministic safety pre-gain;
-- real AudioEngine calibration updates using the gain-stage path;
-- guided transient-stimulus safety/smoothing;
-- persistence/reload without autoplay;
-- privacy exclusion from normal share URLs;
-- malformed profile storage/evidence recovery;
-- browser save/select/mode/delete and guided review/save/abort lifecycles.
+- v1/v2 payload migration to linked v3;
+- linked Off/Balanced/Full symmetry;
+- independent per-channel transforms;
+- raw independent measurements retained without silently rewriting them to the inter-channel cap;
+- applied per-band L/R difference never exceeding 6.0206 dB;
+- channel state rejecting malformed/non-finite/out-of-bound inputs;
+- output-channel DSP evidence showing L/R correction is real rather than source-stream relabelling;
+- legacy linked construction output-equivalent to explicit linked channel state;
+- worst-channel correction driving deterministic safety pre-gain;
+- channel-routed/smoothed guided stimulus;
+- linked and independent deterministic guided state-machine paths;
+- rename/note/duplicate/delete/bypass profile management;
+- explicit personal export/import roundtrip and malformed/future rejection;
+- normal share URLs excluding profile names, notes, ids, measurements, and corrections;
+- import not selecting a profile and not starting audio;
+- full existing transport/share/preset/stereo/animation/analyzer/calibration regression suite.
 
-Do not weaken gain-safety or DSP thresholds to accommodate calibration.
+Do not weaken gain-safety, DSP, or privacy thresholds merely to make validation pass.
