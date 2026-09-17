@@ -17,7 +17,10 @@ describe('guided channel calibration composition', () => {
       state = submitGuidedChannelJudgement(state, 'equal')
     }
     expect(state.phase).toBe('review')
-    expect(guidedChannelOverallProgress(state)).toEqual({ completed: 9, total: 9 })
+    expect(guidedChannelOverallProgress(state)).toEqual({
+      completed: 9,
+      total: 9,
+    })
     const result = guidedChannelCalibrationResult(state)
     expect(result.mode).toBe('linked')
     expect(result.leftRawBandOffsetsDb).toEqual(result.rightRawBandOffsetsDb)
@@ -42,7 +45,10 @@ describe('guided channel calibration composition', () => {
       state = submitGuidedChannelJudgement(state, 'equal')
     }
     expect(state.phase).toBe('review')
-    expect(guidedChannelOverallProgress(state)).toEqual({ completed: 18, total: 18 })
+    expect(guidedChannelOverallProgress(state)).toEqual({
+      completed: 18,
+      total: 18,
+    })
     const result = guidedChannelCalibrationResult(state)
     expect(result.mode).toBe('independent')
     expect(result.leftMeasurement).not.toBeNull()
@@ -55,7 +61,8 @@ describe('guided channel calibration composition', () => {
     for (let index = 0; index < 18; index += 1) {
       state = submitGuidedChannelJudgement(state, 'equal')
     }
-    const rightBefore = guidedChannelCalibrationResult(state).rightRawBandOffsetsDb
+    const rightBefore =
+      guidedChannelCalibrationResult(state).rightRawBandOffsetsDb
     const retestBand = state.left?.bandOrder[0] ?? 0
     state = retestGuidedChannelBand(state, 'left', retestBand)
     expect(state.phase).toBe('left')
@@ -66,7 +73,10 @@ describe('guided channel calibration composition', () => {
     expect(guidedChannelCalibrationResult(state).rightRawBandOffsetsDb).toEqual(
       rightBefore,
     )
-    expect(state.left?.results.find((entry) => entry.bandIndex === retestBand)?.retests).toBe(1)
+    expect(
+      state.left?.results.find((entry) => entry.bandIndex === retestBand)
+        ?.retests,
+    ).toBe(1)
   })
 
   it('supports skip independently without fabricating a result', () => {
@@ -74,7 +84,8 @@ describe('guided channel calibration composition', () => {
     const skipped = activeGuidedCalibrationState(state)?.current?.bandIndex
     state = skipGuidedChannelBand(state)
     expect(
-      state.left?.results.find((entry) => entry.bandIndex === skipped)?.correctionDb,
+      state.left?.results.find((entry) => entry.bandIndex === skipped)
+        ?.correctionDb,
     ).toBeNull()
   })
 })
