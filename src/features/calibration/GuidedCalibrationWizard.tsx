@@ -156,7 +156,7 @@ export default function GuidedCalibrationWizard({
   }
 
   const silence = (): void => {
-    if (!wizard || wizard.stage !== 'matching') {
+    if (wizard?.stage !== 'matching') {
       return
     }
     onStimulusSilent()
@@ -175,7 +175,7 @@ export default function GuidedCalibrationWizard({
   }
 
   const changeAuditionMode = (mode: CalibrationApplicationMode): void => {
-    if (!wizard || wizard.stage !== 'review') {
+    if (wizard?.stage !== 'review') {
       return
     }
     const raw = guidedCalibrationRawOffsetsDb(wizard)
