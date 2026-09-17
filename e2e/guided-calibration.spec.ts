@@ -68,7 +68,7 @@ test('guided calibration completes deterministic mocked matches and saves only a
   const beforeSave = await page.evaluate(() =>
     localStorage.getItem('greygen.profile-state'),
   )
-  expect(beforeSave).not.toContain('Guided E2E')
+  expect(beforeSave ?? '').not.toContain('Guided E2E')
 
   await page.locator('#guided-audition-mode').selectOption('balanced')
   await page.locator('#guided-audition-mode').selectOption('full')
@@ -87,9 +87,9 @@ test('guided calibration completes deterministic mocked matches and saves only a
   const stored = await page.evaluate(() =>
     localStorage.getItem('greygen.profile-state'),
   )
-  expect(stored).toContain('Guided E2E')
-  expect(stored).toContain('guided-narrow-band-v1')
-  expect(stored).toContain('"calibrationMode":"balanced"')
+  expect(stored ?? '').toContain('Guided E2E')
+  expect(stored ?? '').toContain('guided-narrow-band-v1')
+  expect(stored ?? '').toContain('"calibrationMode":"balanced"')
   await expect(page.locator('#master-gain')).toHaveValue(masterBefore)
 })
 
@@ -115,9 +115,10 @@ test('guided calibration supports skip, silence, Stop, abort, and clean restart 
   await expect(
     page.getByRole('heading', { name: 'Guided perceived-level calibration' }),
   ).toBeVisible()
-  expect(
-    await page.evaluate(() => localStorage.getItem('greygen.profile-state')),
-  ).not.toContain('guided-narrow-band-v1')
+  const abortedStorage = await page.evaluate(() =>
+    localStorage.getItem('greygen.profile-state'),
+  )
+  expect(abortedStorage ?? '').not.toContain('guided-narrow-band-v1')
 
   await page.getByRole('button', { name: 'Start audio' }).click()
   await expect(page.getByText('Running', { exact: true })).toBeVisible()
