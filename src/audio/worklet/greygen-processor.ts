@@ -6,6 +6,7 @@ import {
   type WorkletToMainMessage,
   deserializeAnimationState,
   deserializeCalibrationStimulusState,
+  deserializeChannelCalibrationState,
   deserializeGainStageState,
   deserializeSpectrumState,
   deserializeStereoWidthState,
@@ -97,6 +98,9 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
           seed: message.seed,
           spectrumState: deserializeSpectrumState(message.spectrum),
           gainStageState: deserializeGainStageState(message.gainStage),
+          channelCalibrationState: deserializeChannelCalibrationState(
+            message.channelCalibration,
+          ),
           stereoWidthState: deserializeStereoWidthState(message.stereoWidth),
           animationState: deserializeAnimationState(message.animation),
         })
@@ -134,6 +138,17 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
           type: 'ack',
           requestId: message.requestId,
           command: 'set-gain-stage',
+        })
+        return
+      case 'set-channel-calibration':
+        this.engine.setChannelCalibrationState(
+          deserializeChannelCalibrationState(message.channelCalibration),
+        )
+        this.post({
+          version: AUDIO_PROTOCOL_VERSION,
+          type: 'ack',
+          requestId: message.requestId,
+          command: 'set-channel-calibration',
         })
         return
       case 'set-stereo-width':

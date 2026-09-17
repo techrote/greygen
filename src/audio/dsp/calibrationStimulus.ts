@@ -58,7 +58,9 @@ export function createCalibrationStimulusState(
   channel: CalibrationStimulusChannel = 'both',
 ): CalibrationStimulusState {
   if (!isCalibrationStimulusChannel(channel)) {
-    throw new RangeError('calibration stimulus channel must be both, left, or right')
+    throw new RangeError(
+      'calibration stimulus channel must be both, left, or right',
+    )
   }
   return Object.freeze({
     schemaVersion: CALIBRATION_STIMULUS_SCHEMA_VERSION,

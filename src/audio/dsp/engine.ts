@@ -5,8 +5,14 @@ import {
   createAnimationState,
 } from './animation'
 import {
+  type ChannelCalibrationState,
+  channelCalibrationGainsLinear,
+  createChannelCalibrationState,
+} from './channelCalibration'
+import {
   CALIBRATION_STIMULUS_TRANSITION_SECONDS,
   type CalibrationStimulusState,
+  calibrationStimulusChannelTargets,
   calibrationStimulusGainLinear,
   calibrationStimulusWetTarget,
   createCalibrationStimulusState,
@@ -20,6 +26,7 @@ import {
   applyFinalGuard,
   computeSafetyPreGainLinear,
   createGainStageState,
+  estimateFilterBankPeakGain,
   masterGainLinear,
   resolveGainTargets,
   safetyPreGainDb,
@@ -53,6 +60,7 @@ export interface GreygenDspEngineOptions {
   readonly seed?: number
   readonly spectrumState?: SpectrumState
   readonly gainStageState?: GainStageState
+  readonly channelCalibrationState?: ChannelCalibrationState
   readonly stereoWidthState?: StereoWidthState
   readonly animationState?: AnimationState
 }
@@ -61,6 +69,7 @@ export interface GreygenDspResetOptions {
   readonly seed?: number
   readonly spectrumState?: SpectrumState
   readonly gainStageState?: GainStageState
+  readonly channelCalibrationState?: ChannelCalibrationState
   readonly stereoWidthState?: StereoWidthState
   readonly animationState?: AnimationState
 }
@@ -110,6 +119,16 @@ function canonicalCalibrationStimulusState(
     state.mode,
     state.bandIndex,
     state.levelOffsetDb,
+    state.channel,
+  )
+}
+
+function canonicalChannelCalibrationState(
+  state: ChannelCalibrationState,
+): ChannelCalibrationState {
+  return createChannelCalibrationState(
+    state.leftBandOffsetsDb,
+    state.rightBandOffsetsDb,
   )
 }
 
@@ -121,6 +140,8 @@ export class GreygenDspEngine {
   private readonly scratchBandsA = new Float64Array(BAND_COUNT)
   private readonly scratchBandsB = new Float64Array(BAND_COUNT)
   private readonly currentBandGains = new Float64Array(BAND_COUNT)
+  private readonly currentCalibrationLeftGains = new Float64Array(BAND_COUNT)
+  private readonly currentCalibrationRightGains = new Float64Array(BAND_COUNT)
   private readonly currentCalibrationStimulusBandGains = new Float64Array(
     BAND_COUNT,
   )
@@ -131,8 +152,12 @@ export class GreygenDspEngine {
   private readonly safetyPreGainSmoother: OnePoleSmoother
   private readonly masterGainSmoother: OnePoleSmoother
   private readonly stereoWidthSmoother: OnePoleSmoother
+  private readonly calibrationLeftBandSmoothers: OnePoleSmoother[]
+  private readonly calibrationRightBandSmoothers: OnePoleSmoother[]
   private readonly calibrationStimulusBandSmoothers: OnePoleSmoother[]
   private readonly calibrationStimulusWetSmoother: OnePoleSmoother
+  private readonly calibrationStimulusLeftMaskSmoother: OnePoleSmoother
+  private readonly calibrationStimulusRightMaskSmoother: OnePoleSmoother
   private readonly meter = new MeterAccumulator()
   private readonly animation: SpectralAnimation
   private generatorA: Xoshiro128StarStar
@@ -140,6 +165,7 @@ export class GreygenDspEngine {
   private seedValue: number
   private spectrumStateValue: SpectrumState
   private gainStageStateValue: GainStageState
+  private channelCalibrationStateValue: ChannelCalibrationState
   private stereoWidthStateValue: StereoWidthState
   private animationStateValue: AnimationState
   private calibrationStimulusStateValue: CalibrationStimulusState
@@ -159,6 +185,11 @@ export class GreygenDspEngine {
     this.gainStageStateValue = options.gainStageState
       ? canonicalGainStageState(options.gainStageState)
       : createGainStageState()
+    this.channelCalibrationStateValue = options.channelCalibrationState
+      ? canonicalChannelCalibrationState(options.channelCalibrationState)
+      : createChannelCalibrationState(
+          this.gainStageStateValue.calibrationBandOffsetsDb,
+        )
     this.stereoWidthStateValue = options.stereoWidthState
       ? canonicalStereoWidthState(options.stereoWidthState)
       : createStereoWidthState(DEFAULT_STEREO_WIDTH)
@@ -196,7 +227,8 @@ export class GreygenDspEngine {
       CONTROL_SMOOTHING_TIME_SECONDS,
     )
     this.safetyPreGainTargetValue = this.resolveAnimationAwareSafetyTarget(
-      targets.estimatedShapedPeakLinear,
+      targets.bandGainsLinear,
+      targets.ultrasonicResidualGainLinear,
     )
     this.safetyPreGainSmoother = new OnePoleSmoother(
       this.safetyPreGainTargetValue,
@@ -216,6 +248,30 @@ export class GreygenDspEngine {
       this.sampleRate,
       STEREO_WIDTH_SMOOTHING_TIME_SECONDS,
     )
+    const initialLeftCalibration = channelCalibrationGainsLinear(
+      this.channelCalibrationStateValue.leftBandOffsetsDb,
+    )
+    const initialRightCalibration = channelCalibrationGainsLinear(
+      this.channelCalibrationStateValue.rightBandOffsetsDb,
+    )
+    this.calibrationLeftBandSmoothers = Array.from(
+      { length: BAND_COUNT },
+      (_, index) =>
+        new OnePoleSmoother(
+          initialLeftCalibration[index],
+          this.sampleRate,
+          CONTROL_SMOOTHING_TIME_SECONDS,
+        ),
+    )
+    this.calibrationRightBandSmoothers = Array.from(
+      { length: BAND_COUNT },
+      (_, index) =>
+        new OnePoleSmoother(
+          initialRightCalibration[index],
+          this.sampleRate,
+          CONTROL_SMOOTHING_TIME_SECONDS,
+        ),
+    )
     this.calibrationStimulusBandSmoothers = Array.from(
       { length: BAND_COUNT },
       () =>
@@ -226,6 +282,16 @@ export class GreygenDspEngine {
         ),
     )
     this.calibrationStimulusWetSmoother = new OnePoleSmoother(
+      0,
+      this.sampleRate,
+      CALIBRATION_STIMULUS_TRANSITION_SECONDS,
+    )
+    this.calibrationStimulusLeftMaskSmoother = new OnePoleSmoother(
+      0,
+      this.sampleRate,
+      CALIBRATION_STIMULUS_TRANSITION_SECONDS,
+    )
+    this.calibrationStimulusRightMaskSmoother = new OnePoleSmoother(
       0,
       this.sampleRate,
       CALIBRATION_STIMULUS_TRANSITION_SECONDS,
@@ -242,6 +308,10 @@ export class GreygenDspEngine {
 
   get gainStageState(): GainStageState {
     return this.gainStageStateValue
+  }
+
+  get channelCalibrationState(): ChannelCalibrationState {
+    return this.channelCalibrationStateValue
   }
 
   get stereoWidthState(): StereoWidthState {
@@ -302,7 +372,24 @@ export class GreygenDspEngine {
   }
 
   setGainStageState(state: GainStageState): void {
-    this.gainStageStateValue = canonicalGainStageState(state)
+    const next = canonicalGainStageState(state)
+    const calibrationChanged = next.calibrationBandOffsetsDb.some(
+      (value, index) =>
+        value !== this.gainStageStateValue.calibrationBandOffsetsDb[index],
+    )
+    this.gainStageStateValue = next
+    if (calibrationChanged) {
+      this.channelCalibrationStateValue = createChannelCalibrationState(
+        next.calibrationBandOffsetsDb,
+      )
+      this.updateChannelCalibrationTargets()
+    }
+    this.updateGainTargets()
+  }
+
+  setChannelCalibrationState(state: ChannelCalibrationState): void {
+    this.channelCalibrationStateValue = canonicalChannelCalibrationState(state)
+    this.updateChannelCalibrationTargets()
     this.updateGainTargets()
   }
 
@@ -334,6 +421,11 @@ export class GreygenDspEngine {
     const nextGainStage = options.gainStageState
       ? canonicalGainStageState(options.gainStageState)
       : this.gainStageStateValue
+    const nextChannelCalibration = options.channelCalibrationState
+      ? canonicalChannelCalibrationState(options.channelCalibrationState)
+      : options.gainStageState
+        ? createChannelCalibrationState(nextGainStage.calibrationBandOffsetsDb)
+        : this.channelCalibrationStateValue
     const nextStereoWidth = options.stereoWidthState
       ? canonicalStereoWidthState(options.stereoWidthState)
       : this.stereoWidthStateValue
@@ -346,6 +438,7 @@ export class GreygenDspEngine {
     this.generatorB = nextGeneratorB
     this.spectrumStateValue = nextSpectrum
     this.gainStageStateValue = nextGainStage
+    this.channelCalibrationStateValue = nextChannelCalibration
     this.stereoWidthStateValue = nextStereoWidth
     this.animationStateValue = nextAnimation
     this.calibrationStimulusStateValue = createCalibrationStimulusState()
@@ -356,13 +449,22 @@ export class GreygenDspEngine {
     this.guardInterventionsValue = 0
 
     const targets = this.resolveTargets()
+    const leftCalibration = channelCalibrationGainsLinear(
+      nextChannelCalibration.leftBandOffsetsDb,
+    )
+    const rightCalibration = channelCalibrationGainsLinear(
+      nextChannelCalibration.rightBandOffsetsDb,
+    )
     for (let index = 0; index < BAND_COUNT; index += 1) {
       this.bandGainSmoothers[index].reset(targets.bandGainsLinear[index])
       this.animationBandSmoothers[index].reset(0)
+      this.calibrationLeftBandSmoothers[index].reset(leftCalibration[index])
+      this.calibrationRightBandSmoothers[index].reset(rightCalibration[index])
     }
     this.residualGainSmoother.reset(targets.ultrasonicResidualGainLinear)
     this.safetyPreGainTargetValue = this.resolveAnimationAwareSafetyTarget(
-      targets.estimatedShapedPeakLinear,
+      targets.bandGainsLinear,
+      targets.ultrasonicResidualGainLinear,
     )
     this.safetyPreGainSmoother.reset(this.safetyPreGainTargetValue)
     this.safetyPreGainSmoother.setTimeConstantSeconds(
@@ -376,22 +478,33 @@ export class GreygenDspEngine {
       smoother.reset(0)
     }
     this.calibrationStimulusWetSmoother.reset(0)
+    this.calibrationStimulusLeftMaskSmoother.reset(0)
+    this.calibrationStimulusRightMaskSmoother.reset(0)
   }
 
   renderMono(output: Float32Array): void {
     for (let frame = 0; frame < output.length; frame += 1) {
       this.prepareCurrentBandGains()
+      this.prepareCurrentChannelCalibrationGains()
       const residualGain = this.residualGainSmoother.next()
-      const shaped = this.nextShapedSample(
+      const residual = this.nextBandComponents(
         this.generatorA,
         this.filterBankA,
         this.scratchBandsA,
-        residualGain,
       )
+      let shaped = residual * residualGain
+      for (let band = 0; band < BAND_COUNT; band += 1) {
+        shaped +=
+          this.scratchBandsA[band] *
+          this.currentBandGains[band] *
+          this.currentCalibrationLeftGains[band]
+      }
       this.prepareCalibrationStimulusBandGains()
       const stimulus = this.currentCalibrationStimulusSample(this.scratchBandsA)
       const stimulusWet = this.calibrationStimulusWetSmoother.next()
-      const requested = shaped * (1 - stimulusWet) + stimulus * stimulusWet
+      const stimulusMask = this.calibrationStimulusLeftMaskSmoother.next()
+      const requested =
+        shaped * (1 - stimulusWet) + stimulus * stimulusWet * stimulusMask
 
       const safetyGain = this.safetyPreGainSmoother.next()
       const masterGain = this.masterGainSmoother.next()
@@ -415,33 +528,49 @@ export class GreygenDspEngine {
 
     for (let frame = 0; frame < left.length; frame += 1) {
       this.prepareCurrentBandGains()
+      this.prepareCurrentChannelCalibrationGains()
       const residualGain = this.residualGainSmoother.next()
-      const shapedA = this.nextShapedSample(
+      const residualA = this.nextBandComponents(
         this.generatorA,
         this.filterBankA,
         this.scratchBandsA,
-        residualGain,
       )
-      const shapedB = this.nextShapedSample(
+      const residualB = this.nextBandComponents(
         this.generatorB,
         this.filterBankB,
         this.scratchBandsB,
-        residualGain,
       )
 
       const width = this.stereoWidthSmoother.next()
       const angle = stereoWidthToMixAngle(width)
       const common = Math.cos(angle)
       const difference = Math.sin(angle)
-      const mixedLeft = common * shapedA + difference * shapedB
-      const mixedRight = common * shapedA - difference * shapedB
+      let mixedLeft =
+        (common * residualA + difference * residualB) * residualGain
+      let mixedRight =
+        (common * residualA - difference * residualB) * residualGain
+      for (let band = 0; band < BAND_COUNT; band += 1) {
+        const baseGain = this.currentBandGains[band]
+        mixedLeft +=
+          (common * this.scratchBandsA[band] +
+            difference * this.scratchBandsB[band]) *
+          baseGain *
+          this.currentCalibrationLeftGains[band]
+        mixedRight +=
+          (common * this.scratchBandsA[band] -
+            difference * this.scratchBandsB[band]) *
+          baseGain *
+          this.currentCalibrationRightGains[band]
+      }
       this.prepareCalibrationStimulusBandGains()
       const stimulus = this.currentCalibrationStimulusSample(this.scratchBandsA)
       const stimulusWet = this.calibrationStimulusWetSmoother.next()
+      const leftMask = this.calibrationStimulusLeftMaskSmoother.next()
+      const rightMask = this.calibrationStimulusRightMaskSmoother.next()
       const requestedLeft =
-        mixedLeft * (1 - stimulusWet) + stimulus * stimulusWet
+        mixedLeft * (1 - stimulusWet) + stimulus * stimulusWet * leftMask
       const requestedRight =
-        mixedRight * (1 - stimulusWet) + stimulus * stimulusWet
+        mixedRight * (1 - stimulusWet) + stimulus * stimulusWet * rightMask
 
       const safetyGain = this.safetyPreGainSmoother.next()
       const masterGain = this.masterGainSmoother.next()
@@ -495,6 +624,15 @@ export class GreygenDspEngine {
     }
   }
 
+  private prepareCurrentChannelCalibrationGains(): void {
+    for (let band = 0; band < BAND_COUNT; band += 1) {
+      this.currentCalibrationLeftGains[band] =
+        this.calibrationLeftBandSmoothers[band].next()
+      this.currentCalibrationRightGains[band] =
+        this.calibrationRightBandSmoothers[band].next()
+    }
+  }
+
   private prepareCalibrationStimulusBandGains(): void {
     for (let band = 0; band < BAND_COUNT; band += 1) {
       this.currentCalibrationStimulusBandGains[band] =
@@ -511,19 +649,13 @@ export class GreygenDspEngine {
     return stimulus
   }
 
-  private nextShapedSample(
+  private nextBandComponents(
     generator: Xoshiro128StarStar,
     filterBank: TenBandFilterBank,
     scratchBands: Float64Array,
-    residualGain: number,
   ): number {
     const source = generator.nextBipolar() * SOURCE_NORMALIZATION_GAIN_LINEAR
-    const residual = filterBank.processBandComponents(source, scratchBands)
-    let shaped = residual * residualGain
-    for (let band = 0; band < BAND_COUNT; band += 1) {
-      shaped += scratchBands[band] * this.currentBandGains[band]
-    }
-    return shaped
+    return filterBank.processBandComponents(source, scratchBands)
   }
 
   private resolveTargets() {
@@ -531,23 +663,66 @@ export class GreygenDspEngine {
     return resolveGainTargets(
       this.sampleRate,
       spectral,
-      this.gainStageStateValue,
+      createGainStageState(
+        this.gainStageStateValue.masterGainDb,
+        this.gainStageStateValue.animationBandOffsetsDb,
+        new Float64Array(BAND_COUNT),
+      ),
     )
   }
 
   private resolveAnimationAwareSafetyTarget(
-    estimatedShapedPeakLinear: number,
+    baseBandGainsLinear: ArrayLike<number>,
+    ultrasonicResidualGainLinear: number,
   ): number {
     const animationDepthDb =
       this.animationStateValue.mode === 'off'
         ? 0
         : this.animationStateValue.depthDb
+    const leftCalibration = channelCalibrationGainsLinear(
+      this.channelCalibrationStateValue.leftBandOffsetsDb,
+    )
+    const rightCalibration = channelCalibrationGainsLinear(
+      this.channelCalibrationStateValue.rightBandOffsetsDb,
+    )
+    const leftCombined = Float64Array.from(
+      baseBandGainsLinear,
+      (gain, index) => gain * leftCalibration[index],
+    )
+    const rightCombined = Float64Array.from(
+      baseBandGainsLinear,
+      (gain, index) => gain * rightCalibration[index],
+    )
     const normalPeak =
-      estimatedShapedPeakLinear * decibelsToGain(animationDepthDb)
+      Math.max(
+        estimateFilterBankPeakGain(
+          this.sampleRate,
+          leftCombined,
+          ultrasonicResidualGainLinear,
+        ),
+        estimateFilterBankPeakGain(
+          this.sampleRate,
+          rightCombined,
+          ultrasonicResidualGainLinear,
+        ),
+      ) * decibelsToGain(animationDepthDb)
     const stimulusPeak = calibrationStimulusGainLinear(
       this.calibrationStimulusStateValue,
     )
     return computeSafetyPreGainLinear(normalPeak + stimulusPeak)
+  }
+
+  private updateChannelCalibrationTargets(): void {
+    const left = channelCalibrationGainsLinear(
+      this.channelCalibrationStateValue.leftBandOffsetsDb,
+    )
+    const right = channelCalibrationGainsLinear(
+      this.channelCalibrationStateValue.rightBandOffsetsDb,
+    )
+    for (let band = 0; band < BAND_COUNT; band += 1) {
+      this.calibrationLeftBandSmoothers[band].setTarget(left[band])
+      this.calibrationRightBandSmoothers[band].setTarget(right[band])
+    }
   }
 
   private updateCalibrationStimulusTargets(): void {
@@ -561,6 +736,9 @@ export class GreygenDspEngine {
     this.calibrationStimulusWetSmoother.setTarget(
       calibrationStimulusWetTarget(state),
     )
+    const [leftMask, rightMask] = calibrationStimulusChannelTargets(state)
+    this.calibrationStimulusLeftMaskSmoother.setTarget(leftMask)
+    this.calibrationStimulusRightMaskSmoother.setTarget(rightMask)
   }
 
   private updateGainTargets(): void {
@@ -571,7 +749,8 @@ export class GreygenDspEngine {
     this.residualGainSmoother.setTarget(targets.ultrasonicResidualGainLinear)
 
     this.safetyPreGainTargetValue = this.resolveAnimationAwareSafetyTarget(
-      targets.estimatedShapedPeakLinear,
+      targets.bandGainsLinear,
+      targets.ultrasonicResidualGainLinear,
     )
     this.safetyPreGainSmoother.setTimeConstantSeconds(
       this.safetyPreGainTargetValue < this.safetyPreGainSmoother.current

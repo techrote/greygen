@@ -8,8 +8,14 @@ import {
   CALIBRATION_STIMULUS_SCHEMA_VERSION,
   type CalibrationStimulusState,
   createCalibrationStimulusState,
+  isCalibrationStimulusChannel,
   isCalibrationStimulusMode,
 } from './dsp/calibrationStimulus'
+import {
+  CHANNEL_CALIBRATION_SCHEMA_VERSION,
+  type ChannelCalibrationState,
+  createChannelCalibrationState,
+} from './dsp/channelCalibration'
 import type { HighBandMode } from './dsp/filterBank'
 import {
   GAIN_STAGE_SCHEMA_VERSION,
@@ -28,8 +34,8 @@ import {
   createStereoWidthState,
 } from './dsp/stereo'
 
-export const AUDIO_PROTOCOL_VERSION = 5 as const
-export const GREYGEN_PROCESSOR_NAME = 'greygen-processor-v5'
+export const AUDIO_PROTOCOL_VERSION = 6 as const
+export const GREYGEN_PROCESSOR_NAME = 'greygen-processor-v6'
 
 export interface SerializedSpectrumState {
   readonly targetId: SpectralPresetId
@@ -41,6 +47,12 @@ export interface SerializedGainStageState {
   readonly masterGainDb: number
   readonly animationBandOffsetsDb: readonly number[]
   readonly calibrationBandOffsetsDb: readonly number[]
+}
+
+export interface SerializedChannelCalibrationState {
+  readonly schemaVersion: typeof CHANNEL_CALIBRATION_SCHEMA_VERSION
+  readonly leftBandOffsetsDb: readonly number[]
+  readonly rightBandOffsetsDb: readonly number[]
 }
 
 export interface SerializedStereoWidthState {
@@ -62,6 +74,7 @@ export interface SerializedCalibrationStimulusState {
   readonly mode: CalibrationStimulusState['mode']
   readonly bandIndex: number
   readonly levelOffsetDb: number
+  readonly channel: CalibrationStimulusState['channel']
 }
 
 interface ProtocolEnvelope {
@@ -74,6 +87,7 @@ export interface InitializeMessage extends ProtocolEnvelope {
   readonly seed: number
   readonly spectrum: SerializedSpectrumState
   readonly gainStage: SerializedGainStageState
+  readonly channelCalibration: SerializedChannelCalibrationState
   readonly stereoWidth: SerializedStereoWidthState
   readonly animation: SerializedAnimationState
 }
@@ -86,6 +100,11 @@ export interface SetSpectrumMessage extends ProtocolEnvelope {
 export interface SetGainStageMessage extends ProtocolEnvelope {
   readonly type: 'set-gain-stage'
   readonly gainStage: SerializedGainStageState
+}
+
+export interface SetChannelCalibrationMessage extends ProtocolEnvelope {
+  readonly type: 'set-channel-calibration'
+  readonly channelCalibration: SerializedChannelCalibrationState
 }
 
 export interface SetStereoWidthMessage extends ProtocolEnvelope {
@@ -120,6 +139,7 @@ export type MainToWorkletMessage =
   | InitializeMessage
   | SetSpectrumMessage
   | SetGainStageMessage
+  | SetChannelCalibrationMessage
   | SetStereoWidthMessage
   | SetAnimationMessage
   | SetCalibrationStimulusMessage
@@ -141,6 +161,7 @@ export interface AckMessage extends ProtocolEnvelope {
   readonly command:
     | 'set-spectrum'
     | 'set-gain-stage'
+    | 'set-channel-calibration'
     | 'set-stereo-width'
     | 'set-animation'
     | 'set-calibration-stimulus'
@@ -281,6 +302,29 @@ function parseGainStageState(value: unknown): SerializedGainStageState | null {
   }
 }
 
+function parseChannelCalibrationState(
+  value: unknown,
+): SerializedChannelCalibrationState | null {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== CHANNEL_CALIBRATION_SCHEMA_VERSION ||
+    !Array.isArray(value.leftBandOffsetsDb) ||
+    !Array.isArray(value.rightBandOffsetsDb)
+  ) {
+    return null
+  }
+  try {
+    return serializeChannelCalibrationState(
+      createChannelCalibrationState(
+        value.leftBandOffsetsDb,
+        value.rightBandOffsetsDb,
+      ),
+    )
+  } catch {
+    return null
+  }
+}
+
 function parseStereoWidthState(
   value: unknown,
 ): SerializedStereoWidthState | null {
@@ -302,6 +346,7 @@ function parseCalibrationStimulusState(
     !isRecord(value) ||
     value.schemaVersion !== CALIBRATION_STIMULUS_SCHEMA_VERSION ||
     !isCalibrationStimulusMode(value.mode) ||
+    !isCalibrationStimulusChannel(value.channel) ||
     !Number.isInteger(value.bandIndex) ||
     !isFiniteNumber(value.levelOffsetDb)
   ) {
@@ -313,6 +358,7 @@ function parseCalibrationStimulusState(
         value.mode,
         value.bandIndex as number,
         value.levelOffsetDb,
+        value.channel,
       ),
     )
   } catch {
@@ -389,6 +435,29 @@ export function deserializeGainStageState(
   )
 }
 
+export function serializeChannelCalibrationState(
+  state: ChannelCalibrationState,
+): SerializedChannelCalibrationState {
+  const canonical = createChannelCalibrationState(
+    state.leftBandOffsetsDb,
+    state.rightBandOffsetsDb,
+  )
+  return {
+    schemaVersion: CHANNEL_CALIBRATION_SCHEMA_VERSION,
+    leftBandOffsetsDb: Array.from(canonical.leftBandOffsetsDb),
+    rightBandOffsetsDb: Array.from(canonical.rightBandOffsetsDb),
+  }
+}
+
+export function deserializeChannelCalibrationState(
+  state: SerializedChannelCalibrationState,
+): ChannelCalibrationState {
+  return createChannelCalibrationState(
+    state.leftBandOffsetsDb,
+    state.rightBandOffsetsDb,
+  )
+}
+
 export function serializeStereoWidthState(
   state: StereoWidthState,
 ): SerializedStereoWidthState {
@@ -444,12 +513,14 @@ export function serializeCalibrationStimulusState(
     state.mode,
     state.bandIndex,
     state.levelOffsetDb,
+    state.channel,
   )
   return {
     schemaVersion: CALIBRATION_STIMULUS_SCHEMA_VERSION,
     mode: canonical.mode,
     bandIndex: canonical.bandIndex,
     levelOffsetDb: canonical.levelOffsetDb,
+    channel: canonical.channel,
   }
 }
 
@@ -460,6 +531,7 @@ export function deserializeCalibrationStimulusState(
     state.mode,
     state.bandIndex,
     state.levelOffsetDb,
+    state.channel,
   )
 }
 
@@ -479,12 +551,16 @@ export function parseMainToWorkletMessage(
     case 'initialize': {
       const spectrum = parseSpectrumState(value.spectrum)
       const gainStage = parseGainStageState(value.gainStage)
+      const channelCalibration = parseChannelCalibrationState(
+        value.channelCalibration,
+      )
       const stereoWidth = parseStereoWidthState(value.stereoWidth)
       const animation = parseAnimationState(value.animation)
       if (
         !isAudioSeed(value.seed) ||
         !spectrum ||
         !gainStage ||
+        !channelCalibration ||
         !stereoWidth ||
         !animation
       ) {
@@ -497,6 +573,7 @@ export function parseMainToWorkletMessage(
         seed: value.seed,
         spectrum,
         gainStage,
+        channelCalibration,
         stereoWidth,
         animation,
       }
@@ -523,6 +600,20 @@ export function parseMainToWorkletMessage(
         type: 'set-gain-stage',
         requestId: value.requestId,
         gainStage,
+      }
+    }
+    case 'set-channel-calibration': {
+      const channelCalibration = parseChannelCalibrationState(
+        value.channelCalibration,
+      )
+      if (!channelCalibration) {
+        return null
+      }
+      return {
+        version: AUDIO_PROTOCOL_VERSION,
+        type: 'set-channel-calibration',
+        requestId: value.requestId,
+        channelCalibration,
       }
     }
     case 'set-stereo-width': {
@@ -681,6 +772,7 @@ export function parseWorkletToMainMessage(
       if (
         value.command !== 'set-spectrum' &&
         value.command !== 'set-gain-stage' &&
+        value.command !== 'set-channel-calibration' &&
         value.command !== 'set-stereo-width' &&
         value.command !== 'set-animation' &&
         value.command !== 'set-calibration-stimulus' &&
