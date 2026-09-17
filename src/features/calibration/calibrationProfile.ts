@@ -2,19 +2,53 @@ import { BAND_COUNT } from '../../audio/dsp/filterBank'
 import { CALIBRATION_BAND_OFFSET_LIMIT_DB } from '../../audio/dsp/gainSafety'
 import type {
   CalibrationApplicationMode,
+  JsonValue,
   LocalProfileRecord,
 } from '../../app/state/appState'
 
-export const CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION = 1 as const
+export const CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION = 2 as const
+export const LEGACY_CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION = 1 as const
 export const DEFAULT_CALIBRATION_REFERENCE_BAND_INDEX = 5
 export const BALANCED_CALIBRATION_SCALE = 0.6
 export const BALANCED_CALIBRATION_LIMIT_DB = 12
 export const CALIBRATION_PROFILE_NAME_MAX_LENGTH = 120
+export const GUIDED_CALIBRATION_MEASUREMENT_METHOD =
+  'guided-narrow-band-v1' as const
+export const GUIDED_CALIBRATION_MEASUREMENT_VERSION = 1 as const
+
+export type CalibrationMeasurementOutcome =
+  | 'equal'
+  | 'converged'
+  | 'bounded'
+  | 'skipped'
+export type CalibrationMeasurementConfidence =
+  | 'high'
+  | 'medium'
+  | 'low'
+  | 'skipped'
+
+export interface CalibrationBandEvidence {
+  readonly bandIndex: number
+  readonly judgements: number
+  readonly retests: number
+  readonly outcome: CalibrationMeasurementOutcome
+  readonly confidence: CalibrationMeasurementConfidence
+  readonly skipped: boolean
+}
+
+export interface CalibrationMeasurementMetadata {
+  readonly method: typeof GUIDED_CALIBRATION_MEASUREMENT_METHOD
+  readonly wizardVersion: typeof GUIDED_CALIBRATION_MEASUREMENT_VERSION
+  readonly seed: number
+  readonly bandOrder: readonly number[]
+  readonly bandEvidence: readonly CalibrationBandEvidence[]
+}
 
 export interface CalibrationProfilePayload {
   readonly sampleRateHz: number | null
   readonly referenceBandIndex: number
   readonly rawBandOffsetsDb: readonly (number | null)[]
+  readonly measurement: CalibrationMeasurementMetadata | null
 }
 
 export interface CalibrationProfileParseResult {
@@ -36,6 +70,150 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function isBandIndex(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value < BAND_COUNT
+  )
+}
+
+function isUint32(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= 0xffff_ffff
+  )
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+}
+
+function isMeasurementOutcome(
+  value: unknown,
+): value is CalibrationMeasurementOutcome {
+  return (
+    value === 'equal' ||
+    value === 'converged' ||
+    value === 'bounded' ||
+    value === 'skipped'
+  )
+}
+
+function isMeasurementConfidence(
+  value: unknown,
+): value is CalibrationMeasurementConfidence {
+  return (
+    value === 'high' ||
+    value === 'medium' ||
+    value === 'low' ||
+    value === 'skipped'
+  )
+}
+
+function canonicalMeasurement(
+  value: unknown,
+  referenceBandIndex: number,
+): CalibrationMeasurementMetadata | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+  if (
+    !isRecord(value) ||
+    value.method !== GUIDED_CALIBRATION_MEASUREMENT_METHOD ||
+    value.wizardVersion !== GUIDED_CALIBRATION_MEASUREMENT_VERSION ||
+    !isUint32(value.seed) ||
+    !Array.isArray(value.bandOrder) ||
+    !Array.isArray(value.bandEvidence)
+  ) {
+    throw new RangeError('guided calibration measurement metadata is malformed')
+  }
+
+  const bandOrder = value.bandOrder.map((entry) => {
+    if (!isBandIndex(entry) || entry === referenceBandIndex) {
+      throw new RangeError('guided calibration band order is invalid')
+    }
+    return entry
+  })
+  if (
+    bandOrder.length !== BAND_COUNT - 1 ||
+    new Set(bandOrder).size !== bandOrder.length
+  ) {
+    throw new RangeError('guided calibration band order must cover each test band once')
+  }
+
+  const evidence = value.bandEvidence.map((entry) => {
+    if (
+      !isRecord(entry) ||
+      !isBandIndex(entry.bandIndex) ||
+      entry.bandIndex === referenceBandIndex ||
+      !isNonNegativeInteger(entry.judgements) ||
+      !isNonNegativeInteger(entry.retests) ||
+      !isMeasurementOutcome(entry.outcome) ||
+      !isMeasurementConfidence(entry.confidence) ||
+      typeof entry.skipped !== 'boolean'
+    ) {
+      throw new RangeError('guided calibration band evidence is invalid')
+    }
+    if (
+      entry.skipped !== (entry.outcome === 'skipped') ||
+      entry.skipped !== (entry.confidence === 'skipped')
+    ) {
+      throw new RangeError('guided calibration skip evidence is inconsistent')
+    }
+    return Object.freeze({
+      bandIndex: entry.bandIndex,
+      judgements: entry.judgements,
+      retests: entry.retests,
+      outcome: entry.outcome,
+      confidence: entry.confidence,
+      skipped: entry.skipped,
+    })
+  })
+  if (
+    evidence.length !== bandOrder.length ||
+    new Set(evidence.map((entry) => entry.bandIndex)).size !== evidence.length ||
+    bandOrder.some(
+      (bandIndex) => !evidence.some((entry) => entry.bandIndex === bandIndex),
+    )
+  ) {
+    throw new RangeError('guided calibration evidence must cover the test order')
+  }
+
+  return Object.freeze({
+    method: GUIDED_CALIBRATION_MEASUREMENT_METHOD,
+    wizardVersion: GUIDED_CALIBRATION_MEASUREMENT_VERSION,
+    seed: value.seed,
+    bandOrder: Object.freeze(bandOrder),
+    bandEvidence: Object.freeze(evidence),
+  })
+}
+
+function measurementToJson(
+  measurement: CalibrationMeasurementMetadata | null,
+): JsonValue {
+  if (!measurement) {
+    return null
+  }
+  return {
+    method: measurement.method,
+    wizardVersion: measurement.wizardVersion,
+    seed: measurement.seed,
+    bandOrder: Array.from(measurement.bandOrder),
+    bandEvidence: measurement.bandEvidence.map((entry) => ({
+      bandIndex: entry.bandIndex,
+      judgements: entry.judgements,
+      retests: entry.retests,
+      outcome: entry.outcome,
+      confidence: entry.confidence,
+      skipped: entry.skipped,
+    })),
+  }
+}
+
 export function sanitizeCalibrationProfileName(value: string): string {
   let normalized = value.normalize('NFKC')
   normalized = Array.from(normalized)
@@ -55,6 +233,7 @@ export function createCalibrationProfilePayload(input: {
   readonly sampleRateHz?: number | null
   readonly referenceBandIndex?: number
   readonly rawBandOffsetsDb: readonly (number | null)[]
+  readonly measurement?: CalibrationMeasurementMetadata | null
 }): CalibrationProfilePayload {
   if (input.rawBandOffsetsDb.length !== BAND_COUNT) {
     throw new RangeError(
@@ -101,10 +280,16 @@ export function createCalibrationProfilePayload(input: {
     throw new RangeError('the reference band cannot be skipped')
   }
 
+  const measurement = canonicalMeasurement(
+    input.measurement ?? null,
+    referenceBandIndex,
+  )
+
   return Object.freeze({
     sampleRateHz,
     referenceBandIndex,
     rawBandOffsetsDb: freezeOffsets(rawBandOffsetsDb),
+    measurement,
   })
 }
 
@@ -114,6 +299,7 @@ export function createCalibrationProfileRecord(input: {
   readonly sampleRateHz?: number | null
   readonly referenceBandIndex?: number
   readonly rawBandOffsetsDb: readonly (number | null)[]
+  readonly measurement?: CalibrationMeasurementMetadata | null
 }): LocalProfileRecord {
   const name = sanitizeCalibrationProfileName(input.name)
   if (name.length === 0) {
@@ -133,6 +319,7 @@ export function createCalibrationProfileRecord(input: {
       sampleRateHz: profile.sampleRateHz,
       referenceBandIndex: profile.referenceBandIndex,
       rawBandOffsetsDb: profile.rawBandOffsetsDb,
+      measurement: measurementToJson(profile.measurement),
     }),
   })
 }
@@ -142,8 +329,9 @@ export function parseCalibrationProfileRecord(
 ): CalibrationProfileParseResult {
   if (
     record.kind !== 'calibration' ||
-    record.payloadSchemaVersion !==
-      CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION ||
+    (record.payloadSchemaVersion !==
+      LEGACY_CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION &&
+      record.payloadSchemaVersion !== CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION) ||
     !isRecord(record.payload)
   ) {
     return {
@@ -177,8 +365,22 @@ export function parseCalibrationProfileRecord(
           ? payload.referenceBandIndex
           : DEFAULT_CALIBRATION_REFERENCE_BAND_INDEX,
       rawBandOffsetsDb: raw,
+      measurement:
+        record.payloadSchemaVersion ===
+        LEGACY_CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION
+          ? null
+          : (payload.measurement as CalibrationMeasurementMetadata | null),
     })
-    return { profile, messages: Object.freeze([]) }
+    return {
+      profile,
+      messages:
+        record.payloadSchemaVersion ===
+        LEGACY_CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION
+          ? Object.freeze([
+              'Calibration payload v1 loaded without guided measurement evidence.',
+            ])
+          : Object.freeze([]),
+    }
   } catch (error) {
     return {
       profile: null,
