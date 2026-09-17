@@ -1,4 +1,8 @@
 import { type AnimationState, createAnimationState } from './dsp/animation'
+import {
+  type CalibrationStimulusState,
+  createCalibrationStimulusState,
+} from './dsp/calibrationStimulus'
 import { DEFAULT_ENGINE_PRESET, DEFAULT_ENGINE_SEED } from './dsp/engine'
 import type { HighBandMode } from './dsp/filterBank'
 import { type GainStageState, createGainStageState } from './dsp/gainSafety'
@@ -23,6 +27,7 @@ import {
   isAudioSeed,
   parseWorkletToMainMessage,
   serializeAnimationState,
+  serializeCalibrationStimulusState,
   serializeGainStageState,
   serializeSpectrumState,
   serializeStereoWidthState,
@@ -237,6 +242,16 @@ function canonicalAnimation(state: AnimationState): AnimationState {
     state.depthDb,
     state.speed,
     state.energyPreserving,
+  )
+}
+
+function canonicalCalibrationStimulus(
+  state: CalibrationStimulusState,
+): CalibrationStimulusState {
+  return createCalibrationStimulusState(
+    state.mode,
+    state.bandIndex,
+    state.levelOffsetDb,
   )
 }
 
@@ -633,6 +648,52 @@ export class AudioEngine {
     if (response.type !== 'ack' || response.command !== 'set-animation') {
       throw new Error('Unexpected set-animation acknowledgement')
     }
+  }
+
+  async setCalibrationStimulusState(
+    state: CalibrationStimulusState,
+  ): Promise<void> {
+    const canonical = canonicalCalibrationStimulus(state)
+    if (!this.node && canonical.mode !== 'inactive') {
+      throw new Error('Calibration stimulus requires running audio')
+    }
+    if (!this.node) {
+      return
+    }
+    const response = await this.request(
+      {
+        version: AUDIO_PROTOCOL_VERSION,
+        type: 'set-calibration-stimulus',
+        requestId: this.allocateRequestId(),
+        calibrationStimulus: serializeCalibrationStimulusState(canonical),
+      },
+      'ack',
+    )
+    if (
+      response.type !== 'ack' ||
+      response.command !== 'set-calibration-stimulus'
+    ) {
+      throw new Error('Unexpected set-calibration-stimulus acknowledgement')
+    }
+  }
+
+  async setCalibrationStimulusBand(
+    bandIndex: number,
+    levelOffsetDb: number,
+  ): Promise<void> {
+    await this.setCalibrationStimulusState(
+      createCalibrationStimulusState('band', bandIndex, levelOffsetDb),
+    )
+  }
+
+  async silenceCalibrationStimulus(): Promise<void> {
+    await this.setCalibrationStimulusState(
+      createCalibrationStimulusState('silent'),
+    )
+  }
+
+  async endCalibrationStimulus(): Promise<void> {
+    await this.setCalibrationStimulusState(createCalibrationStimulusState())
   }
 
   async resetSeed(seed: number): Promise<void> {

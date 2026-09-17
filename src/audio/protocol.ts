@@ -4,6 +4,12 @@ import {
   createAnimationState,
   isAnimationMode,
 } from './dsp/animation'
+import {
+  CALIBRATION_STIMULUS_SCHEMA_VERSION,
+  type CalibrationStimulusState,
+  createCalibrationStimulusState,
+  isCalibrationStimulusMode,
+} from './dsp/calibrationStimulus'
 import type { HighBandMode } from './dsp/filterBank'
 import {
   GAIN_STAGE_SCHEMA_VERSION,
@@ -22,8 +28,8 @@ import {
   createStereoWidthState,
 } from './dsp/stereo'
 
-export const AUDIO_PROTOCOL_VERSION = 4 as const
-export const GREYGEN_PROCESSOR_NAME = 'greygen-processor-v4'
+export const AUDIO_PROTOCOL_VERSION = 5 as const
+export const GREYGEN_PROCESSOR_NAME = 'greygen-processor-v5'
 
 export interface SerializedSpectrumState {
   readonly targetId: SpectralPresetId
@@ -49,6 +55,13 @@ export interface SerializedAnimationState {
   readonly depthDb: number
   readonly speed: number
   readonly energyPreserving: boolean
+}
+
+export interface SerializedCalibrationStimulusState {
+  readonly schemaVersion: typeof CALIBRATION_STIMULUS_SCHEMA_VERSION
+  readonly mode: CalibrationStimulusState['mode']
+  readonly bandIndex: number
+  readonly levelOffsetDb: number
 }
 
 interface ProtocolEnvelope {
@@ -85,6 +98,11 @@ export interface SetAnimationMessage extends ProtocolEnvelope {
   readonly animation: SerializedAnimationState
 }
 
+export interface SetCalibrationStimulusMessage extends ProtocolEnvelope {
+  readonly type: 'set-calibration-stimulus'
+  readonly calibrationStimulus: SerializedCalibrationStimulusState
+}
+
 export interface ResetSeedMessage extends ProtocolEnvelope {
   readonly type: 'reset-seed'
   readonly seed: number
@@ -104,6 +122,7 @@ export type MainToWorkletMessage =
   | SetGainStageMessage
   | SetStereoWidthMessage
   | SetAnimationMessage
+  | SetCalibrationStimulusMessage
   | ResetSeedMessage
   | RequestStatusMessage
   | StopMessage
@@ -124,6 +143,7 @@ export interface AckMessage extends ProtocolEnvelope {
     | 'set-gain-stage'
     | 'set-stereo-width'
     | 'set-animation'
+    | 'set-calibration-stimulus'
     | 'reset-seed'
 }
 
@@ -275,6 +295,31 @@ function parseStereoWidthState(
   return serializeStereoWidthState(createStereoWidthState(value.width))
 }
 
+function parseCalibrationStimulusState(
+  value: unknown,
+): SerializedCalibrationStimulusState | null {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== CALIBRATION_STIMULUS_SCHEMA_VERSION ||
+    !isCalibrationStimulusMode(value.mode) ||
+    !Number.isInteger(value.bandIndex) ||
+    !isFiniteNumber(value.levelOffsetDb)
+  ) {
+    return null
+  }
+  try {
+    return serializeCalibrationStimulusState(
+      createCalibrationStimulusState(
+        value.mode,
+        value.bandIndex as number,
+        value.levelOffsetDb,
+      ),
+    )
+  } catch {
+    return null
+  }
+}
+
 function parseAnimationState(value: unknown): SerializedAnimationState | null {
   if (
     !isRecord(value) ||
@@ -392,6 +437,32 @@ export function deserializeAnimationState(
   )
 }
 
+export function serializeCalibrationStimulusState(
+  state: CalibrationStimulusState,
+): SerializedCalibrationStimulusState {
+  const canonical = createCalibrationStimulusState(
+    state.mode,
+    state.bandIndex,
+    state.levelOffsetDb,
+  )
+  return {
+    schemaVersion: CALIBRATION_STIMULUS_SCHEMA_VERSION,
+    mode: canonical.mode,
+    bandIndex: canonical.bandIndex,
+    levelOffsetDb: canonical.levelOffsetDb,
+  }
+}
+
+export function deserializeCalibrationStimulusState(
+  state: SerializedCalibrationStimulusState,
+): CalibrationStimulusState {
+  return createCalibrationStimulusState(
+    state.mode,
+    state.bandIndex,
+    state.levelOffsetDb,
+  )
+}
+
 export function parseMainToWorkletMessage(
   value: unknown,
 ): MainToWorkletMessage | null {
@@ -476,6 +547,20 @@ export function parseMainToWorkletMessage(
         type: 'set-animation',
         requestId: value.requestId,
         animation,
+      }
+    }
+    case 'set-calibration-stimulus': {
+      const calibrationStimulus = parseCalibrationStimulusState(
+        value.calibrationStimulus,
+      )
+      if (!calibrationStimulus) {
+        return null
+      }
+      return {
+        version: AUDIO_PROTOCOL_VERSION,
+        type: 'set-calibration-stimulus',
+        requestId: value.requestId,
+        calibrationStimulus,
       }
     }
     case 'reset-seed':
@@ -598,6 +683,7 @@ export function parseWorkletToMainMessage(
         value.command !== 'set-gain-stage' &&
         value.command !== 'set-stereo-width' &&
         value.command !== 'set-animation' &&
+        value.command !== 'set-calibration-stimulus' &&
         value.command !== 'reset-seed'
       ) {
         return null

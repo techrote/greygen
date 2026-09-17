@@ -5,6 +5,7 @@ import {
   type MainToWorkletMessage,
   type WorkletToMainMessage,
   deserializeAnimationState,
+  deserializeCalibrationStimulusState,
   deserializeGainStageState,
   deserializeSpectrumState,
   deserializeStereoWidthState,
@@ -155,6 +156,17 @@ class GreygenAudioProcessor extends AudioWorkletProcessor {
           type: 'ack',
           requestId: message.requestId,
           command: 'set-animation',
+        })
+        return
+      case 'set-calibration-stimulus':
+        this.engine.setCalibrationStimulusState(
+          deserializeCalibrationStimulusState(message.calibrationStimulus),
+        )
+        this.post({
+          version: AUDIO_PROTOCOL_VERSION,
+          type: 'ack',
+          requestId: message.requestId,
+          command: 'set-calibration-stimulus',
         })
         return
       case 'reset-seed':
