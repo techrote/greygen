@@ -145,7 +145,8 @@ export default function CalibrationPanel({
     (record) => parseCalibrationProfileRecord(record).profile !== null,
   )
   const activeRecord =
-    calibrationProfiles.find((profile) => profile.id === activeProfileId) ?? null
+    calibrationProfiles.find((profile) => profile.id === activeProfileId) ??
+    null
   const activeParsed = activeRecord
     ? parseCalibrationProfileRecord(activeRecord).profile
     : null
@@ -168,7 +169,9 @@ export default function CalibrationPanel({
   const [editNote, setEditNote] = useState('')
   const [exportText, setExportText] = useState('')
   const [importText, setImportText] = useState('')
-  const [portabilityNotice, setPortabilityNotice] = useState<string | null>(null)
+  const [portabilityNotice, setPortabilityNotice] = useState<string | null>(
+    null,
+  )
 
   useEffect(() => {
     setEditName(activeRecord?.name ?? '')
@@ -297,9 +300,9 @@ export default function CalibrationPanel({
         </button>
       </div>
       <p className="status-note">
-        Balanced is the conservative default. Full is explicit opt-in. Independent
-        profiles are limited to a bounded per-band L/R correction difference and
-        all profile changes use smoothed gain paths.
+        Balanced is the conservative default. Full is explicit opt-in.
+        Independent profiles are limited to a bounded per-band L/R correction
+        difference and all profile changes use smoothed gain paths.
       </p>
 
       {activeRecord && activeParsed ? (
@@ -358,7 +361,9 @@ export default function CalibrationPanel({
               <li key={profile.id} className="saved-preset-item">
                 <strong>{profile.name}</strong>
                 <span>
-                  {parsed?.channelMode === 'independent' ? 'independent L/R' : 'linked'}
+                  {parsed?.channelMode === 'independent'
+                    ? 'independent L/R'
+                    : 'linked'}
                   {' · '}
                   {parsed?.sampleRateHz
                     ? `${parsed.sampleRateHz.toLocaleString()} Hz capture`
@@ -450,7 +455,9 @@ export default function CalibrationPanel({
               id="manual-channel-mode"
               value={channelMode}
               onChange={(event) =>
-                setChannelMode(event.currentTarget.value as CalibrationChannelMode)
+                setChannelMode(
+                  event.currentTarget.value as CalibrationChannelMode,
+                )
               }
             >
               <option value="linked">Linked / symmetric</option>
@@ -475,7 +482,9 @@ export default function CalibrationPanel({
           </label>
           <OffsetGrid
             prefix="calibration-left-band"
-            label={channelMode === 'linked' ? 'Linked correction' : 'Left correction'}
+            label={
+              channelMode === 'linked' ? 'Linked correction' : 'Left correction'
+            }
             values={leftOffsetDrafts}
             referenceBandIndex={referenceBandIndex}
             onChange={(index, value) => setOffset('left', index, value)}

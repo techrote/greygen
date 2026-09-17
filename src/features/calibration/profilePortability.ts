@@ -84,7 +84,9 @@ export function parseCalibrationProfileExport(
   } catch {
     return {
       record: null,
-      messages: Object.freeze(['Personal calibration export JSON is malformed.']),
+      messages: Object.freeze([
+        'Personal calibration export JSON is malformed.',
+      ]),
     }
   }
 

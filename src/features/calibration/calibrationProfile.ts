@@ -130,7 +130,9 @@ function isMeasurementConfidence(
   )
 }
 
-function isCalibrationChannelMode(value: unknown): value is CalibrationChannelMode {
+function isCalibrationChannelMode(
+  value: unknown,
+): value is CalibrationChannelMode {
   return value === 'linked' || value === 'independent'
 }
 
@@ -244,10 +246,7 @@ function sanitizeText(value: string, maxLength: number): string {
     .filter((character) => {
       const code = character.codePointAt(0) ?? 0
       return (
-        code >= 0x20 &&
-        code !== 0x7f &&
-        character !== '<' &&
-        character !== '>'
+        code >= 0x20 && code !== 0x7f && character !== '<' && character !== '>'
       )
     })
     .join('')
@@ -500,7 +499,8 @@ export function parseCalibrationProfileRecord(
     }
     const profile = createCalibrationProfilePayload({
       sampleRateHz:
-        payload.sampleRateHz === null || typeof payload.sampleRateHz === 'number'
+        payload.sampleRateHz === null ||
+        typeof payload.sampleRateHz === 'number'
           ? payload.sampleRateHz
           : null,
       referenceBandIndex:
@@ -511,7 +511,8 @@ export function parseCalibrationProfileRecord(
       leftRawBandOffsetsDb: left,
       rightRawBandOffsetsDb: right,
       note: typeof payload.note === 'string' ? payload.note : '',
-      measurement: payload.linkedMeasurement as CalibrationMeasurementMetadata | null,
+      measurement:
+        payload.linkedMeasurement as CalibrationMeasurementMetadata | null,
       leftMeasurement:
         payload.leftMeasurement as CalibrationMeasurementMetadata | null,
       rightMeasurement:
@@ -665,7 +666,8 @@ export function resolveCalibrationRecordOffsetsDb(
   record: LocalProfileRecord | null,
   mode: CalibrationApplicationMode,
 ): readonly number[] {
-  return resolveCalibrationRecordChannelOffsetsDb(record, mode).leftBandOffsetsDb
+  return resolveCalibrationRecordChannelOffsetsDb(record, mode)
+    .leftBandOffsetsDb
 }
 
 export function findCalibrationProfile(

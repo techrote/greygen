@@ -39,16 +39,19 @@ export interface GuidedChannelCalibrationResult {
 
 function assertSeed(seed: number): number {
   if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) {
-    throw new RangeError('guided channel seed must be an unsigned 32-bit integer')
+    throw new RangeError(
+      'guided channel seed must be an unsigned 32-bit integer',
+    )
   }
   return seed >>> 0
 }
 
 function channelSeed(seed: number, channel: 'left' | 'right'): number {
   return (
-    seed ^
-    (channel === 'left' ? GUIDED_LEFT_SEED_XOR : GUIDED_RIGHT_SEED_XOR)
-  ) >>> 0
+    (seed ^
+      (channel === 'left' ? GUIDED_LEFT_SEED_XOR : GUIDED_RIGHT_SEED_XOR)) >>>
+    0
+  )
 }
 
 export function createGuidedChannelCalibrationState(
@@ -172,7 +175,9 @@ export function retestGuidedChannelBand(
     throw new Error('channel retests can only start from overall review')
   }
   if (state.mode === 'linked' && channel !== 'linked') {
-    throw new RangeError('linked calibration can only retest the linked channel')
+    throw new RangeError(
+      'linked calibration can only retest the linked channel',
+    )
   }
   if (state.mode === 'independent' && channel === 'linked') {
     throw new RangeError('independent calibration retests left or right')

@@ -123,8 +123,9 @@ export default function GuidedCalibrationWizard({
   const [comfortableConfirmed, setComfortableConfirmed] = useState(false)
   const [channelMode, setChannelMode] =
     useState<CalibrationChannelMode>('linked')
-  const [wizard, setWizard] =
-    useState<GuidedChannelCalibrationState | null>(null)
+  const [wizard, setWizard] = useState<GuidedChannelCalibrationState | null>(
+    null,
+  )
   const [heardReference, setHeardReference] = useState(false)
   const [heardTest, setHeardTest] = useState(false)
   const [lastAudition, setLastAudition] = useState<'reference' | 'test' | null>(
@@ -176,7 +177,12 @@ export default function GuidedCalibrationWizard({
 
   const submitJudgement = (judgement: CalibrationJudgement): void => {
     const active = wizard ? activeGuidedCalibrationState(wizard) : null
-    if (!wizard || active?.stage !== 'matching' || !heardReference || !heardTest) {
+    if (
+      !wizard ||
+      active?.stage !== 'matching' ||
+      !heardReference ||
+      !heardTest
+    ) {
       return
     }
     onStimulusSilent()
@@ -345,10 +351,10 @@ export default function GuidedCalibrationWizard({
           </label>
         </fieldset>
         <p className="status-note">
-          Independent mode measures each playback channel separately. A left / right
-          difference may come from the listener, transducer, fit, coupling, room,
-          or device and is not interpreted as hearing loss. Linked mode is always
-          available as the conservative fallback.
+          Independent mode measures each playback channel separately. A left /
+          right difference may come from the listener, transducer, fit,
+          coupling, room, or device and is not interpreted as hearing loss.
+          Linked mode is always available as the conservative fallback.
         </p>
         <ul className="calibration-safety-list">
           <li>Set a comfortable listening level before beginning.</li>
@@ -397,7 +403,11 @@ export default function GuidedCalibrationWizard({
   const progress = guidedChannelOverallProgress(wizard)
   const active = activeGuidedCalibrationState(wizard)
 
-  if (wizard.phase !== 'review' && active?.stage === 'matching' && active.current) {
+  if (
+    wizard.phase !== 'review' &&
+    active?.stage === 'matching' &&
+    active.current
+  ) {
     const correction = currentGuidedCalibrationCorrectionDb(active) ?? 0
     const frequency = NOMINAL_BAND_CENTERS_HZ[active.current.bandIndex]
     const extreme =
@@ -414,17 +424,18 @@ export default function GuidedCalibrationWizard({
           <div>
             <p className="label">
               {channelLabel(wizard.phase)} · Match{' '}
-              {Math.min(progress.completed + 1, progress.total)} of {progress.total}
+              {Math.min(progress.completed + 1, progress.total)} of{' '}
+              {progress.total}
             </p>
             <h4 id="guided-heading">{frequencyLabel(frequency)} test band</h4>
           </div>
           <output aria-live="polite">{formatCorrection(correction)}</output>
         </div>
         <p>
-          Space alternates reference/test in {channelLabel(wizard.phase).toLowerCase()}.
-          After hearing both, choose how the test sounds relative to the 1 kHz
-          reference. The probe is bounded to ±24 dB and master is never changed
-          automatically.
+          Space alternates reference/test in{' '}
+          {channelLabel(wizard.phase).toLowerCase()}. After hearing both, choose
+          how the test sounds relative to the 1 kHz reference. The probe is
+          bounded to ±24 dB and master is never changed automatically.
         </p>
         {extreme ? (
           <p className="calibration-caveat" role="note">
@@ -539,11 +550,13 @@ export default function GuidedCalibrationWizard({
             <li className="calibration-review-band" key={frequency}>
               <strong>{frequencyLabel(frequency)}</strong>
               {result.mode === 'linked' ? (
-                <span>{formatCorrection(result.leftRawBandOffsetsDb[bandIndex])}</span>
+                <span>
+                  {formatCorrection(result.leftRawBandOffsetsDb[bandIndex])}
+                </span>
               ) : (
                 <span>
-                  L {formatCorrection(result.leftRawBandOffsetsDb[bandIndex])} · R{' '}
-                  {formatCorrection(result.rightRawBandOffsetsDb[bandIndex])}
+                  L {formatCorrection(result.leftRawBandOffsetsDb[bandIndex])} ·
+                  R {formatCorrection(result.rightRawBandOffsetsDb[bandIndex])}
                 </span>
               )}
               <small>
@@ -559,7 +572,10 @@ export default function GuidedCalibrationWizard({
                     type="button"
                     className="secondary-action"
                     onClick={() =>
-                      startRetest(result.mode === 'linked' ? 'linked' : 'left', bandIndex)
+                      startRetest(
+                        result.mode === 'linked' ? 'linked' : 'left',
+                        bandIndex,
+                      )
                     }
                   >
                     Retest {result.mode === 'linked' ? '' : 'L'}
