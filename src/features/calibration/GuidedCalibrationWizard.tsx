@@ -118,12 +118,7 @@ export default function GuidedCalibrationWizard({
   }
 
   const submitJudgement = (judgement: CalibrationJudgement): void => {
-    if (
-      !wizard ||
-      wizard.stage !== 'matching' ||
-      !heardReference ||
-      !heardTest
-    ) {
+    if (wizard?.stage !== 'matching' || !heardReference || !heardTest) {
       return
     }
     onStimulusSilent()
@@ -134,7 +129,7 @@ export default function GuidedCalibrationWizard({
   }
 
   const skip = (): void => {
-    if (!wizard || wizard.stage !== 'matching') {
+    if (wizard?.stage !== 'matching') {
       return
     }
     onStimulusSilent()
@@ -169,7 +164,7 @@ export default function GuidedCalibrationWizard({
   }
 
   const startRetest = (bandIndex: number): void => {
-    if (!wizard || wizard.stage !== 'review') {
+    if (wizard?.stage !== 'review') {
       return
     }
     onRestoreSavedProfile()
@@ -189,11 +184,7 @@ export default function GuidedCalibrationWizard({
   }
 
   const save = (): void => {
-    if (
-      !wizard ||
-      wizard.stage !== 'review' ||
-      profileName.trim().length === 0
-    ) {
+    if (wizard?.stage !== 'review' || profileName.trim().length === 0) {
       return
     }
     onStimulusEnd()
@@ -313,8 +304,6 @@ export default function GuidedCalibrationWizard({
       <section
         className="guided-calibration guided-calibration-active"
         aria-labelledby="guided-heading"
-        tabIndex={0}
-        onKeyDown={handleKeyboard}
       >
         <div className="section-heading-row">
           <div>
@@ -357,6 +346,14 @@ export default function GuidedCalibrationWizard({
           Heard reference: {heardReference ? 'yes' : 'no'} · Heard test:{' '}
           {heardTest ? 'yes' : 'no'}
         </p>
+        <button
+          id="guided-keyboard-control"
+          type="button"
+          className="secondary-action"
+          onKeyDown={handleKeyboard}
+        >
+          Keyboard controls
+        </button>
         <div className="calibration-judgement-row">
           <button
             type="button"
@@ -407,7 +404,6 @@ export default function GuidedCalibrationWizard({
     <section
       className="guided-calibration guided-calibration-active"
       aria-labelledby="guided-heading"
-      onKeyDown={handleKeyboard}
     >
       <div className="section-heading-row">
         <div>
@@ -421,16 +417,12 @@ export default function GuidedCalibrationWizard({
         chain. Skipped bands remain unknown and will not be fabricated. Nothing
         is saved until you explicitly save below.
       </p>
-      <div className="calibration-review-grid" role="list">
+      <ul className="calibration-review-grid">
         {NOMINAL_BAND_CENTERS_HZ.map((frequency, bandIndex) => {
           const result = resultsByBand.get(bandIndex)
           const isReference = bandIndex === wizard.referenceBandIndex
           return (
-            <div
-              className="calibration-review-band"
-              role="listitem"
-              key={frequency}
-            >
+            <li className="calibration-review-band" key={frequency}>
               <strong>{frequencyLabel(frequency)}</strong>
               <span>{formatCorrection(raw[bandIndex])}</span>
               <small>
@@ -449,10 +441,10 @@ export default function GuidedCalibrationWizard({
                   Retest
                 </button>
               ) : null}
-            </div>
+            </li>
           )
         })}
-      </div>
+      </ul>
       <label htmlFor="guided-audition-mode">
         Audition unsaved result
         <select

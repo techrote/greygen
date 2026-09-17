@@ -41,7 +41,7 @@ test('guided calibration completes deterministic mocked matches and saves only a
     }
 
     if (index === 0) {
-      await region.focus()
+      await page.locator('#guided-keyboard-control').focus()
       await page.keyboard.press('Space')
       await expect(
         page.getByRole('button', { name: /^Hear test / }),
@@ -128,7 +128,7 @@ test('guided calibration supports skip, silence, Stop, abort, and clean restart 
   await expect(page.locator('.guided-calibration-active')).toContainText(
     'Match 1 of 9',
   )
-  await page.locator('.guided-calibration-active').focus()
+  await page.locator('#guided-keyboard-control').focus()
   await page.keyboard.press('Escape')
   await expect(
     page.getByRole('heading', { name: 'Guided perceived-level calibration' }),

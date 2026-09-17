@@ -692,6 +692,9 @@ button.danger-action:hover:not(:disabled) {
 
 .calibration-review-grid {
   display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.55rem;
 }
