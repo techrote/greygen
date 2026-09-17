@@ -118,7 +118,12 @@ export default function GuidedCalibrationWizard({
   }
 
   const submitJudgement = (judgement: CalibrationJudgement): void => {
-    if (!wizard || wizard.stage !== 'matching' || !heardReference || !heardTest) {
+    if (
+      !wizard ||
+      wizard.stage !== 'matching' ||
+      !heardReference ||
+      !heardTest
+    ) {
       return
     }
     onStimulusSilent()
@@ -184,7 +189,11 @@ export default function GuidedCalibrationWizard({
   }
 
   const save = (): void => {
-    if (!wizard || wizard.stage !== 'review' || profileName.trim().length === 0) {
+    if (
+      !wizard ||
+      wizard.stage !== 'review' ||
+      profileName.trim().length === 0
+    ) {
       return
     }
     onStimulusEnd()
@@ -192,8 +201,9 @@ export default function GuidedCalibrationWizard({
       name: profileName,
       referenceBandIndex: wizard.referenceBandIndex,
       rawBandOffsetsDb: guidedCalibrationRawOffsetsDb(wizard),
-      measurement:
-        createGuidedCalibrationMeasurement(wizard) as CalibrationMeasurementMetadata,
+      measurement: createGuidedCalibrationMeasurement(
+        wizard,
+      ) as CalibrationMeasurementMetadata,
     })
     setWizard(null)
     setAuditionMode('off')
@@ -249,8 +259,8 @@ export default function GuidedCalibrationWizard({
         <ul className="calibration-safety-list">
           <li>Set a comfortable listening level before beginning.</li>
           <li>
-            Skip anything you cannot comfortably match; never turn the system
-            up aggressively to force an inaudible band to appear.
+            Skip anything you cannot comfortably match; never turn the system up
+            aggressively to force an inaudible band to appear.
           </li>
           <li>
             The 31 Hz and 16 kHz regions can be limited by playback hardware,
@@ -273,9 +283,7 @@ export default function GuidedCalibrationWizard({
           type="button"
           className="primary-action"
           disabled={
-            disabled ||
-            audioStatus !== 'running' ||
-            !comfortableConfirmed
+            disabled || audioStatus !== 'running' || !comfortableConfirmed
           }
           onClick={start}
         >
@@ -305,6 +313,7 @@ export default function GuidedCalibrationWizard({
       <section
         className="guided-calibration guided-calibration-active"
         aria-labelledby="guided-heading"
+        tabIndex={0}
         onKeyDown={handleKeyboard}
       >
         <div className="section-heading-row">
@@ -340,11 +349,7 @@ export default function GuidedCalibrationWizard({
               ? `Hear test ${frequencyLabel(frequency)}`
               : 'Hear 1 kHz reference'}
           </button>
-          <button
-            type="button"
-            className="secondary-action"
-            onClick={silence}
-          >
+          <button type="button" className="secondary-action" onClick={silence}>
             Silence calibration
           </button>
         </div>
@@ -421,7 +426,11 @@ export default function GuidedCalibrationWizard({
           const result = resultsByBand.get(bandIndex)
           const isReference = bandIndex === wizard.referenceBandIndex
           return (
-            <div className="calibration-review-band" role="listitem" key={frequency}>
+            <div
+              className="calibration-review-band"
+              role="listitem"
+              key={frequency}
+            >
               <strong>{frequencyLabel(frequency)}</strong>
               <span>{formatCorrection(raw[bandIndex])}</span>
               <small>

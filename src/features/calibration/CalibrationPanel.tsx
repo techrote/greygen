@@ -204,14 +204,14 @@ export default function CalibrationPanel({
         onSave={onGuidedSave}
       />
 
-      <details className="manual-calibration-details">
+      <details className="manual-calibration-details" open>
         <summary>Manual profile editor</summary>
         <fieldset className="calibration-editor" disabled={disabled}>
           <legend>Create manual relative profile</legend>
           <p className="status-note">
             Advanced/manual path. Blank a non-reference band to mark it
-            unknown/skipped. Do not raise the system level aggressively to
-            force an inaudible band to appear.
+            unknown/skipped. Do not raise the system level aggressively to force
+            an inaudible band to appear.
           </p>
           <label htmlFor="calibration-profile-name">
             Profile name
