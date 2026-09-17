@@ -23,6 +23,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: python scripts/issue14_audio_patch.py
+      - run: python scripts/issue14_audio_compat.py
       - run: npm run format
       - run: npm run typecheck
       - name: Commit audio integration
