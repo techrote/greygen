@@ -35,7 +35,9 @@ describe('guided calibration state machine', () => {
     const state = finishAllEqual()
     expect(state.stage).toBe('review')
     expect(state.results).toHaveLength(9)
-    expect(state.results.every((result) => result.outcome === 'equal')).toBe(true)
+    expect(state.results.every((result) => result.outcome === 'equal')).toBe(
+      true,
+    )
     expect(state.results.every((result) => result.confidence === 'high')).toBe(
       true,
     )
@@ -46,7 +48,10 @@ describe('guided calibration state machine', () => {
     let state = createGuidedCalibrationState(1234)
     const bandIndex = state.current?.bandIndex
     let responses = 0
-    while (state.stage === 'matching' && state.current?.bandIndex === bandIndex) {
+    while (
+      state.stage === 'matching' &&
+      state.current?.bandIndex === bandIndex
+    ) {
       state = submitCalibrationJudgement(state, 'quieter')
       responses += 1
       expect(responses).toBeLessThanOrEqual(GUIDED_CALIBRATION_MAX_JUDGEMENTS)
@@ -60,7 +65,10 @@ describe('guided calibration state machine', () => {
   it('converges repeated louder responses at the negative correction bound', () => {
     let state = createGuidedCalibrationState(1234)
     const bandIndex = state.current?.bandIndex
-    while (state.stage === 'matching' && state.current?.bandIndex === bandIndex) {
+    while (
+      state.stage === 'matching' &&
+      state.current?.bandIndex === bandIndex
+    ) {
       state = submitCalibrationJudgement(state, 'louder')
     }
     const result = state.results.find((entry) => entry.bandIndex === bandIndex)
@@ -85,7 +93,9 @@ describe('guided calibration state machine', () => {
     let state = createGuidedCalibrationState(1234)
     const skippedBand = state.current?.bandIndex
     state = skipCurrentCalibrationBand(state)
-    const result = state.results.find((entry) => entry.bandIndex === skippedBand)
+    const result = state.results.find(
+      (entry) => entry.bandIndex === skippedBand,
+    )
     expect(result).toMatchObject({
       correctionDb: null,
       outcome: 'skipped',
@@ -134,7 +144,9 @@ describe('guided calibration state machine', () => {
 
     const restarted = createGuidedCalibrationState(1234)
     expect(restarted.results).toEqual([])
-    expect(restarted.bandOrder).toEqual(createGuidedCalibrationState(1234).bandOrder)
+    expect(restarted.bandOrder).toEqual(
+      createGuidedCalibrationState(1234).bandOrder,
+    )
     expect(currentGuidedCalibrationCorrectionDb(restarted)).toBe(0)
   })
 })

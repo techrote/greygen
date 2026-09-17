@@ -21,9 +21,9 @@ describe('calibration stimulus AudioWorklet protocol', () => {
     if (parsed?.type !== 'set-calibration-stimulus') {
       throw new Error('Expected calibration stimulus message')
     }
-    expect(deserializeCalibrationStimulusState(parsed.calibrationStimulus)).toEqual(
-      source,
-    )
+    expect(
+      deserializeCalibrationStimulusState(parsed.calibrationStimulus),
+    ).toEqual(source)
   })
 
   it('rejects malformed or out-of-bound stimulus state', () => {

@@ -72,27 +72,30 @@ export interface GuidedCalibrationMeasurement {
 }
 
 function assertSeed(seed: number): number {
-  if (
-    !Number.isInteger(seed) ||
-    seed < 0 ||
-    seed > 0xffff_ffff
-  ) {
-    throw new RangeError('guided calibration seed must be an unsigned 32-bit integer')
+  if (!Number.isInteger(seed) || seed < 0 || seed > 0xffff_ffff) {
+    throw new RangeError(
+      'guided calibration seed must be an unsigned 32-bit integer',
+    )
   }
   return seed >>> 0
 }
 
 function assertBandIndex(bandIndex: number): number {
-  if (!Number.isInteger(bandIndex) || bandIndex < 0 || bandIndex >= BAND_COUNT) {
-    throw new RangeError(`bandIndex must be an integer from 0 to ${BAND_COUNT - 1}`)
+  if (
+    !Number.isInteger(bandIndex) ||
+    bandIndex < 0 ||
+    bandIndex >= BAND_COUNT
+  ) {
+    throw new RangeError(
+      `bandIndex must be an integer from 0 to ${BAND_COUNT - 1}`,
+    )
   }
   return bandIndex
 }
 
 function gridIndexToDb(gridIndex: number): number {
   return (
-    -CALIBRATION_BAND_OFFSET_LIMIT_DB +
-    gridIndex * GUIDED_CALIBRATION_STEP_DB
+    -CALIBRATION_BAND_OFFSET_LIMIT_DB + gridIndex * GUIDED_CALIBRATION_STEP_DB
   )
 }
 
@@ -116,7 +119,10 @@ function freezeResults(
   return Object.freeze(results.map((result) => Object.freeze({ ...result })))
 }
 
-function shuffleBands(seed: number, referenceBandIndex: number): readonly number[] {
+function shuffleBands(
+  seed: number,
+  referenceBandIndex: number,
+): readonly number[] {
   const order = Array.from({ length: BAND_COUNT }, (_, index) => index).filter(
     (index) => index !== referenceBandIndex,
   )
@@ -138,7 +144,9 @@ export function createGuidedCalibrationState(
   const reference = assertBandIndex(referenceBandIndex)
   const bandOrder = shuffleBands(canonicalSeed, reference)
   if (bandOrder.length === 0) {
-    throw new Error('guided calibration requires at least one non-reference band')
+    throw new Error(
+      'guided calibration requires at least one non-reference band',
+    )
   }
   return Object.freeze({
     version: GUIDED_CALIBRATION_VERSION,
@@ -310,12 +318,7 @@ export function skipCurrentCalibrationBand(
   if (state.stage !== 'matching' || !state.current) {
     throw new Error('a calibration band can only be skipped while matching')
   }
-  return finishCurrentBand(
-    state,
-    null,
-    'skipped',
-    state.current.judgements,
-  )
+  return finishCurrentBand(state, null, 'skipped', state.current.judgements)
 }
 
 export function retestCalibrationBand(
@@ -327,7 +330,9 @@ export function retestCalibrationBand(
     throw new Error('retests can only start from review')
   }
   if (band === state.referenceBandIndex) {
-    throw new RangeError('the reference band is fixed at 0 dB and is not retested')
+    throw new RangeError(
+      'the reference band is fixed at 0 dB and is not retested',
+    )
   }
   if (!state.results.some((result) => result.bandIndex === band)) {
     throw new RangeError('only completed calibration bands can be retested')
@@ -357,7 +362,9 @@ export function createGuidedCalibrationMeasurement(
   state: GuidedCalibrationState,
 ): GuidedCalibrationMeasurement {
   if (state.stage !== 'review') {
-    throw new Error('calibration measurement metadata is only complete at review')
+    throw new Error(
+      'calibration measurement metadata is only complete at review',
+    )
   }
   const evidence = state.bandOrder.map((bandIndex) => {
     const result = state.results.find((entry) => entry.bandIndex === bandIndex)

@@ -62,9 +62,7 @@ export function calibrationStimulusGainLinear(
   if (state.mode !== 'band') {
     return 0
   }
-  return decibelsToGain(
-    CALIBRATION_STIMULUS_BASE_GAIN_DB + state.levelOffsetDb,
-  )
+  return decibelsToGain(CALIBRATION_STIMULUS_BASE_GAIN_DB + state.levelOffsetDb)
 }
 
 export function calibrationStimulusWetTarget(

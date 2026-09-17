@@ -47,7 +47,9 @@ test('guided calibration completes deterministic mocked matches and saves only a
         page.getByRole('button', { name: /^Hear test / }),
       ).toBeVisible()
       await page.keyboard.press('Space')
-      await expect(region).toContainText('Heard reference: yes · Heard test: yes')
+      await expect(region).toContainText(
+        'Heard reference: yes · Heard test: yes',
+      )
       await page.keyboard.press('ArrowDown')
     } else {
       await page.getByRole('button', { name: 'Hear 1 kHz reference' }).click()

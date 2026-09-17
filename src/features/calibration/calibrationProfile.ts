@@ -142,7 +142,9 @@ function canonicalMeasurement(
     bandOrder.length !== BAND_COUNT - 1 ||
     new Set(bandOrder).size !== bandOrder.length
   ) {
-    throw new RangeError('guided calibration band order must cover each test band once')
+    throw new RangeError(
+      'guided calibration band order must cover each test band once',
+    )
   }
 
   const evidence = value.bandEvidence.map((entry) => {
@@ -175,12 +177,15 @@ function canonicalMeasurement(
   })
   if (
     evidence.length !== bandOrder.length ||
-    new Set(evidence.map((entry) => entry.bandIndex)).size !== evidence.length ||
+    new Set(evidence.map((entry) => entry.bandIndex)).size !==
+      evidence.length ||
     bandOrder.some(
       (bandIndex) => !evidence.some((entry) => entry.bandIndex === bandIndex),
     )
   ) {
-    throw new RangeError('guided calibration evidence must cover the test order')
+    throw new RangeError(
+      'guided calibration evidence must cover the test order',
+    )
   }
 
   return Object.freeze({
@@ -331,7 +336,8 @@ export function parseCalibrationProfileRecord(
     record.kind !== 'calibration' ||
     (record.payloadSchemaVersion !==
       LEGACY_CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION &&
-      record.payloadSchemaVersion !== CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION) ||
+      record.payloadSchemaVersion !==
+        CALIBRATION_PROFILE_PAYLOAD_SCHEMA_VERSION) ||
     !isRecord(record.payload)
   ) {
     return {
