@@ -1,188 +1,168 @@
 # Guided Relative Perceived-Level Calibration
 
-Status: canonical contract for issue #14 guided calibration.
+Status: canonical contract for issues #14-#15 guided linked and independent-channel calibration.
 
 ## Purpose and boundary
 
-Greygen's guided workflow estimates **relative perceived-level correction for the current listener + playback chain** using the existing ten-band model. It is not a medical hearing test, audiogram, dB HL measurement, or calibrated SPL measurement.
+Greygen's guided workflow estimates **relative perceived-level correction for the current listener + playback chain** using the ten-band model. It is not a medical hearing test, audiogram, dB HL measurement, calibrated SPL measurement, or diagnosis of left/right hearing asymmetry.
 
-The workflow intentionally separates three concepts:
+The workflow separates:
 
 1. transient calibration stimulus playback;
-2. an in-memory deterministic matching state machine;
-3. the private persisted calibration profile defined by `CALIBRATION_PROFILES.md`.
+2. a deterministic in-memory matching state machine;
+3. the private calibration profile defined by `CALIBRATION_PROFILES.md`.
 
-Starting or abandoning the wizard never mutates a saved profile. A profile is created only after the review screen and an explicit Save action.
+Opening, aborting, or auditioning a wizard result never mutates a saved profile. Persistence occurs only after review and explicit Save.
 
-## Prerequisites and user control
+## User control
 
-The wizard does not start audio. Before Begin becomes available:
+The wizard never starts audio. Begin requires:
 
-- the main Greygen audio engine must already be Running because the user explicitly selected Start audio;
-- the user must confirm that they have set a comfortable overall listening level.
+- the main audio engine already Running after explicit **Start audio**;
+- explicit confirmation that the user set a comfortable overall level.
 
-Greygen never raises master gain automatically during calibration. The normal master control remains the user's digital master. The user can use **Silence calibration**, the normal **Stop audio** transport, or **Abort calibration** at any time.
+Greygen never raises master automatically during calibration. **Silence calibration**, the normal **Stop audio** transport, and **Abort calibration** remain available.
 
-Abort:
+Abort ends transient stimulus mode, restores the previously selected saved profile/application mode, discards the in-memory run, and writes no profile.
 
-- ends transient stimulus mode;
-- restores the previously selected saved profile/application mode;
-- discards the in-memory run;
-- writes no new calibration profile.
+## Channel modes
 
-A restart creates a fresh deterministic run from the same seed; abandoned responses are not retained.
+Issue #15 adds an explicit pre-test choice:
+
+- **Linked / symmetric:** one nine-band run; every stimulus is sent to both output channels and the resulting curve is applied identically left/right.
+- **Independent left / right:** one deterministic nine-band run on the left output channel followed by one on the right output channel. The non-target channel is faded to silence while the target channel is tested.
+
+The UI always identifies the active channel. Linked mode remains available as the conservative fallback.
+
+Independent L/R differences are playback-chain observations only. They may arise from transducer mismatch, fit/coupling, room, routing, device gain, listener perception, or measurement uncertainty. Greygen does not label or interpret them as hearing loss.
 
 ## Stimulus topology
 
-The default stimulus is narrow-band noise derived from Greygen's actual ten-band complementary filter bank rather than a sine oscillator or pre-rendered asset.
+The default stimulus is narrow-band noise from Greygen's actual complementary ten-band filter bank.
 
-The worklet owns a transient `CalibrationStimulusState` with three modes:
+Runtime `CalibrationStimulusState` supports:
 
 - `inactive`: normal Greygen output;
-- `silent`: calibration owns the output but emits silence;
-- `band`: calibration owns the output and emits one selected filter-bank component.
+- `silent`: calibration owns output but emits silence;
+- `band`: one selected filter-bank component;
+- channel target `both | left | right`.
 
-This state is runtime-only. It is not part of `SoundState`, `ProfileState`, share URLs, or user sound presets.
+The stimulus state is runtime-only and never enters SoundState, ProfileState, normal share URLs, or named sound presets.
 
 ### Level and bounds
 
-The calibration stimulus base is `-18 dB` relative to the selected band component. The test-band relative probe offset is bounded to the same global calibration range as stored Full correction: `[-24,+24] dB`.
+- base stimulus: `-18 dB` relative to the selected band component;
+- test relative probe: `[-24,+24] dB`;
+- reference: 1 kHz / band index 5 / `0 dB` relative probe.
 
-The reference band is the 1 kHz model band (index 5) at `0 dB` relative probe offset.
-
-No workflow state can request an unbounded probe and no response path increases master gain.
+No response can request an unbounded probe or increase master.
 
 ### Transitions
 
-Normal↔calibration and band-to-band changes are smoothed with a 40 ms one-pole transition. Entering the wizard first requests `silent`; no reference/test band auto-plays simply because the wizard was opened.
+Normal↔stimulus, band changes, and left/right channel masks use 40 ms one-pole smoothing. Entering the wizard requests `silent`; no reference/test band auto-plays simply because the wizard opened.
 
-`Silence calibration` targets all calibration-band gains to zero while retaining calibration ownership of the output, producing a short click-free fade to silence. The normal Stop transport closes the AudioContext through the existing lifecycle path.
-
-### Stereo
-
-The calibration stimulus is centred: the selected deterministic A-stream band component is applied identically to left and right. Normal stereo width processing is bypassed while the transient stimulus owns the output. This avoids width-dependent perceived-position changes during matching.
+In independent mode a channel transition is therefore a fade, not a hard pan or channel step.
 
 ## Digital safety
 
-Transient calibration participates in the same deterministic safety-pre-gain system as normal Greygen output.
+Transient calibration participates in deterministic safety pre-gain. The safety target conservatively accounts for normal requested response plus bounded calibration probe demand during crossfade.
 
-During stimulus mode the safety target conservatively accounts for both:
+Saved independent correction is evaluated per output channel and the more demanding channel determines shared safety attenuation. The separate per-band inter-channel correction guard is defined in `CALIBRATION_PROFILES.md`.
 
-- the current normal requested-response estimate; and
-- the bounded calibration probe gain.
-
-This sum is conservative during the crossfade. Positive probe gain therefore cannot silently consume the existing headroom allowance. Master smoothing, final guard, and dBFS metering remain unchanged.
-
-Digital safety does not make a claim about acoustic SPL or listening exposure because Greygen does not know downstream device gain/transducer sensitivity.
+These mechanisms protect digital headroom; they do not establish acoustic SPL or universal listening exposure safety because downstream gain/transducer sensitivity is unknown.
 
 ## Deterministic matching algorithm
 
-The guided state machine is pure and wall-clock independent.
+The inner per-channel state machine is pure and wall-clock independent.
 
 Constants:
 
-- reference band: index 5 / 1 kHz;
-- tested bands: the remaining nine bands;
+- reference: 1 kHz / index 5;
+- tested bands: remaining nine;
 - correction grid: `[-24,+24] dB`;
-- grid spacing: `0.5 dB`;
+- spacing: `0.5 dB`;
 - grid states: 97;
-- maximum judgements for one test-band search: 7.
+- maximum judgements per band search: 7.
 
-### Order
-
-The nine test bands are Fisher-Yates shuffled using Greygen's seeded `Xoshiro128StarStar` PRNG with a dedicated guided-calibration stream id (`14`). Equal seeds therefore produce equal band order; no wall-clock or browser randomness determines order.
-
-The default application derives the wizard seed deterministically from the current sound seed, keeping calibration ordering replayable while independent from the audio source stream.
-
-### Pairwise response semantics
-
-Each test starts at `0 dB` relative correction. The user hears the 1 kHz reference and the current test band, then chooses:
+Each test starts at 0 dB relative correction. User responses mean:
 
 - **Test is quieter** → correction must increase;
-- **About equal** → accept the current grid value;
+- **About equal** → accept current grid value;
 - **Test is louder** → correction must decrease.
 
-Quieter/louder responses perform a bounded binary search on the 97-point grid. Seven judgements are sufficient to terminate the search. An endpoint result is recorded as `bounded`, not chased beyond ±24 dB.
+Quieter/louder perform bounded binary search. Endpoint termination is `bounded`, never chased beyond ±24 dB. **Skip / cannot comfortably match** stores `null`; no interpolation is fabricated.
 
-A band can instead be **Skip / cannot comfortably match**. It is recorded as `null`, with `skipped` outcome/confidence. No interpolation fabricates a correction for it.
+### Ordering and channel composition
+
+Each nine-band pass uses seeded `Xoshiro128StarStar` shuffling. Equal seeds reproduce equal order.
+
+The outer issue-#15 channel state machine reuses the exact #14 per-band algorithm rather than duplicating convergence logic:
+
+- linked mode uses the base guided seed;
+- independent left/right derive stable separate seeds from that base seed;
+- left completes before right begins;
+- completing a retest returns to overall review rather than restarting the other channel.
+
+A linked run therefore has 9 test bands; an independent run has 18 test-band steps total.
 
 ## Extreme bands
 
-31 Hz and 16 kHz steps display an explicit caveat that mismatch may reflect hardware, coupling, room, or listener limits. The UI tells the user to skip rather than raise overall level aggressively.
+31 Hz and 16 kHz display the existing hardware/coupling/room/listener caveat and explicit skip path. No clinical inference is made from skipped or bounded results on either channel.
 
-No inference about hearing loss or clinical threshold is made from skipped or bounded bands.
+## Review, retest, and audition
 
-## Review and retest
+Linked review displays one raw curve. Independent review displays L and R raw corrections for each band. The reference remains explicit; skipped values remain unknown.
 
-After nine test bands complete, playback leaves transient-stimulus mode and the wizard shows a raw review table:
+Any completed non-reference band can be retested. Independent mode allows left or right retest independently while retaining the other channel's completed result.
 
-- reference band at 0 dB;
-- each raw relative correction or Skipped;
-- confidence;
-- retest count.
+Before saving, the unsaved result can be auditioned as Off/Balanced/Full through the real channel-aware profile transform. Audition is not persistence. Cancel restores the prior saved profile/application state.
 
-Any completed non-reference band may be retested. Retesting performs a fresh bounded search for that band and replaces its result while incrementing its retest count.
+## Saved metadata
 
-Before saving, the user can audition the unsaved raw result as:
+Issue #15 advances newly created calibration payloads to schema v3 while preserving v1/v2 compatibility as linked profiles.
 
-- Off;
-- Balanced;
-- Full.
+Linked guided profiles store linked evidence. Independent guided profiles store separate left/right evidence, each containing method/version, seed, actual order, judgement/retest counts, outcome, confidence, and skipped flags.
 
-This audition uses the existing #13 correction layer and transform functions. It does not create or persist a profile. Cancel restores the previously saved profile/application state.
+Optional device/headphone/speaker note is plain local profile data. The workflow does not collect age, diagnosis, hearing history, demographic information, or unnecessary health data.
 
-## Saved measurement metadata
-
-Issue #14 advances the typed calibration payload to schema v2. Schema-v1 calibration payloads remain readable and are interpreted with `measurement: null`.
-
-A guided v2 payload can store:
-
-- method id `guided-narrow-band-v1`;
-- wizard version 1;
-- deterministic seed;
-- actual randomized band order;
-- for each test band: judgement count, retest count, outcome, confidence, and skipped flag.
-
-The payload does not collect age, diagnosis, hearing-history, demographic, or other unnecessary health data.
-
-Saving always activates the new profile in **Balanced** mode. Full remains an explicit user choice after saving.
+New guided saves activate in **Balanced** mode. Full remains explicit opt-in.
 
 ## Keyboard contract
 
-While matching, the focusable wizard region supports:
+The focusable **Keyboard controls** button supports while matching:
 
 - Space: alternate reference/test;
 - Left: Test is quieter;
 - Down: About equal;
 - Right: Test is louder;
-- K: skip/cannot comfortably match;
+- K: skip;
 - S: silence calibration;
 - Escape: abort.
 
-Judgement controls remain disabled until both reference and test have been auditioned for the current comparison.
+Judgement controls remain disabled until reference and test were both auditioned for the current comparison.
 
 ## Validation invariants
 
-Issue #14 validation must lock:
+The #14-#15 guided gate covers:
 
-- seeded order reproducibility and non-reference coverage;
-- normal equal-response completion;
-- repeated quieter/louder endpoint behavior;
-- maximum seven-judgement termination;
-- 0.5 dB grid behavior;
-- skip preservation as `null`;
-- deterministic review/retest replacement;
-- abort/restart state reset;
-- v1 profile-payload compatibility and v2 measurement validation;
-- transient stimulus bounds;
-- transient safety-pre-gain accounting;
-- smooth fade to calibration silence;
-- full browser journey with explicit start + comfort confirmation;
-- no profile saved before explicit review Save;
-- saved guided profile defaults Balanced;
-- master level unchanged through wizard operation;
-- keyboard response path;
-- global Stop + Abort path;
-- all prior #13 profile, share/privacy, transport, stereo, animation, analyzer, and no-autoplay tests.
+- deterministic linked order and nine-band completion;
+- deterministic independent left→right composition and distinct channel seeds;
+- 18-step independent completion;
+- per-channel skip preservation as `null`;
+- per-channel retest without losing the other channel;
+- maximum seven-judgement bounded convergence;
+- 0.5 dB grid semantics;
+- channel-routed AudioWorklet stimulus;
+- smooth channel/silence transitions;
+- explicit Start + comfortable-level acknowledgement;
+- visible active channel and non-diagnostic L/R language;
+- extreme-band caveat/skip;
+- no saved profile before explicit Save;
+- unsaved Off/Balanced/Full audition;
+- saved profile defaults Balanced;
+- master unchanged;
+- global Stop/Abort/restart/Escape;
+- no autoplay from profile import or wizard state;
+- all prior profile/privacy/share/transport/stereo/animation/analyzer regressions.
 
-Thresholds/bounds are product contracts and must not be loosened merely to make a failing test pass.
+Bounds are product contracts and must not be loosened merely to make validation pass.
