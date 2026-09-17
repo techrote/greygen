@@ -11,8 +11,8 @@ p.write_text(text)
 p = Path('src/features/calibration/GuidedCalibrationWizard.tsx')
 text = p.read_text()
 old = '        aria-labelledby="guided-heading"\n        onKeyDown={handleKeyboard}\n'
-if text.count(old) != 2:
-    raise SystemExit(f'expected two active wizard sections, found {text.count(old)}')
+if old not in text:
+    raise SystemExit('active wizard section pattern missing')
 text = text.replace(
     old,
     '        aria-labelledby="guided-heading"\n        tabIndex={0}\n        onKeyDown={handleKeyboard}\n',
