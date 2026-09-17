@@ -2,17 +2,19 @@ import { BAND_COUNT } from './filterBank'
 import { CALIBRATION_BAND_OFFSET_LIMIT_DB } from './gainSafety'
 import { decibelsToGain } from './numbers'
 
-export const CALIBRATION_STIMULUS_SCHEMA_VERSION = 1 as const
+export const CALIBRATION_STIMULUS_SCHEMA_VERSION = 2 as const
 export const CALIBRATION_STIMULUS_BASE_GAIN_DB = -18
 export const CALIBRATION_STIMULUS_TRANSITION_SECONDS = 0.04
 
 export type CalibrationStimulusMode = 'inactive' | 'silent' | 'band'
+export type CalibrationStimulusChannel = 'both' | 'left' | 'right'
 
 export interface CalibrationStimulusState {
   readonly schemaVersion: typeof CALIBRATION_STIMULUS_SCHEMA_VERSION
   readonly mode: CalibrationStimulusMode
   readonly bandIndex: number
   readonly levelOffsetDb: number
+  readonly channel: CalibrationStimulusChannel
 }
 
 function assertBandIndex(value: number): number {
@@ -43,16 +45,27 @@ export function isCalibrationStimulusMode(
   return value === 'inactive' || value === 'silent' || value === 'band'
 }
 
+export function isCalibrationStimulusChannel(
+  value: unknown,
+): value is CalibrationStimulusChannel {
+  return value === 'both' || value === 'left' || value === 'right'
+}
+
 export function createCalibrationStimulusState(
   mode: CalibrationStimulusMode = 'inactive',
   bandIndex = 5,
   levelOffsetDb = 0,
+  channel: CalibrationStimulusChannel = 'both',
 ): CalibrationStimulusState {
+  if (!isCalibrationStimulusChannel(channel)) {
+    throw new RangeError('calibration stimulus channel must be both, left, or right')
+  }
   return Object.freeze({
     schemaVersion: CALIBRATION_STIMULUS_SCHEMA_VERSION,
     mode,
     bandIndex: assertBandIndex(bandIndex),
     levelOffsetDb: assertLevelOffsetDb(levelOffsetDb),
+    channel,
   })
 }
 
@@ -69,4 +82,20 @@ export function calibrationStimulusWetTarget(
   state: CalibrationStimulusState,
 ): number {
   return state.mode === 'inactive' ? 0 : 1
+}
+
+export function calibrationStimulusChannelTargets(
+  state: CalibrationStimulusState,
+): readonly [number, number] {
+  if (state.mode !== 'band') {
+    return [0, 0]
+  }
+  switch (state.channel) {
+    case 'both':
+      return [1, 1]
+    case 'left':
+      return [1, 0]
+    case 'right':
+      return [0, 1]
+  }
 }
