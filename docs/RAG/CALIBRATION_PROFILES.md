@@ -1,6 +1,6 @@
 # Calibration Profiles and Correction Pipeline
 
-Status: canonical contract for issue #13 calibration profile state, bounded correction application, privacy, and safety integration.
+Status: canonical contract for issues #13-#14 calibration profile state, bounded correction application, guided-measurement metadata, privacy, and safety integration.
 
 ## Product boundary
 
@@ -8,7 +8,7 @@ Greygen calibration profiles describe **relative perceived-level correction for 
 
 The profile layer is local/private `ProfileState`. It is intentionally outside `SoundState`, user sound presets, and normal share URLs.
 
-The guided measurement workflow is owned by issue #14. Issue #13 establishes the model and real correction pipeline so later measurement can write trustworthy profiles without changing DSP ownership.
+Issue #13 established the profile model and real correction pipeline. Issue #14 adds the guided narrow-band measurement workflow that produces the same bounded profile type. The guided stimulus/state machine is documented separately in `GUIDED_CALIBRATION.md`.
 
 ## State ownership
 
@@ -18,18 +18,34 @@ The guided measurement workflow is owned by issue #14. Issue #13 establishes the
 - `activeProfileId`, or `null`;
 - calibration application mode `off | balanced | full`.
 
-Schema v1 profiles migrate with no active profile and mode Off. This preserves pre-calibration renderer behavior and prevents an upgrade from applying correction unexpectedly.
+Schema v1 ProfileState migrates with no active profile and mode Off. This preserves pre-calibration renderer behavior and prevents an upgrade from applying correction unexpectedly.
 
 A calibration record uses the generic `LocalProfileRecord` envelope with:
 
 - `kind: calibration`;
-- calibration payload schema v1;
+- calibration payload schema v2 for newly created profiles;
 - local id and sanitized local name;
 - optional sample rate context;
 - reference-band index;
-- exactly ten raw relative offsets, each finite or `null` for skipped/unknown.
+- exactly ten raw relative offsets, each finite or `null` for skipped/unknown;
+- optional validated guided-measurement evidence.
+
+Calibration payload schema v1 remains readable. It has the same sample-rate/reference/raw-offset fields but no guided measurement evidence; it is interpreted as `measurement: null` rather than rewritten or rejected.
 
 The default reference is the 1 kHz nominal band, index 5 in the ten-band model.
+
+## Guided measurement metadata
+
+A v2 payload may contain private guided evidence produced by `guided-narrow-band-v1`:
+
+- wizard schema/version;
+- deterministic unsigned seed;
+- actual randomized nine-band test order;
+- for every non-reference band: judgement count, retest count, outcome, confidence, and skipped flag.
+
+The evidence is validated structurally before use. Its band order must contain each non-reference band exactly once; evidence must cover that order exactly; skip/outcome/confidence flags must be internally consistent. Malformed evidence causes the calibration record to be rejected safely rather than partially trusted.
+
+No age, diagnosis, medical history, demographic data, or other unnecessary health information is collected by the core guided workflow.
 
 ## Bounds and skipped values
 
@@ -72,7 +88,7 @@ The constants and exact transform are locked by unit tests. Changes require an e
 
 ## DSP placement and smoothing
 
-Calibration correction is the real stage 5 in Greygen's level path:
+Saved calibration correction is the real stage 5 in Greygen's level path:
 
 1. source normalization;
 2. nominal target;
@@ -83,38 +99,44 @@ Calibration correction is the real stage 5 in Greygen's level path:
 7. master;
 8. final guard.
 
-The existing `GainStageState.calibrationBandOffsetsDb` is the sole DSP input for this layer. `AudioEngine.setCalibrationBandOffsetsDb()` updates it through the existing versioned `set-gain-stage` worklet command.
+The existing `GainStageState.calibrationBandOffsetsDb` is the sole DSP input for saved/profile correction. `AudioEngine.setCalibrationBandOffsetsDb()` updates it through the versioned `set-gain-stage` worklet command.
 
-No new audio protocol shape is required for issue #13. Calibration changes inherit the existing 40 ms component-gain smoothing, so profile/mode switches do not hard-step filter gains.
+Calibration profile changes inherit the existing 40 ms component-gain smoothing, so profile/mode switches do not hard-step filter gains.
+
+Issue #14 additionally introduces a transient runtime-only calibration-stimulus command for narrow-band reference/test playback. That transient state is not saved as profile/sound state; see `GUIDED_CALIBRATION.md`.
 
 ## Headroom behavior
 
-Calibration boosts participate in the same deterministic transfer-function response estimate as user and animation offsets **before** safety pre-gain is chosen. Therefore positive correction causes additional protective attenuation rather than silently consuming headroom.
+Saved calibration boosts participate in the same deterministic transfer-function response estimate as user and animation offsets **before** safety pre-gain is chosen. Therefore positive correction causes additional protective attenuation rather than silently consuming headroom.
 
-Full correction must never bypass or compensate away safety attenuation. Greygen also never raises the master control automatically to make an inaudible band appear.
+The transient guided stimulus also participates in conservative safety accounting while active. Full correction and guided probes must never bypass or compensate away safety attenuation. Greygen never raises the master control automatically to make an inaudible band appear.
 
 The final sample-domain guard remains emergency-only.
 
 ## UI behavior
 
-The issue #13 UI is intentionally a minimal pipeline editor, not the guided calibration wizard:
+The calibration surface now provides two paths over the same private profile model:
+
+- guided relative perceived-level calibration from issue #14;
+- the issue #13 manual ten-band editor as an advanced/manual path.
+
+Common profile controls allow:
 
 - choose an active local profile;
 - choose Off / Balanced / Full;
-- create a manual ten-band relative profile for pipeline validation;
-- blank a non-reference band to mark it skipped/unknown;
 - delete profiles;
 - show non-medical/private-local language.
 
-Saving a new profile activates it in Balanced mode. Selecting an existing profile also defaults to Balanced; the user can explicitly choose Full or Off.
+The guided workflow requires explicit running audio plus a comfortable-level acknowledgement, supports skip/retest/review and unsaved Off/Balanced/Full audition, and writes a profile only after explicit Save. A newly saved guided result activates in Balanced mode. Manual saving likewise defaults to Balanced.
 
-Profile application, reload, import, or migration never starts audio. The normal explicit Start lifecycle remains authoritative.
+Profile application, reload, migration, wizard review, or share import never starts audio. The normal explicit Start lifecycle remains authoritative.
 
 ## Privacy
 
 Calibration data is private local state by default:
 
 - stored under the ProfileState persistence document;
+- guided measurement evidence remains inside that private profile payload;
 - excluded from normal SoundState serialization;
 - excluded from normal user sound presets;
 - excluded from normal share URL fragments;
@@ -125,10 +147,11 @@ Tests use unique private fixture strings and verify normal sound sharing does no
 
 ## Validation invariants
 
-Issue #13 validation must cover:
+Across issues #13-#14 validation covers:
 
 - profile payload creation/parsing and name sanitation;
 - ProfileState v1 -> v2 migration with correction Off;
+- calibration payload v1 compatibility and v2 guided-evidence validation;
 - invalid active-profile/mode recovery to safe bypass;
 - exact Full transform;
 - exact locked Balanced transform;
@@ -136,10 +159,11 @@ Issue #13 validation must cover:
 - skipped/unknown behavior;
 - Off neutral behavior;
 - positive calibration boosts causing stronger deterministic safety pre-gain;
-- real AudioEngine calibration updates using the existing gain-stage path;
+- real AudioEngine calibration updates using the gain-stage path;
+- guided transient-stimulus safety/smoothing;
 - persistence/reload without autoplay;
 - privacy exclusion from normal share URLs;
-- malformed profile storage recovery;
-- browser save/select/mode/delete lifecycle.
+- malformed profile storage/evidence recovery;
+- browser save/select/mode/delete and guided review/save/abort lifecycles.
 
 Do not weaken gain-safety or DSP thresholds to accommodate calibration.

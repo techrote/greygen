@@ -62,9 +62,12 @@ import {
 import CalibrationPanel, {
   type CalibrationDraft,
 } from '../features/calibration/CalibrationPanel'
+import type { GuidedCalibrationSaveDraft } from '../features/calibration/GuidedCalibrationWizard'
 import {
+  createCalibrationProfilePayload,
   createCalibrationProfileRecord,
   findCalibrationProfile,
+  resolveCalibrationBandOffsetsDb,
   resolveCalibrationRecordOffsetsDb,
 } from '../features/calibration/calibrationProfile'
 import {
@@ -232,6 +235,19 @@ export interface GeneratorSurfaceProps {
   readonly onSelectCalibrationProfile?: (id: string | null) => void
   readonly onCalibrationModeChange?: (mode: CalibrationApplicationMode) => void
   readonly onDeleteCalibrationProfile?: (id: string) => void
+  readonly onGuidedStimulusBand?: (
+    bandIndex: number,
+    levelOffsetDb: number,
+  ) => void
+  readonly onGuidedStimulusSilent?: () => void
+  readonly onGuidedStimulusEnd?: () => void
+  readonly onGuidedAuditionDraft?: (
+    rawBandOffsetsDb: readonly (number | null)[],
+    referenceBandIndex: number,
+    mode: CalibrationApplicationMode,
+  ) => void
+  readonly onGuidedRestoreSavedProfile?: () => void
+  readonly onGuidedSave?: (draft: GuidedCalibrationSaveDraft) => void
   readonly onSaveUserPreset: (name: string) => boolean
   readonly onLoadUserPreset: (id: string) => void
   readonly onDeleteUserPreset: (id: string) => void
@@ -277,6 +293,12 @@ export function GeneratorSurface({
   onSelectCalibrationProfile = () => {},
   onCalibrationModeChange = () => {},
   onDeleteCalibrationProfile = () => {},
+  onGuidedStimulusBand = () => {},
+  onGuidedStimulusSilent = () => {},
+  onGuidedStimulusEnd = () => {},
+  onGuidedAuditionDraft = () => {},
+  onGuidedRestoreSavedProfile = () => {},
+  onGuidedSave = () => {},
   onSaveUserPreset,
   onLoadUserPreset,
   onDeleteUserPreset,
@@ -864,11 +886,19 @@ export function GeneratorSurface({
               activeProfileId={profileState.activeProfileId}
               applicationMode={profileState.calibrationMode}
               sampleRate={audioSnapshot.sampleRate}
+              audioStatus={audioSnapshot.status}
+              guidedSeed={(soundState.seed ^ 0x4341_4c31) >>> 0}
               disabled={controlsDisabled}
               onSave={onSaveCalibrationProfile}
               onSelect={onSelectCalibrationProfile}
               onModeChange={onCalibrationModeChange}
               onDelete={onDeleteCalibrationProfile}
+              onGuidedStimulusBand={onGuidedStimulusBand}
+              onGuidedStimulusSilent={onGuidedStimulusSilent}
+              onGuidedStimulusEnd={onGuidedStimulusEnd}
+              onGuidedAuditionDraft={onGuidedAuditionDraft}
+              onGuidedRestoreSavedProfile={onGuidedRestoreSavedProfile}
+              onGuidedSave={onGuidedSave}
             />
           </div>
         ) : null}
@@ -1474,6 +1504,101 @@ export default function App() {
       .catch(reportControlFailure)
   }
 
+  const restoreSavedCalibration = (): void => {
+    const engine = engineRef.current
+    if (!engine) {
+      return
+    }
+    const active = findCalibrationProfile(
+      profileState.profiles,
+      profileState.activeProfileId,
+    )
+    setControlError(null)
+    void engine
+      .setCalibrationBandOffsetsDb(
+        resolveCalibrationRecordOffsetsDb(active, profileState.calibrationMode),
+      )
+      .catch(reportControlFailure)
+  }
+
+  const handleGuidedStimulusBand = (
+    bandIndex: number,
+    levelOffsetDb: number,
+  ): void => {
+    setControlError(null)
+    void engineRef.current
+      ?.setCalibrationStimulusBand(bandIndex, levelOffsetDb)
+      .catch(reportControlFailure)
+  }
+
+  const handleGuidedStimulusSilent = (): void => {
+    setControlError(null)
+    void engineRef.current
+      ?.silenceCalibrationStimulus()
+      .catch(reportControlFailure)
+  }
+
+  const handleGuidedStimulusEnd = (): void => {
+    setControlError(null)
+    void engineRef.current?.endCalibrationStimulus().catch(reportControlFailure)
+  }
+
+  const handleGuidedAuditionDraft = (
+    rawBandOffsetsDb: readonly (number | null)[],
+    referenceBandIndex: number,
+    mode: CalibrationApplicationMode,
+  ): void => {
+    const engine = engineRef.current
+    if (!engine) {
+      return
+    }
+    try {
+      const profile = createCalibrationProfilePayload({
+        sampleRateHz: audioSnapshot.sampleRate,
+        referenceBandIndex,
+        rawBandOffsetsDb,
+      })
+      setControlError(null)
+      void Promise.all([
+        engine.endCalibrationStimulus(),
+        engine.setCalibrationBandOffsetsDb(
+          resolveCalibrationBandOffsetsDb(profile, mode),
+        ),
+      ]).catch(reportControlFailure)
+    } catch (error) {
+      reportControlFailure(error)
+    }
+  }
+
+  const handleGuidedSave = (draft: GuidedCalibrationSaveDraft): void => {
+    let suffix = profileState.profiles.length + 1
+    let id = `calibration-${suffix}`
+    while (profileState.profiles.some((profile) => profile.id === id)) {
+      suffix += 1
+      id = `calibration-${suffix}`
+    }
+    try {
+      const record = createCalibrationProfileRecord({
+        id,
+        name: draft.name,
+        sampleRateHz: audioSnapshot.sampleRate,
+        referenceBandIndex: draft.referenceBandIndex,
+        rawBandOffsetsDb: draft.rawBandOffsetsDb,
+        measurement: draft.measurement,
+      })
+      handleGuidedStimulusEnd()
+      applyProfileState(
+        createProfileState(
+          [...profileState.profiles, record],
+          record.id,
+          'balanced',
+        ),
+      )
+    } catch (error) {
+      setControlError(errorText(error))
+    }
+  }
+
   const handleSaveCalibrationProfile = (draft: CalibrationDraft): void => {
     let suffix = profileState.profiles.length + 1
     let id = `calibration-${suffix}`
@@ -1612,6 +1737,12 @@ export default function App() {
       onSelectCalibrationProfile={handleSelectCalibrationProfile}
       onCalibrationModeChange={handleCalibrationModeChange}
       onDeleteCalibrationProfile={handleDeleteCalibrationProfile}
+      onGuidedStimulusBand={handleGuidedStimulusBand}
+      onGuidedStimulusSilent={handleGuidedStimulusSilent}
+      onGuidedStimulusEnd={handleGuidedStimulusEnd}
+      onGuidedAuditionDraft={handleGuidedAuditionDraft}
+      onGuidedRestoreSavedProfile={restoreSavedCalibration}
+      onGuidedSave={handleGuidedSave}
       onSaveUserPreset={handleSaveUserPreset}
       onLoadUserPreset={handleLoadUserPreset}
       onDeleteUserPreset={handleDeleteUserPreset}

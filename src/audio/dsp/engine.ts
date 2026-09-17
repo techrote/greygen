@@ -4,6 +4,13 @@ import {
   SpectralAnimation,
   createAnimationState,
 } from './animation'
+import {
+  CALIBRATION_STIMULUS_TRANSITION_SECONDS,
+  type CalibrationStimulusState,
+  calibrationStimulusGainLinear,
+  calibrationStimulusWetTarget,
+  createCalibrationStimulusState,
+} from './calibrationStimulus'
 import { BAND_COUNT, TenBandFilterBank, type HighBandMode } from './filterBank'
 import {
   CONTROL_SMOOTHING_TIME_SECONDS,
@@ -96,6 +103,16 @@ function canonicalAnimationState(state: AnimationState): AnimationState {
   )
 }
 
+function canonicalCalibrationStimulusState(
+  state: CalibrationStimulusState,
+): CalibrationStimulusState {
+  return createCalibrationStimulusState(
+    state.mode,
+    state.bandIndex,
+    state.levelOffsetDb,
+  )
+}
+
 export class GreygenDspEngine {
   readonly sampleRate: number
 
@@ -104,6 +121,9 @@ export class GreygenDspEngine {
   private readonly scratchBandsA = new Float64Array(BAND_COUNT)
   private readonly scratchBandsB = new Float64Array(BAND_COUNT)
   private readonly currentBandGains = new Float64Array(BAND_COUNT)
+  private readonly currentCalibrationStimulusBandGains = new Float64Array(
+    BAND_COUNT,
+  )
   private readonly animationTargetOffsetsDb = new Float64Array(BAND_COUNT)
   private readonly bandGainSmoothers: OnePoleSmoother[]
   private readonly animationBandSmoothers: OnePoleSmoother[]
@@ -111,6 +131,8 @@ export class GreygenDspEngine {
   private readonly safetyPreGainSmoother: OnePoleSmoother
   private readonly masterGainSmoother: OnePoleSmoother
   private readonly stereoWidthSmoother: OnePoleSmoother
+  private readonly calibrationStimulusBandSmoothers: OnePoleSmoother[]
+  private readonly calibrationStimulusWetSmoother: OnePoleSmoother
   private readonly meter = new MeterAccumulator()
   private readonly animation: SpectralAnimation
   private generatorA: Xoshiro128StarStar
@@ -120,6 +142,7 @@ export class GreygenDspEngine {
   private gainStageStateValue: GainStageState
   private stereoWidthStateValue: StereoWidthState
   private animationStateValue: AnimationState
+  private calibrationStimulusStateValue: CalibrationStimulusState
   private safetyPreGainTargetValue: number
   private guardInterventionsValue = 0
 
@@ -142,6 +165,7 @@ export class GreygenDspEngine {
     this.animationStateValue = options.animationState
       ? canonicalAnimationState(options.animationState)
       : createAnimationState()
+    this.calibrationStimulusStateValue = createCalibrationStimulusState()
     this.animation = new SpectralAnimation(
       this.sampleRate,
       this.animationStateValue,
@@ -192,6 +216,20 @@ export class GreygenDspEngine {
       this.sampleRate,
       STEREO_WIDTH_SMOOTHING_TIME_SECONDS,
     )
+    this.calibrationStimulusBandSmoothers = Array.from(
+      { length: BAND_COUNT },
+      () =>
+        new OnePoleSmoother(
+          0,
+          this.sampleRate,
+          CALIBRATION_STIMULUS_TRANSITION_SECONDS,
+        ),
+    )
+    this.calibrationStimulusWetSmoother = new OnePoleSmoother(
+      0,
+      this.sampleRate,
+      CALIBRATION_STIMULUS_TRANSITION_SECONDS,
+    )
   }
 
   get seed(): number {
@@ -216,6 +254,10 @@ export class GreygenDspEngine {
 
   get animationSampleCursor(): number {
     return this.animation.sampleCursor
+  }
+
+  get calibrationStimulusState(): CalibrationStimulusState {
+    return this.calibrationStimulusStateValue
   }
 
   get targetId(): SpectralPresetId {
@@ -275,6 +317,13 @@ export class GreygenDspEngine {
     this.updateGainTargets()
   }
 
+  setCalibrationStimulusState(state: CalibrationStimulusState): void {
+    this.calibrationStimulusStateValue =
+      canonicalCalibrationStimulusState(state)
+    this.updateCalibrationStimulusTargets()
+    this.updateGainTargets()
+  }
+
   reset(options: GreygenDspResetOptions = {}): void {
     const nextSeed = options.seed ?? this.seedValue
     const nextGeneratorA = new Xoshiro128StarStar(nextSeed, 0)
@@ -299,6 +348,7 @@ export class GreygenDspEngine {
     this.gainStageStateValue = nextGainStage
     this.stereoWidthStateValue = nextStereoWidth
     this.animationStateValue = nextAnimation
+    this.calibrationStimulusStateValue = createCalibrationStimulusState()
     this.filterBankA.reset()
     this.filterBankB.reset()
     this.animation.reset(nextAnimation)
@@ -321,6 +371,11 @@ export class GreygenDspEngine {
     this.masterGainSmoother.reset(0)
     this.masterGainSmoother.setTarget(masterGainLinear(nextGainStage))
     this.stereoWidthSmoother.reset(nextStereoWidth.width)
+    this.currentCalibrationStimulusBandGains.fill(0)
+    for (const smoother of this.calibrationStimulusBandSmoothers) {
+      smoother.reset(0)
+    }
+    this.calibrationStimulusWetSmoother.reset(0)
   }
 
   renderMono(output: Float32Array): void {
@@ -333,10 +388,14 @@ export class GreygenDspEngine {
         this.scratchBandsA,
         residualGain,
       )
+      this.prepareCalibrationStimulusBandGains()
+      const stimulus = this.currentCalibrationStimulusSample(this.scratchBandsA)
+      const stimulusWet = this.calibrationStimulusWetSmoother.next()
+      const requested = shaped * (1 - stimulusWet) + stimulus * stimulusWet
 
       const safetyGain = this.safetyPreGainSmoother.next()
       const masterGain = this.masterGainSmoother.next()
-      const preGuard = shaped * safetyGain * masterGain
+      const preGuard = requested * safetyGain * masterGain
       const guarded = applyFinalGuard(preGuard)
       if (guarded !== preGuard) {
         this.guardInterventionsValue += 1
@@ -376,11 +435,18 @@ export class GreygenDspEngine {
       const difference = Math.sin(angle)
       const mixedLeft = common * shapedA + difference * shapedB
       const mixedRight = common * shapedA - difference * shapedB
+      this.prepareCalibrationStimulusBandGains()
+      const stimulus = this.currentCalibrationStimulusSample(this.scratchBandsA)
+      const stimulusWet = this.calibrationStimulusWetSmoother.next()
+      const requestedLeft =
+        mixedLeft * (1 - stimulusWet) + stimulus * stimulusWet
+      const requestedRight =
+        mixedRight * (1 - stimulusWet) + stimulus * stimulusWet
 
       const safetyGain = this.safetyPreGainSmoother.next()
       const masterGain = this.masterGainSmoother.next()
-      const leftPreGuard = mixedLeft * safetyGain * masterGain
-      const rightPreGuard = mixedRight * safetyGain * masterGain
+      const leftPreGuard = requestedLeft * safetyGain * masterGain
+      const rightPreGuard = requestedRight * safetyGain * masterGain
       const guardedLeft = applyFinalGuard(leftPreGuard)
       const guardedRight = applyFinalGuard(rightPreGuard)
       if (guardedLeft !== leftPreGuard) {
@@ -429,6 +495,22 @@ export class GreygenDspEngine {
     }
   }
 
+  private prepareCalibrationStimulusBandGains(): void {
+    for (let band = 0; band < BAND_COUNT; band += 1) {
+      this.currentCalibrationStimulusBandGains[band] =
+        this.calibrationStimulusBandSmoothers[band].next()
+    }
+  }
+
+  private currentCalibrationStimulusSample(scratchBands: Float64Array): number {
+    let stimulus = 0
+    for (let band = 0; band < BAND_COUNT; band += 1) {
+      stimulus +=
+        scratchBands[band] * this.currentCalibrationStimulusBandGains[band]
+    }
+    return stimulus
+  }
+
   private nextShapedSample(
     generator: Xoshiro128StarStar,
     filterBank: TenBandFilterBank,
@@ -460,8 +542,24 @@ export class GreygenDspEngine {
       this.animationStateValue.mode === 'off'
         ? 0
         : this.animationStateValue.depthDb
-    return computeSafetyPreGainLinear(
-      estimatedShapedPeakLinear * decibelsToGain(animationDepthDb),
+    const normalPeak =
+      estimatedShapedPeakLinear * decibelsToGain(animationDepthDb)
+    const stimulusPeak = calibrationStimulusGainLinear(
+      this.calibrationStimulusStateValue,
+    )
+    return computeSafetyPreGainLinear(normalPeak + stimulusPeak)
+  }
+
+  private updateCalibrationStimulusTargets(): void {
+    const state = this.calibrationStimulusStateValue
+    const selectedGain = calibrationStimulusGainLinear(state)
+    for (let band = 0; band < BAND_COUNT; band += 1) {
+      this.calibrationStimulusBandSmoothers[band].setTarget(
+        state.mode === 'band' && band === state.bandIndex ? selectedGain : 0,
+      )
+    }
+    this.calibrationStimulusWetSmoother.setTarget(
+      calibrationStimulusWetTarget(state),
     )
   }
 

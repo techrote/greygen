@@ -647,3 +647,77 @@ button.danger-action:hover:not(:disabled) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.guided-calibration {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid currentColor;
+  border-radius: 0.7rem;
+}
+
+.guided-calibration h4 {
+  margin: 0;
+}
+
+.guided-calibration-active {
+  outline: 2px solid transparent;
+}
+
+.calibration-safety-list {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.calibration-comfort-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.calibration-audition-row,
+.calibration-judgement-row,
+.calibration-exit-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.calibration-caveat {
+  padding: 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 0.55rem;
+}
+
+.calibration-review-grid {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.calibration-review-band {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.65rem;
+  border: 1px solid currentColor;
+  border-radius: 0.5rem;
+}
+
+.manual-calibration-details {
+  margin-top: 1rem;
+}
+
+.manual-calibration-details > summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+@media (max-width: 52rem) {
+  .calibration-review-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

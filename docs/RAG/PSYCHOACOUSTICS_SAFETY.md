@@ -41,19 +41,21 @@ A generic Grey preset must therefore be an original practical curve with documen
 
 ## Calibration stimulus
 
-Prefer narrow-band noise over pure sine tones for the default guided workflow because it better resembles the generated material and can reduce sensitivity to exact standing-wave/resonance behavior. A future advanced mode may expose other stimuli.
+Greygen's implemented guided workflow uses narrow-band noise rather than pure sine tones because it better resembles the generated material and reduces dependence on a single exact sinusoidal resonance. A future advanced mode may expose other stimuli.
 
-Default guided workflow concept:
+Issue #14 implements the default workflow as:
 
-1. user chooses a comfortable overall level;
-2. 1 kHz (or another stable mid-band) acts as reference;
-3. test band and reference are alternated/randomized;
-4. user reports which is louder or adjusts until subjectively equal;
-5. algorithm converges within bounded correction range;
+1. user explicitly starts audio, chooses a comfortable overall level, and confirms that level before the wizard can begin;
+2. the 1 kHz ten-band component acts as the fixed reference;
+3. the other nine bands are tested in deterministic seeded non-monotonic order;
+4. reference and test are alternated, and the user judges the test as quieter, about equal, or louder;
+5. a bounded 0.5 dB-grid binary search converges in at most seven judgements per search;
 6. uncertain/extreme bands can be skipped rather than chased;
-7. result is saved as a named local playback profile.
+7. completed bands can be retested from review;
+8. the raw result can be auditioned Off/Balanced/Full without being saved;
+9. only an explicit final Save creates a named local playback profile, defaulting to Balanced.
 
-The order should not always march monotonically low-to-high; randomization/retests reduce expectation/order effects.
+The wizard has explicit calibration silence and Abort controls, while the normal global Stop transport remains authoritative. It never auto-increases master gain.
 
 ## Extreme low/high bands
 
@@ -64,25 +66,27 @@ Rules:
 - never encourage indefinite gain increase until a band becomes audible;
 - show a clear “skip / cannot match” path;
 - cap test/correction gain;
-- reduce global pre-gain as correction boosts increase;
-- warn that inability to match may reflect transducer/room limitations as much as hearing;
+- reduce global pre-gain as correction/probe boosts increase;
+- warn that inability to match may reflect transducer/room limitations as much as listener factors;
 - do not extrapolate skipped bands into a medical conclusion.
+
+The guided UI displays this caveat on both extreme-band steps and preserves a skip as `null` rather than inventing a value.
 
 ## Balanced vs full correction
 
-Calibration application should support at least:
+Calibration application supports:
 
-- **Balanced**: conservative fraction/smoothed form of the measured correction, default;
+- **Balanced**: deterministic conservative scaled/smoothed form of the measured correction, default;
 - **Full**: applies the measured relative correction within safety bounds, explicit opt-in;
 - **Off**: stored profile retained but not applied.
 
-The precise Balanced transform must be deterministic and documented (for example correction scaling plus spatial smoothing), not a hidden subjective tweak.
+The precise Balanced transform is canonical in `CALIBRATION_PROFILES.md` and locked by tests; it is not a hidden subjective tweak. The guided review may audition all three modes before saving, but a saved guided result activates in Balanced mode.
 
 ## Left/right calibration
 
-Independent-ear/headphone-channel correction can be useful but carries more risk of large asymmetry.
+Independent-ear/headphone-channel correction can be useful but carries more risk of large asymmetry. It is not part of the current guided workflow; the current transient stimulus is centred and produces one shared profile curve.
 
-When introduced:
+When independent-channel calibration is introduced:
 
 - calibrate channels independently with clear channel indication;
 - cap inter-channel correction difference;
@@ -98,10 +102,11 @@ Nevertheless it must reduce avoidable risk:
 
 - start at conservative digital level;
 - require explicit user start;
+- require comfortable-level acknowledgement before guided matching;
 - do not surprise the user with a large level jump when applying profiles/presets;
-- use smoothing for all level changes;
-- automatically compensate headroom for positive correction;
-- provide visible master level and quick mute/stop;
+- use smoothing for all audible level/stimulus changes;
+- automatically compensate digital headroom for positive correction/probe demand;
+- provide visible master level and immediate calibration silence plus quick global stop;
 - never auto-increase master level to compensate for an inaudible test band;
 - persist the user's chosen master level cautiously and consider a startup ceiling if later user testing justifies it.
 
@@ -121,24 +126,24 @@ Do not label digital meters as SPL, phon, sones, or hearing threshold unless the
 A profile may record:
 
 - name;
-- created/updated time;
 - engine/schema version;
 - sample rate during calibration;
-- channel mode;
 - reference band;
 - raw relative offsets;
-- confidence/retest markers;
-- application mode (Balanced/Full/Off);
-- optional user note naming headphones/speakers.
+- deterministic guided method/version/seed;
+- randomized test order;
+- per-band confidence, judgement, retest, and skip markers;
+- application mode (Balanced/Full/Off).
 
-Avoid collecting unnecessary demographic/health data.
+The current guided workflow deliberately does **not** collect age, diagnosis, demographic data, hearing history, or other unnecessary health information.
 
 ## Privacy
 
 Calibration profiles are personal local data. Default behavior:
 
 - local-only storage;
-- excluded from normal share URLs;
+- excluded from normal share URLs and normal sound presets;
+- guided measurement evidence remains in the private profile payload;
 - exports omit calibration unless explicitly requested;
 - deletion/reset available;
 - no telemetry upload in the core project.
