@@ -3,33 +3,16 @@ import { expect, type Page, test } from '@playwright/test'
 const browserName = (projectName: string): string =>
   projectName.replace(/-core$/u, '')
 
-const expectStartedAudio = async (
-  page: Page,
-  projectName: string,
-): Promise<'running' | 'suspended-firefox'> => {
-  const status = page.locator('.status-value')
-  await expect(status).toHaveText(/^(Running|Suspended)$/u)
-  const value = (await status.textContent())?.trim()
-
-  if (value === 'Running') {
-    await expect(
-      page.getByText('Audio engine active', { exact: false }),
-    ).toBeVisible()
-    return 'running'
-  }
-
-  // Headless Firefox on Linux CI can initialize the real AudioWorklet while
-  // leaving AudioContext suspended when the runner exposes no usable audio
-  // sink. Do not treat this as generic success: require the Firefox project
-  // and processor-ready evidence (sample rate + high-band mode), then exercise
-  // explicit Stop/cleanup. Physical Firefox Running is a release spot check.
-  expect(projectName).toBe('firefox-core')
-  await expect(page.getByRole('button', { name: 'Resume audio' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Stop audio' })).toBeVisible()
+const startAudioFromKeyboard = async (page: Page): Promise<void> => {
+  const start = page.getByRole('button', { name: 'Start audio' })
+  await expect(start).toBeEnabled()
+  await start.press('Enter')
+  await expect(page.locator('.status-value')).toHaveText('Running', {
+    timeout: 10_000,
+  })
   await expect(
-    page.getByText(/16k control is a stable high shelf/u),
+    page.getByText('Audio engine active', { exact: false }),
   ).toBeVisible()
-  return 'suspended-firefox'
 }
 
 test('core generator state and persistence are interoperable', async ({
@@ -78,10 +61,11 @@ test('real AudioWorklet lifecycle survives repeated start/stop and analyzer tear
   await page.goto('/')
 
   for (let cycle = 0; cycle < 3; cycle += 1) {
-    await page.getByRole('button', { name: 'Start audio' }).click()
-    const startMode = await expectStartedAudio(page, testInfo.project.name)
+    // Keyboard activation remains a genuine user gesture while avoiding a
+    // stale service-worker update banner intercepting pointer events.
+    await startAudioFromKeyboard(page)
 
-    if (cycle === 0 && startMode === 'running') {
+    if (cycle === 0) {
       await page.getByRole('button', { name: 'Open analyzer' }).click()
       await expect(page.locator('.analyzer-panel')).toBeVisible()
       await expect
@@ -97,7 +81,8 @@ test('real AudioWorklet lifecycle survives repeated start/stop and analyzer tear
       await expect(page.locator('.analyzer-panel')).toHaveCount(0)
     }
 
-    await page.getByRole('button', { name: 'Stop audio' }).click()
+    const stop = page.getByRole('button', { name: 'Stop audio' })
+    await stop.press('Enter')
     await expect(page.getByText('Stopped', { exact: true })).toBeVisible()
     await expect(
       page.getByText('Audio context closed', { exact: false }),
