@@ -1,0 +1,36 @@
+
+> greygen@0.0.0 typecheck
+> tsc -b
+
+e2e/accessibility.spec.ts(11,31): error TS2304: Cannot find name 'Element'.
+e2e/accessibility.spec.ts(11,52): error TS2304: Cannot find name 'HTMLElement'.
+e2e/accessibility.spec.ts(12,32): error TS2304: Cannot find name 'HTMLElement'.
+e2e/accessibility.spec.ts(16,21): error TS2304: Cannot find name 'getComputedStyle'.
+e2e/accessibility.spec.ts(25,38): error TS2304: Cannot find name 'HTMLElement'.
+e2e/accessibility.spec.ts(34,17): error TS7006: Parameter 'id' implicitly has an 'any' type.
+e2e/accessibility.spec.ts(34,24): error TS2584: Cannot find name 'document'. Do you need to change your target library? Try changing the 'lib' compiler option to include 'dom'.
+e2e/accessibility.spec.ts(42,28): error TS2304: Cannot find name 'HTMLInputElement'.
+e2e/accessibility.spec.ts(43,28): error TS2304: Cannot find name 'HTMLSelectElement'.
+e2e/accessibility.spec.ts(44,28): error TS2304: Cannot find name 'HTMLTextAreaElement'.
+e2e/accessibility.spec.ts(47,27): error TS18046: 'label' is of type 'unknown'.
+e2e/accessibility.spec.ts(55,28): error TS2304: Cannot find name 'HTMLButtonElement'.
+e2e/accessibility.spec.ts(56,28): error TS2304: Cannot find name 'HTMLElement'.
+e2e/accessibility.spec.ts(63,28): error TS2584: Cannot find name 'document'. Do you need to change your target library? Try changing the 'lib' compiler option to include 'dom'.
+e2e/accessibility.spec.ts(63,54): error TS2304: Cannot find name 'HTMLElement'.
+e2e/accessibility.spec.ts(64,20): error TS18046: 'element' is of type 'unknown'.
+e2e/accessibility.spec.ts(71,7): error TS2584: Cannot find name 'document'. Do you need to change your target library? Try changing the 'lib' compiler option to include 'dom'.
+e2e/accessibility.spec.ts(71,33): error TS2304: Cannot find name 'HTMLElement'.
+e2e/accessibility.spec.ts(80,7): error TS2584: Cannot find name 'document'. Do you need to change your target library? Try changing the 'lib' compiler option to include 'dom'.
+e2e/accessibility.spec.ts(80,33): error TS2304: Cannot find name 'HTMLElement'.
+e2e/accessibility.spec.ts(82,35): error TS18046: 'element' is of type 'unknown'.
+e2e/accessibility.spec.ts(83,28): error TS18046: 'element' is of type 'unknown'.
+e2e/accessibility.spec.ts(83,61): error TS18046: 'element' is of type 'unknown'.
+e2e/accessibility.spec.ts(106,19): error TS2304: Cannot find name 'getComputedStyle'.
+e2e/accessibility.spec.ts(236,20): error TS2584: Cannot find name 'document'. Do you need to change your target library? Try changing the 'lib' compiler option to include 'dom'.
+e2e/accessibility.spec.ts(237,20): error TS2584: Cannot find name 'document'. Do you need to change your target library? Try changing the 'lib' compiler option to include 'dom'.
+e2e/accessibility.spec.ts(245,18): error TS2304: Cannot find name 'getComputedStyle'.
+e2e/accessibility.spec.ts(251,31): error TS2304: Cannot find name 'window'.
+e2e/accessibility.spec.ts(251,50): error TS2584: Cannot find name 'document'. Do you need to change your target library? Try changing the 'lib' compiler option to include 'dom'.
+e2e/accessibility.spec.ts(277,13): error TS2304: Cannot find name 'matchMedia'.
+e2e/accessibility.spec.ts(290,28): error TS2304: Cannot find name 'getComputedStyle'.
+exit_status=1
