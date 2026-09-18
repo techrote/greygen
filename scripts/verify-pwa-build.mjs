@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 
-const baseArgument = process.argv.find((argument) => argument.startsWith('--base='))
+const baseArgument = process.argv.find((argument) =>
+  argument.startsWith('--base='),
+)
 const expectedBase = baseArgument?.slice('--base='.length) ?? '/'
 const dist = new URL('../dist/', import.meta.url)
 
