@@ -181,6 +181,15 @@ test('profile selection and guided calibration can be completed and aborted from
 
   const active = page.locator('#guided-keyboard-control')
   await expect(active).toBeFocused()
+
+  const silence = page.getByRole('button', { name: 'Silence calibration' })
+  await silence.focus()
+  await page.keyboard.press('Space')
+  await expect(
+    page.getByText('Heard reference: no · Heard test: no', { exact: true }),
+  ).toBeVisible()
+  await active.focus()
+
   for (let index = 0; index < 9; index += 1) {
     await expect(active).toContainText(`Match ${index + 1} of 9`)
     await page.keyboard.press('Space')
@@ -197,6 +206,12 @@ test('profile selection and guided calibration can be completed and aborted from
   const guidedName = page.locator('#guided-profile-name')
   await guidedName.focus()
   await page.keyboard.type('Keyboard guided profile')
+  await page.keyboard.press('Escape')
+  await expect(guidedName).toBeFocused()
+  await expect(
+    page.getByRole('heading', { name: 'Guided calibration result' }),
+  ).toBeVisible()
+
   const saveGuided = page.getByRole('button', {
     name: 'Save local profile in Balanced mode',
   })
