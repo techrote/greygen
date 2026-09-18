@@ -53,13 +53,27 @@ Ordinary default/reference renders are expected to report zero final-guard inter
 
 ## Performance evidence policy
 
-`npm run characterize` times the same pure DSP engine used by the worklet and reports rendered audio duration, wall time, realtime factor, sample rate, feature state, and environment metadata. CI runs the default characterization at all three sample rates so each release candidate leaves comparable machine-local evidence in its workflow log.
+`npm run characterize` times the same pure DSP engine used by the worklet and reports rendered audio duration, wall time, realtime factor, sample rate, feature state, and environment metadata. CI runs the default characterization at all three sample rates so each release candidate leaves comparable machine-local evidence in its workflow log and uploads the three textual reports as the short-lived `dsp-conformance-characterization` workflow artifact.
 
 Realtime factor is **informational evidence**, not a universal CPU-percentage or device-support promise. Hosted-runner timing varies with virtualization and load. A hard timing threshold is therefore not part of the deterministic DSP contract. The release criterion is that observed reference-runner factors are comfortably above realtime and show no obvious regression relative to nearby runs; a material collapse must be investigated before release.
 
 The worklet hot path was inspected during #19. `GreygenAudioProcessor.process()` reuses the browser-owned output buffers, and `GreygenDspEngine.renderMono/renderStereo()` reuse preallocated filter/scratch/smoother storage. There are no object/array allocations inside the per-sample loops. Control-state canonicalization may allocate on message/control changes, and telemetry constructs a message at the bounded 10 Hz telemetry cadence; neither is per-sample churn.
 
 The analyzer remains on the main thread, uses a single reusable `Float32Array`, and UI sampling is frame-bounded and suspended when the panel/document is inactive according to `ANALYZER_DIAGNOSTICS.md`.
+
+### Issue #19 hosted-runner reference observation
+
+CI run #261 on GitHub-hosted `ubuntu-latest`, Node 24.21.0, Linux x64, used the default 262,144-frame Grey characterization. It recorded:
+
+| Sample rate | High-band mode | Offline realtime factor | Stereo correlation (target 0.7071) | L/R RMS balance | Final-guard interventions |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 44.1 kHz | degraded high shelf | 12.00x | 0.7083 | -0.0100 dB | 0 |
+| 48 kHz | degraded high shelf | 11.16x | 0.7083 | -0.0099 dB | 0 |
+| 96 kHz | bounded bandpass | 5.61x | 0.7084 | -0.0101 dB | 0 |
+
+The slowest observation was therefore 5.61x realtime at 96 kHz while all ordinary-reference guard counts remained zero. This is comfortably above realtime on that hosted runner and shows no obvious deadline-risk regression in the offline engine. It is a reference observation, not a portable minimum-device guarantee. The three reports are retained with that workflow run as the characterization artifact; later runs are expected to vary in wall time while preserving deterministic DSP measurements within the existing contracts.
+
+The same run measured White/Pink/Brown slope errors within the existing ±0.5 dB/octave contract at every sample rate; neutral filter-bank reconstruction remained at floating-point-noise scale, and the reported high-band modes matched the expected 44.1/48/96 kHz topology. No DSP tolerance was changed for this pass.
 
 ## Production/PWA path
 
