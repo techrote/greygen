@@ -2,6 +2,7 @@ import type { AudioEngineSnapshot } from '../../audio/AudioEngine'
 import { DSP_ENGINE_VERSION } from '../../audio/dsp/engine'
 import { AUDIO_PROTOCOL_VERSION } from '../../audio/protocol'
 import type { SoundState } from '../../app/state/appState'
+import { GREYGEN_APP_VERSION } from '../../version'
 
 export const ANALYZER_MAX_BARS = 64
 export const ANALYZER_MAX_FPS = 15
@@ -102,6 +103,7 @@ export function buildDiagnostics(
         ? `${snapshot.sampleRate.toLocaleString()} Hz`
         : '—',
     },
+    { label: 'Greygen', value: `v${GREYGEN_APP_VERSION}` },
     { label: 'DSP engine', value: `v${DSP_ENGINE_VERSION}` },
     { label: 'Audio protocol', value: `v${AUDIO_PROTOCOL_VERSION}` },
     {
