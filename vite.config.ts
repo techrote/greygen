@@ -19,6 +19,7 @@ function greygenPwaPlugin(): Plugin {
   return {
     name: 'greygen-pwa',
     apply: 'build',
+    enforce: 'post',
     generateBundle(_options, bundle) {
       const entries: PwaCacheEntry[] = Object.values(bundle).map((output) => ({
         path: output.fileName,
