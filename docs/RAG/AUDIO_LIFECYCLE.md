@@ -1,6 +1,6 @@
 # Browser Audio Lifecycle and Worklet Protocol
 
-Status: canonical contract for browser audio integration after issues #5–#6.
+Status: canonical contract for browser audio integration, reconciled through issue #19 cross-browser/conformance hardening.
 
 ## Boundary
 
@@ -12,12 +12,19 @@ React UI
     -> versioned MessagePort protocol
       -> AudioWorkletProcessor adapter
         -> GreygenDspEngine (pure TypeScript)
-          -> source + spectral shaping + gain safety + meters
+          -> seeded sources + spectral shaping + stereo mix
+             + output-channel calibration + gain safety + meters
 ```
 
-`src/audio/dsp/engine.ts` is the reusable render engine used by Node/Vitest fixtures and by the worklet processor. It has no DOM, `AudioContext`, or `AudioWorklet` dependency. The worklet adapter does not duplicate DSP logic.
+`src/audio/dsp/engine.ts` is the reusable render engine used by Node/Vitest fixtures and by the worklet processor. It has no DOM, `AudioContext`, storage, URL, clipboard, or network dependency. The worklet adapter does not duplicate DSP logic.
 
-The main thread never renders audio blocks and no longer applies a separate output `GainNode`; issue #6 moved master/safety/guard semantics into the pure engine. See `GAIN_SAFETY.md`.
+The browser graph is normally:
+
+```text
+AudioWorkletNode -> AnalyserNode -> AudioDestination
+```
+
+The analyzer is optional instrumentation on the main thread. It does not own transport, master gain, safety, or DSP state. If a browser context does not expose `createAnalyser`, the worklet connects directly to the destination.
 
 ## Lifecycle states
 
@@ -28,19 +35,21 @@ The main thread never renders audio blocks and no longer applies a separate outp
 - `running` — processor handshake completed and the browser context reports `running`;
 - `suspended` — the context reports `suspended` or `interrupted`; another explicit Resume action is available;
 - `error` — a recoverable runtime failure occurred, with a typed/actionable error;
-- `stopped` — nodes are disconnected and the context is closed;
+- `stopped` — owned nodes are disconnected and the context is closed;
 - `unsupported` — the environment is missing a required capability or secure context.
 
-Constructing `AudioEngine` never creates an `AudioContext`. `startFromUserGesture()` is the only ordinary entry point that creates a context, and `resumeFromUserGesture()` is the explicit resume path. Imported/persisted state must not call either method automatically.
+Constructing `AudioEngine` never creates an `AudioContext`. `startFromUserGesture()` is the only ordinary entry point that creates one, and `resumeFromUserGesture()` is the explicit resume path. Persistence restore, local preset load, normal share import, calibration profile import/selection/management, and service-worker reload do not call either method automatically.
+
+Repeated Start after Stop creates a fresh browser graph. Greygen does not retain an old context/node/port/analyzer as a reusable hidden transport.
 
 ## Capability and error model
 
 Capability checks distinguish:
 
 - insecure context;
-- missing `AudioContext`;
+- missing `AudioContext` (with `webkitAudioContext` accepted as the Safari compatibility constructor);
 - missing `AudioWorkletNode`;
-- a context that does not expose `audioWorklet`.
+- a created context that does not expose `audioWorklet`.
 
 Runtime failures distinguish at least:
 
@@ -51,98 +60,117 @@ Runtime failures distinguish at least:
 - invalid/incompatible protocol traffic;
 - request timeout/control-send failure.
 
-Errors are surfaced in `AudioEngineSnapshot.error`; they are not swallowed. The UI states what the user can do next rather than silently leaving a dead transport.
+Errors are surfaced in `AudioEngineSnapshot.error`; they are not swallowed. A failed graph is cleaned up before the recoverable error state is presented.
 
-## Protocol v2
+## Protocol v6
 
-`src/audio/protocol.ts` owns the shared structured-clone message contract. Issue #6 advances the version to `2`; request/response traffic uses a positive integer `requestId`.
+`src/audio/protocol.ts` owns the shared structured-clone contract. The current protocol version is **6** and the registered processor name is `greygen-processor-v6`.
 
-Main-thread commands:
+Request/response commands use positive integer `requestId` values. Main-thread commands include:
 
-- `initialize` — seed + serialized spectral state + serialized gain-stage state;
-- `set-spectrum` — replace spectral target/user offsets;
-- `set-gain-stage` — replace master/animation-placeholder/calibration-placeholder gain state;
-- `reset-seed` — deterministically restart the source stream;
-- `request-status` — explicit low-rate runtime-status request;
-- `stop` — stop processor output and acknowledge cleanup.
+- `initialize` — seed, spectrum, gain stage, output-channel calibration, stereo width, and animation state;
+- `set-spectrum`;
+- `set-gain-stage`;
+- `set-channel-calibration`;
+- `set-stereo-width`;
+- `set-animation`;
+- `set-calibration-stimulus` — including `both | left | right` output routing;
+- `reset-seed`;
+- `request-status`;
+- `stop`.
 
-Processor responses:
+Processor responses include:
 
-- `ready` — initialization handshake including runtime sample rate and high-band mode;
+- `ready` — initialization handshake including sample rate, target, high-band mode, stereo width, and animation state;
 - `ack` — command acknowledgement;
-- `status` — sample rate, target id, high-band mode, and rendered-frame count;
-- `telemetry` — unsolicited bounded-rate digital peak/RMS/safety/master/guard data;
-- `stopped` — stop acknowledgement;
-- `error` — invalid-message or DSP-engine failure.
+- `status` — runtime sample rate/target/high-band/stereo/animation/frame state;
+- `telemetry` — unsolicited bounded-rate digital Peak/RMS/safety/master/guard/stereo data;
+- `stopped`;
+- `error`.
 
-Runtime parsers validate protocol version, request ids, uint32 seed bounds, spectral/gain-state shape and ranges, high-band mode, sample rate, frame counters, and all telemetry numbers before data crosses the architectural boundary.
+Runtime parsers validate the protocol envelope and the typed state payloads before they cross the architectural boundary. Telemetry is intentionally not request-scoped and therefore does not consume request ids.
 
-Telemetry is intentionally not request-scoped and therefore does not consume request ids. Later features extend the typed union rather than inventing ad-hoc side channels.
+Saved application/share/profile serialization remains outside this protocol. Browser-local or imported data reaches audio only through validated `AudioEngine` control methods after the relevant state layer has accepted it.
 
 ## Worklet hot path
 
-`greygen-processor.ts` holds one `GreygenDspEngine` instance. A newly constructed processor remains alive but emits zeros until a valid `initialize` message has reset the engine to the requested seed, spectrum, and gain state. This prevents constructor defaults from leaking into the destination during the node-to-handshake interval.
+`greygen-processor.ts` holds one `GreygenDspEngine` instance. A newly constructed processor emits zeros until a valid `initialize` message resets the engine to the requested state, preventing constructor defaults from leaking into the destination during the node-to-handshake interval.
 
 Once initialized, `process()`:
 
-1. obtains the browser-provided mono output buffer;
-2. calls `engine.renderMono(output)`;
-3. increments primitive frame counters;
+1. obtains browser-owned output buffers;
+2. calls `engine.renderStereo(left, right)` when a stereo output is supplied, or the mono fallback when only one channel is available;
+3. updates primitive frame counters;
 4. emits telemetry only when the bounded interval is reached;
-5. returns `true`.
+5. returns `true` until stopped.
 
-After an acknowledged `stop`, the processor zeros any final supplied output buffer and returns `false` so the browser may retire the processor. Before initialization it zeros the supplied buffer but returns `true`, allowing the handshake to complete.
+After an acknowledged `stop`, the processor zeros any final supplied output buffer and returns `false` so the browser may retire it. Before initialization it also zeros supplied buffers but remains alive for the handshake.
 
-No logging, DOM/network access, Promise work, or deliberate object/array creation occurs per sample. The only regular `MessagePort` emission is telemetry at nominally 10 Hz, not once per render quantum.
-
-Mono output remains intentional. Power-preserving stereo decorrelation belongs to issue #9.
+The #19 hot-path audit confirms that the processor and pure engine reuse browser-owned output buffers plus preallocated band/scratch/smoother storage. There is no deliberate object/array allocation inside the per-sample render loops. Control-message canonicalization may allocate outside rendering, and telemetry constructs a message at the bounded nominal 10 Hz cadence; neither is per-sample churn. See `CONFORMANCE.md` for the performance evidence policy.
 
 ## Worklet asset loading
 
-The browser runtime imports the TypeScript processor with Vite's worker-URL transform (`?worker&url`) and passes the emitted URL to `audioWorklet.addModule()`. Development and production therefore load compiled JavaScript rather than repository TypeScript.
+The browser runtime imports the TypeScript processor with Vite's worker-URL transform (`?worker&url`) and passes the emitted compiled asset URL to `audioWorklet.addModule()`. Development and production therefore load emitted JavaScript rather than repository TypeScript.
 
-The processor name is versioned (`greygen-processor-v2`) alongside protocol v2.
+Issue #17's production service worker caches the exact emitted worklet asset in the same revisioned application version set as the shell. A cached/offline app still requires an explicit Start gesture before creating/resuming browser audio.
 
-## Output-level ownership
+## Stereo, calibration, and output ownership
 
-The temporary issue #5 main-thread `GainNode` has been removed. The default conservative `0.05` linear level survives as the issue #6 **master-gain default inside the pure DSP engine**, where it is smoothed and metered.
+Master level, deterministic safety pre-gain, final guard, metering, stereo width/correlation, animation, and output-channel calibration are all owned by the pure DSP engine rather than a hidden main-thread gain stage.
 
-Safety pre-gain, master gain, final guard, and dBFS meters are defined in `GAIN_SAFETY.md`. None of those values is an acoustic SPL measurement or a universal safe-listening guarantee.
+The internal decorrelation streams A/B are not left/right ears. The DSP forms output-channel band components first and then applies left/right calibration to the corresponding output components. Worst-channel requested demand drives the shared safety attenuation. Exact stage ordering is canonical in `ARCHITECTURE.md`, `CALIBRATION_PROFILES.md`, and `GAIN_SAFETY.md`.
+
+All displayed runtime level telemetry is digital (for example dBFS or gain dB), not acoustic SPL.
+
+## Analyzer graph invariant
+
+`readAnalyzerFrame()` is observational. It calls the browser `AnalyserNode` into a reusable `Float32Array`; it must not disconnect, reconnect, rebuild, or otherwise mutate the live output graph.
+
+The #19 conformance audit found and fixed a defect where analyzer sampling called `AnalyserNode.disconnect()`, which could sever `AnalyserNode -> AudioDestination` after the first spectrum read. Disconnection now belongs only to lifecycle cleanup. Instrumented unit tests assert repeated reads leave the graph connected and repeated start/stop releases each analyzer exactly once; the cross-browser production journey also exercises live analyzer sampling.
+
+The analyzer display loop is separately bounded and cleaned up by the analyzer component. See `ANALYZER_DIAGNOSTICS.md`.
 
 ## Suspend/interruption behavior
 
-`AudioEngine` listens for context `statechange` events. Both browser `suspended` and platform/browser `interrupted` states map to the recoverable Greygen `suspended` state. Greygen does not automatically resume them; the user receives an explicit Resume action.
+`AudioEngine` listens for context `statechange` events. Both browser `suspended` and platform/browser `interrupted` states map to Greygen's recoverable `suspended` state. Greygen does not automatically resume them; the user receives an explicit Resume action and Stop remains available.
 
-A processor exception raises `processorerror`; because that node will thereafter output silence, Greygen closes the failed graph and exposes a recoverable error requiring a fresh start.
+A processor exception raises `processorerror`; because that node can no longer be trusted to produce correct output, Greygen closes the failed graph and exposes a recoverable error requiring a fresh start.
 
 ## Cleanup invariant
 
-Stop, error cleanup, component unmount/HMR disposal, and failed startup all tear down the same owned resources:
+Stop, error cleanup, component disposal, failed startup, and replacement of stale owned resources converge on the same cleanup path:
 
-- reject/clear pending protocol requests;
-- detach processor/context event handlers;
-- close the MessagePort when available;
+- reject and clear pending protocol requests and their timers;
+- detach processor and context event handlers;
+- clear the processor port message handler and close the MessagePort when available;
 - disconnect the worklet node;
+- disconnect the analyzer, if present;
 - close the `AudioContext` when it is not already closed;
-- clear facade references and stale telemetry.
+- clear facade references, analyzer buffer, and stale telemetry.
 
-A missing stop acknowledgement does not block cleanup.
+A missing stop acknowledgement does not block cleanup. Issue #19 adds an adversarial fixture that performs five start/stop cycles and requires every created context, worklet node, analyzer, and message port to be released exactly once.
+
+## Cross-browser evidence
+
+Chromium runs the complete Playwright browser suite. Firefox and Playwright WebKit run the production-build cross-browser core, including persisted state/no-autostart behavior, a real `AudioWorklet`, repeated Start/Stop, analyzer sampling/teardown, share privacy, and uncaught-error checks. Headless Linux CI provides an OS-level PulseAudio null sink so browser-native audio graphs have an output endpoint; this does not substitute a fake Web Audio implementation or claim acoustic validation.
+
+Playwright WebKit is Safari-class engine evidence, not a replacement for a release-time check on current physical Safari/macOS or iOS/iPadOS. Exact matrix scope and limitations are canonical in `CONFORMANCE.md`.
 
 ## Testability
 
-`AudioEngine` depends on a small `AudioEngineRuntime` port rather than constructing browser globals internally. Unit tests use deterministic fake contexts/nodes/ports to prove:
+`AudioEngine` depends on a small `AudioEngineRuntime` port rather than constructing every browser global internally. Deterministic tests cover, among other cases:
 
 - no context creation before explicit Start;
 - start/handshake/running transitions;
-- spectrum/gain/control/status round trips;
+- spectrum/gain/stereo/animation/channel-calibration/status protocol paths;
 - unsolicited telemetry propagation;
 - interruption and explicit resume;
-- capability failures;
-- module-load failures;
-- processor errors;
-- stop/disconnect/context-close cleanup.
+- capability/module/processor failures;
+- analyzer reads that do not mutate the graph;
+- repeated resource cleanup;
+- stop/disconnect/context-close behavior.
 
-Playwright exercises the production Vite worklet URL and real Chromium AudioWorklet path on localhost, waits for actual dBFS telemetry, verifies clean Stop/close, and covers a feature-override unsupported state.
+The pure DSP suite remains the authority for audio correctness; browser tests prove lifecycle/adaptation rather than replacing deterministic spectral/safety validation.
 
 ## Platform references
 
@@ -150,4 +178,5 @@ Playwright exercises the production Vite worklet URL and real Chromium AudioWork
 - https://developer.mozilla.org/en-US/docs/Web/API/Worklet/addModule
 - https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/state
 - https://developer.mozilla.org/en-US/docs/Web/API/AudioWorkletNode/processorerror_event
+- https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode
 - https://vite.dev/guide/features.html#web-workers

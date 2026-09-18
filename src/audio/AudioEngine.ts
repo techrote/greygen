@@ -777,14 +777,6 @@ export class AudioEngine {
   readAnalyzerFrame(): AnalyzerSpectrumFrame | null {
     const analyzer = this.analyzer
     const buffer = this.analyzerBuffer
-    if (this.analyzer) {
-      try {
-        this.analyzer.disconnect()
-      } catch {
-        // Browser graph may already be torn down.
-      }
-    }
-
     const context = this.context
     if (
       !analyzer ||

@@ -12,7 +12,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -29,13 +29,53 @@ jobs:
         run: npm run typecheck
       - name: Unit tests
         run: npm test
+      - name: DSP conformance characterization
+        shell: bash
+        run: |
+          mkdir -p conformance-artifacts
+          for sample_rate in 44100 48000 96000; do
+            npm run characterize -- --sample-rate "$sample_rate" \
+              | tee "conformance-artifacts/characterization-${sample_rate}.txt"
+          done
+      - name: Preserve DSP characterization evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsp-conformance-characterization
+          path: conformance-artifacts/characterization-*.txt
+          if-no-files-found: error
+          retention-days: 14
       - name: Production build
         run: npm run build
       - name: Verify production PWA artifact
         run: npm run verify:pwa
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Browser smoke and offline tests
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Start virtual audio sink
+        shell: bash
+        run: |
+          sudo apt-get install -y pulseaudio pulseaudio-utils
+          export XDG_RUNTIME_DIR="${RUNNER_TEMP}/xdg-runtime"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+
+          pulseaudio --start --exit-idle-time=-1
+          ready=0
+          for _ in {1..20}; do
+            if pactl info >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 0.25
+          done
+          test "$ready" -eq 1
+
+          sink_module="$(pactl load-module module-null-sink sink_name=greygen_ci sink_properties=device.description=GreygenCI)"
+          test -n "$sink_module"
+          pactl set-default-sink greygen_ci
+          pactl info
+          pactl list short sinks
+      - name: Browser smoke, lifecycle, privacy, and offline tests
         run: npm run test:e2e
       - name: GitHub Pages base-path build
         run: npm run build:pages
