@@ -41,6 +41,19 @@ The guided workflow uses bounded narrow-band noise against a 1 kHz reference, de
 
 Private playback-profile management includes rename, optional device/headphone/speaker notes, duplicate, deliberate two-step delete, bypass, and a clearly separate **personal calibration export/import** envelope. This export is intentionally labelled as personal playback/calibration data and is never inserted into ordinary sound share URLs. Import validates and stores a new local profile but does not select/apply it and never creates or resumes audio. The manual linked/independent ten-band profile editor remains available as an advanced path. Current sound, local user presets, private profiles, and UI preferences are versioned local documents. Reload, profile application, profile import, wizard review, or share import never restores Running: choose **Start audio** explicitly to create/resume the browser audio context and initialize the worklet.
 
+### Offline DSP characterization
+
+Issue #16 adds a deterministic developer report over the same pure DSP engine used by the AudioWorklet. It requires no browser or audio hardware and reports spectral slopes, neutral/filter-bank behavior, stereo correlation/RMS balance, safety pre-gain/final-guard activity, animation bounds, and an informational offline realtime factor.
+
+```bash
+npm run characterize
+npm run characterize -- --sample-rate 44100
+npm run characterize -- --sample-rate 96000 --animation orbit --animation-depth 8
+npm run characterize -- --json > characterization.json
+```
+
+The JSON report is versioned. DSP/statistical fields are deterministic for a fixed engine version/state/seed; wall-time performance and environment metadata are machine-local observations. Characterization supplements the pass/fail validation suite—it does not weaken or replace it. See `docs/RAG/DSP_CHARACTERIZATION.md`.
+
 ### Verification commands
 
 ```bash
@@ -59,6 +72,7 @@ Useful local commands:
 npm run format
 npm run test:watch
 npm run preview
+npm run characterize -- --help
 ```
 
 `npm run test:e2e` starts the production preview server automatically through Playwright configuration. CI installs Chromium for the current worklet/browser lifecycle gate; the broader cross-browser matrix is a later roadmap milestone.
@@ -82,9 +96,10 @@ Start with:
 13. `docs/RAG/CALIBRATION_PROFILES.md`
 14. `docs/RAG/GUIDED_CALIBRATION.md`
 15. `docs/RAG/ANALYZER_DIAGNOSTICS.md`
-16. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
-17. `docs/RAG/UX_STATE.md`
-18. `docs/RAG/AGENT_PLAYBOOK.md`
-19. `docs/RAG/ROADMAP.md`
+16. `docs/RAG/DSP_CHARACTERIZATION.md`
+17. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
+18. `docs/RAG/UX_STATE.md`
+19. `docs/RAG/AGENT_PLAYBOOK.md`
+20. `docs/RAG/ROADMAP.md`
 
 The GitHub issues are executable work packets. Each issue must be completed end-to-end: implementation, tests, documentation updates, PR, automated checks, review of failures, and merge only after required checks pass.
