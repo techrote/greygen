@@ -6,6 +6,7 @@ import {
   buildSpectrumBars,
   clampAnalyzerDb,
 } from '../../src/features/analyzer/analyzerModel'
+import { GREYGEN_APP_VERSION } from '../../src/version'
 
 describe('analyzer model', () => {
   it('clamps non-finite and out-of-range spectrum values', () => {
@@ -26,12 +27,16 @@ describe('analyzer model', () => {
     expect(bars.every((bar) => bar.level >= 0 && bar.level <= 1)).toBe(true)
   })
 
-  it('formats private-safe runtime diagnostics', () => {
+  it('formats private-safe versioned runtime diagnostics', () => {
     const rows = buildDiagnostics(
       INITIAL_AUDIO_SNAPSHOT,
       createDefaultSoundState(),
       false,
     )
+    expect(rows).toContainEqual({
+      label: 'Greygen',
+      value: `v${GREYGEN_APP_VERSION}`,
+    })
     expect(rows.some((row) => row.label === 'DSP engine')).toBe(true)
     expect(rows.some((row) => row.label === 'Audio protocol')).toBe(true)
     expect(rows.some((row) => row.label === 'Seed')).toBe(true)

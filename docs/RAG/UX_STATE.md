@@ -1,6 +1,6 @@
 # UX and State Model
 
-Status: canonical product-state and interaction guidance, reconciled through issue #18 accessibility/responsive hardening.
+Status: canonical product-state and interaction guidance, reconciled through issue #20 v0.1 release hardening.
 
 ## Primary interaction model
 
@@ -52,7 +52,7 @@ Initial UI is honest about browser autoplay constraints:
 - suspended/interrupted: visible recoverable state with Resume and Stop;
 - unsupported: capability explanation rather than silent failure.
 
-Loading persisted state, a local saved preset, or a share URL does not create an autoplay exception.
+Loading persisted state, a local saved preset, a normal share URL, a private profile import, or a service-worker update does not create an autoplay exception.
 
 ## Built-in preset behavior
 
@@ -110,10 +110,12 @@ Private/local by default:
 
 - named calibration/playback profiles;
 - measured relative corrections;
-- left/right variants;
+- linked/symmetric or independent left/right data;
 - balanced/full/off application mode;
-- calibration metadata/confidence;
-- optional user notes/device names.
+- calibration metadata/confidence/evidence;
+- optional sanitized user notes/device names.
+
+ProfileState schema v2 is the current envelope. Current calibration payloads are independently versioned at v3; historical v1/v2 payloads remain readable as linked data. Exact migration/application semantics live in `CALIBRATION_PROFILES.md` and `STATE_PERSISTENCE.md`.
 
 ### UiState
 
@@ -138,7 +140,7 @@ Current reset/deletion distinctions are:
 - Delete saved preset — one UserPresetLibraryState record only;
 - Delete profiles — private ProfileState only.
 
-## Share URLs
+## Share URLs and private portability
 
 A normal share URL represents **SoundState only**, not identity/profile/library/UI data.
 
@@ -147,7 +149,7 @@ Current requirements and implementation:
 - compact versioned deterministic serialization;
 - URL fragment rather than backend-dependent storage;
 - no personal calibration data;
-- no profile names/notes/ids;
+- no profile names/notes/ids/evidence/corrections;
 - no saved user-preset names/library contents;
 - no UI preferences;
 - canonical validation/clamping for finite accepted values;
@@ -157,13 +159,19 @@ Current requirements and implementation:
 
 A normal share input is therefore safe to load while Ready: it changes requested SoundState and remains Ready/silent. If the user explicitly loads one while already Running, existing typed/smoothed AudioEngine controls update the current engine; there is still no hidden start/resume action.
 
-An explicit advanced private-profile export may later exist only through a separate intentional action and format.
+Private playback/calibration portability is now implemented as a **separate explicit surface and serializer**. Preparing a personal export requires an intentional user action and is clearly labelled as personal playback/calibration data. Its envelope may contain the profile name, optional playback-device note, linked/independent measurement/correction data, and guided evidence because that is the private data the user chose to export. It omits the local record id and never appears in the normal `#s=` share fragment.
+
+Personal profile import validates before storage, creates a new local identity, and remains unselected/unapplied. It never creates or resumes audio. See `PRESETS_SHARING.md` and `CALIBRATION_PROFILES.md`.
 
 ## Calibration UX
 
-Default guided calibration should explain its non-medical/playback-chain nature, require comfortable level confirmation, use bounded reference/test comparisons, permit skip/cannot-match, randomize/retest, and save a named local profile only after review.
+Guided calibration explains its non-medical/playback-chain nature, requires comfortable-level confirmation, uses bounded reference/test comparisons, permits skip/cannot-match, randomizes/retests, and saves a named local profile only after review.
+
+Linked/symmetric mode presents both channels. Independent mode presents a complete left pass then right pass with explicit channel wording and smooth routing. Independent differences are not interpreted diagnostically.
 
 Keyboard shortcuts on the active guided region supplement—not replace—the visible native buttons. Focus moves into the active region when the flow starts or changes major phase, and returns to the guided entry region on Save/Abort so keyboard users are not dropped back to the document body.
+
+Calibration silence, Abort, and the global Stop remain separately available; the wizard never raises master automatically.
 
 ## Accessibility
 
@@ -183,18 +191,18 @@ Minimum requirements:
 - no state depends on hue alone;
 - global Stop remains immediately reachable while audio can run.
 
-Saved preset names are ordinary escaped text. Share URLs use selectable text inputs with labelled buttons/forms.
+Saved preset names are ordinary escaped text. Share URLs and personal export/import use selectable/labelled native text controls and buttons/forms.
 
-The detailed implemented contract, browser regression evidence, and release-time assistive-technology checklist live in `ACCESSIBILITY_RESPONSIVE.md`.
+The detailed implemented contract, browser regression evidence, and release-time assistive-technology checklist live in `ACCESSIBILITY_RESPONSIVE.md` and `../RELEASE_CHECKLIST.md`.
 
 ## Responsive behavior
 
-The ten-band surface must remain usable on narrow displays. Do not shrink hit targets to microscopic sizes; horizontal spectral scrolling is preferable when needed. Preset/share forms may stack into a single column on narrow viewports.
+The ten-band surface must remain usable on narrow displays. Do not shrink hit targets to microscopic sizes; horizontal spectral scrolling is preferable when needed. Preset/share/profile forms may stack into a single column on narrow viewports.
 
 The document itself must remain horizontally contained at representative phone portrait and landscape sizes. The transport action dock is safe-area aware and action rows may stack on narrow screens; extra page-bottom space prevents it from covering final controls.
 
 ## Error states
 
-Provide user-visible states for AudioWorklet unsupported, secure-context/worklet failures, AudioContext resume failure, corrupt persisted state, future/malformed shared state, storage/clipboard failure, and runtime high-band degradation.
+Provide user-visible states for AudioWorklet unsupported, secure-context/worklet failures, AudioContext resume failure, corrupt/future persisted state, malformed/future shared state, malformed/future personal-profile import, storage/clipboard failure, and runtime high-band degradation.
 
 Errors should state what remains usable and what the user can do next.

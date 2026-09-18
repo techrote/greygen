@@ -4,6 +4,8 @@ A browser-based calibrated spectral-noise generator and psychoacoustic playgroun
 
 Greygen is grey noise. The project synthesizes noise locally, exposes a simple ten-band model, and progressively adds deterministic DSP, safe headroom management, power-preserving stereo decorrelation, spectral animation, user calibration profiles, and an advanced continuous-spectrum editor.
 
+Greygen is an independent clean-room project. myNoise is a product-class/conceptual reference only; Greygen does not copy or bundle myNoise source, recordings, artwork, branding, calibration values, or preset data, and is not affiliated with or endorsed by myNoise. ISO 226 is cited only as psychoacoustic background; Greygen does not embed paid/copyrighted ISO numerical tables.
+
 ## Core principles
 
 - **Local-first audio:** synthesis and calibration remain in the browser; no backend is required for the core product.
@@ -12,6 +14,35 @@ Greygen is grey noise. The project synthesizes noise locally, exposes a simple t
 - **Safe by construction:** bounded boosts, deterministic safety pre-gain, metering, and a final overflow guard protect digital headroom; calibration must not encourage chasing inaudible frequencies with ever-higher gain.
 - **Clean-room implementation:** do not copy myNoise source, audio, artwork, branding, preset data, or copyrighted standards tables.
 - **Repository as ground truth:** architecture, decisions, validation contracts, and autonomous-agent instructions live under `docs/RAG/` and are updated with implementation changes.
+
+## v0.1 release candidate
+
+Application version **0.1.0** is the first complete ten-band MVP release candidate. Start with the [user guide](docs/USER_GUIDE.md), [changelog](CHANGELOG.md), [release audit](docs/RELEASE_AUDIT.md), and [release checklist](docs/RELEASE_CHECKLIST.md).
+
+The automated support evidence is deliberately precise:
+
+- **Chromium:** complete production-path Playwright suite.
+- **Firefox:** production-build core persistence/lifecycle/AudioWorklet/analyzer/privacy journey.
+- **Playwright WebKit:** the same core journey as Safari-class engine evidence.
+
+Playwright WebKit is not represented as a completed physical Safari/macOS/iOS test. A current Safari hardware check and one current desktop NVDA/VoiceOver spot check remain explicit **pre-tag manual gates** in the release checklist rather than being fabricated by CI.
+
+Greygen requires a secure context plus `AudioContext`, `AudioWorklet`, and `AudioWorkletNode`; unsupported capability is surfaced explicitly. The core product has no analytics/tracking backend, account system, hosted noise stream, or calibration-upload service. AudioWorklet “telemetry” is local in-memory DSP status, not network telemetry.
+
+### Source-license status
+
+The repository owner has not selected a Greygen source license and the repository intentionally has no `LICENSE` file. Do not infer an open-source grant merely because the repository is publicly readable or because third-party dependencies have permissive licenses. A future source-license choice requires an explicit owner decision.
+
+## Quick use
+
+1. Open the application; it remains silent in **Ready** state.
+2. Choose a White/Pink/Brown/Grey target and optionally shape the ten bands, stereo width, animation, or master digital level.
+3. Choose **Start audio** explicitly. Restored state, share links, profile imports, PWA reloads, and updates never auto-start audio.
+4. Use the fixed **Stop audio** transport whenever needed.
+5. Treat Peak/RMS/safety values as digital dBFS/headroom only—not acoustic SPL.
+6. For guided calibration, first set a comfortable playback level. Skip any frequency that cannot be matched comfortably; Greygen never raises master automatically to force a response.
+
+Private calibration profiles are local by default. Normal share URLs contain only generic SoundState; profile names/notes/evidence/corrections, saved-preset names/library metadata, and UI preferences are excluded. Personal calibration portability uses a separate, explicit export/import surface.
 
 ## Stack
 
@@ -56,7 +87,7 @@ The JSON report is versioned. DSP/statistical fields are deterministic for a fix
 
 ### PWA, offline use, and static deployment
 
-Production builds now include an installable web-app manifest and a generated service worker that precaches the application shell **and the exact emitted AudioWorklet asset as one revisioned version set**. After one successful online load/install, the core application can reload offline. Offline/persisted/share state never restores Running: audio still requires an explicit **Start audio** gesture.
+Production builds include an installable web-app manifest and a generated service worker that precaches the application shell **and the exact emitted AudioWorklet asset as one revisioned version set**. After one successful online load/install, the core application can reload offline. Offline/persisted/share state never restores Running: audio still requires an explicit **Start audio** gesture.
 
 ```bash
 npm run build
@@ -110,6 +141,10 @@ npm run characterize -- --help
 ```
 
 `npm run test:e2e` starts the production preview server automatically through Playwright configuration after a production build exists. Chromium runs the complete integration/offline suite; Firefox and WebKit run the cross-browser core against the same production preview. CI records all three DSP characterization sample rates before the browser matrix.
+
+## Release artifact
+
+A verified static release artifact is simply the generated `dist/` tree after `npm run build && npm run verify:pwa` (root hosting) or `npm run build:pages && npm run verify:pwa:pages` (repository Pages base path). Exact clean-checkout, archive, manual browser/AT, deployment, and tag commands are in `docs/RELEASE_CHECKLIST.md`. Do not create or advertise a public `v0.1.0` tag until those operator gates are actually completed.
 
 ## RAG / development ground truth
 

@@ -1,6 +1,6 @@
 # Greygen Development Roadmap
 
-Status: canonical dependency order and issue map.
+Status: canonical dependency order and issue map, reconciled through issue #20 v0.1 release hardening.
 
 The roadmap is intentionally staged so the audio math becomes testable before UI complexity and calibration arrive. Issue numbers below assume the repository's initial issue set created with this roadmap.
 
@@ -136,6 +136,8 @@ Run current Chromium/Firefox/WebKit matrix, characterize 44.1/48/96 kHz behavior
 
 Complete release checklist, README/user guide, calibration warnings, architecture/validation reconciliation, license/provenance audit, dependency audit, CI green default branch, changelog/versioning, and a tagged/releasable static build process.
 
+Repository-side release hardening defines application v0.1.0, makes the version visible alongside DSP/protocol diagnostics, records the clean-room/dependency/license/privacy audit, adds a reproducible static artifact/tag checklist, and reconciles current ProfileState/UiState/private-export documentation. It does not create a public tag automatically: physical Safari and desktop assistive-technology checks remain explicit pre-tag operator gates.
+
 ## Phase E — post-MVP spectral laboratory
 
 ### #21 Continuous high-resolution spectral model/editor
@@ -150,22 +152,28 @@ Add curve morphing, keyframed/stochastic spectral trajectories, richer seeded au
 
 Issues #1–#20 define the first credible release. #21–#22 are intentionally post-MVP and must not delay a useful calibrated ten-band generator.
 
+After #20 merges, the next dependency-ready development item is **#21**, but public v0.1 tagging remains governed by `docs/RELEASE_CHECKLIST.md` rather than by beginning post-MVP work.
+
 ## Parallelism guidance
 
 Do not parallelize tightly coupled DSP issues #2–#6 against unmerged predecessor assumptions. After #7/#8, #9/#10/#12 can proceed with moderate independence. #16 can begin after the DSP contracts exist and can be extended incrementally. Accessibility should be considered throughout, but #18 is the dedicated audit rather than permission to defer obvious accessibility defects.
 
+Post-MVP #21 should begin from the merged v0.1 contract; #22 must not proceed against an unmerged #21 realization model.
+
 ## Release gates
 
-No v0.1 release until:
+No public v0.1 tag until:
 
-- required CI passes on default branch;
+- required CI passes on the exact default-branch commit proposed for tagging;
 - seeded DSP validators are green;
-- worklet lifecycle is reliable on supported browsers;
+- worklet lifecycle is reliable on supported automated browser paths;
 - normal presets do not depend on heavy limiting;
 - calibration language and gain bounds meet safety RAG;
 - personal calibration is excluded from normal share paths;
 - keyboard operation and stop/mute are reliable;
-- license/provenance audit finds no copied reference-site assets/data.
+- license/provenance audit finds no copied reference-site assets/data;
+- the owner-selected source-license status is represented accurately rather than invented;
+- the manual current-Safari and desktop assistive-technology checks required by `docs/RELEASE_CHECKLIST.md` have been performed when authorizing a public tag.
 
 ### Implemented: issue #12 analyzer/diagnostics
 
@@ -177,8 +185,12 @@ A browser-independent developer CLI now emits versioned human-readable or JSON c
 
 ### Implemented: issue #18 accessibility/responsive hardening
 
-The native generator/profile/calibration control surface now has explicit keyboard/focus contracts, viewport-reachable lifecycle Stop, 44 px critical touch targets, deliberate narrow-screen ten-band scrolling, and visual-only reduced-motion behavior. Chromium regressions cover semantic names/IDs/tab order, fine/coarse range operation, keyboard profile creation/selection, complete guided calibration plus abort/focus restoration, portrait/landscape containment, and Stop reachability. `ACCESSIBILITY_RESPONSIVE.md` records the source/DOM manual review and keeps a real desktop screen-reader spot check as a release-time human gate rather than claiming CI substitutes for assistive technology.
+The native generator/profile/calibration control surface has explicit keyboard/focus contracts, viewport-reachable lifecycle Stop, 44 px critical touch targets, deliberate narrow-screen ten-band scrolling, and visual-only reduced-motion behavior. Chromium regressions cover semantic names/IDs/tab order, fine/coarse range operation, keyboard profile creation/selection, complete guided calibration plus abort/focus restoration, portrait/landscape containment, and Stop reachability. `ACCESSIBILITY_RESPONSIVE.md` records the source/DOM manual review and keeps a real desktop screen-reader spot check as a release-time human gate rather than claiming CI substitutes for assistive technology.
 
 ### Implemented: issue #19 cross-browser/performance/conformance hardening
 
-The production-path browser matrix now combines the complete Chromium suite with focused Firefox/WebKit core journeys for persistence, real AudioWorklet initialization, repeated lifecycle/analyzer cleanup, share privacy, and no-autostart behavior. Headless Linux CI provisions an OS-level PulseAudio null sink so the browsers retain their native Web Audio/AudioWorklet path rather than receiving a synthetic runtime fallback. CI characterizes the same DSP engine at 44.1/48/96 kHz without weakening numeric thresholds, preserves the reports as workflow evidence, and the hot-loop audit records preallocated render storage. The pass also repaired a real analyzer lifecycle defect: sampling no longer disconnects the live Web Audio graph, with repeated cleanup and adversarial ownership tests enforcing the invariant. Playwright WebKit remains Safari-class automation rather than a substitute for the documented physical-Safari release spot check. With #19 complete, #20 v0.1 release hardening is the next dependency-ready MVP issue.
+The production-path browser matrix combines the complete Chromium suite with focused Firefox/WebKit core journeys for persistence, real AudioWorklet initialization, repeated lifecycle/analyzer cleanup, share privacy, and no-autostart behavior. Headless Linux CI provisions an OS-level PulseAudio null sink so the browsers retain their native Web Audio/AudioWorklet path rather than receiving a synthetic runtime fallback. CI characterizes the same DSP engine at 44.1/48/96 kHz without weakening numeric thresholds, preserves the reports as workflow evidence, and the hot-loop audit records preallocated render storage. The pass also repaired a real analyzer lifecycle defect: sampling no longer disconnects the live Web Audio graph, with repeated cleanup and adversarial ownership tests enforcing the invariant. Playwright WebKit remains Safari-class automation rather than a substitute for the documented physical-Safari release spot check.
+
+### Release hardening: issue #20
+
+The v0.1 release PR adds explicit application/package versioning, private-safe version diagnostics, user/operator documentation, changelog, dependency/license/provenance/privacy audit, a high-severity npm advisory CI gate, release metadata boundary tests, and canonical schema/export reconciliation. The repository can be marked v0.1 repository-ready after the PR is green and merged; **tag publication remains a separate checklist action** because unavailable physical Safari and assistive-technology checks must not be claimed as completed.
