@@ -111,7 +111,6 @@ test('core controls expose semantic names, visible focus, and keyboard fine/coar
   await page.keyboard.press('Enter')
   await expect(page.getByText('Running', { exact: true })).toBeVisible()
   const stop = page.getByRole('button', { name: 'Stop audio' })
-  await page.keyboard.press('Tab')
   await expect(stop).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(page.getByText('Stopped', { exact: true })).toBeVisible()
