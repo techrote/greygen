@@ -1,0 +1,176 @@
+
+> greygen@0.0.0 test:e2e
+> playwright test
+
+[WebServer] (!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+[WebServer]   - import "./src/pwa/serviceWorkerSource" without a file extension (vite.config.ts:8:8). Add the file extension
+[WebServer] Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+Running 27 tests using 1 worker
+××F
+::error file=e2e/accessibility.spec.ts,title=[chromium] › e2e/accessibility.spec.ts:92:1 › core controls expose semantic names, visible focus, and keyboard fine/coarse adjustment,line=114,col=22::  1) [chromium] › e2e/accessibility.spec.ts:92:1 › core controls expose semantic names, visible focus, and keyboard fine/coarse adjustment %0A    Error: expect(locator).toBeFocused() failed%0A%0A    Locator:  getByRole('button', { name: 'Stop audio' })%0A    Expected: focused%0A    Received: inactive%0A    Timeout:  5000ms%0A%0A    Call log:%0A      - Expect "toBeFocused" getByRole('button', { name: 'Stop audio' }) with timeout 5000ms%0A      - waiting for getByRole('button', { name: 'Stop audio' })%0A        14 × locator resolved to <button type="button" class="primary-action" aria-describedby="audio-status-note">Stop audio</button>%0A           - unexpected value "inactive"%0A%0A%0A      112 |   await expect(page.getByText('Running', { exact: true })).toBeVisible()%0A      113 |   const stop = page.getByRole('button', { name: 'Stop audio' })%0A    > 114 |   await expect(stop).toBeFocused()%0A          |                      ^%0A      115 |   await page.keyboard.press('Enter')%0A      116 |   await expect(page.getByText('Stopped', { exact: true })).toBeVisible()%0A      117 |%0A        at /home/runner/work/greygen/greygen/e2e/accessibility.spec.ts:114:22
+::error file=e2e/accessibility.spec.ts,title=[chromium] › e2e/accessibility.spec.ts:92:1 › core controls expose semantic names, visible focus, and keyboard fine/coarse adjustment,line=114,col=22::  1) [chromium] › e2e/accessibility.spec.ts:92:1 › core controls expose semantic names, visible focus, and keyboard fine/coarse adjustment %0A%0A    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────%0A    Error: expect(locator).toBeFocused() failed%0A%0A    Locator:  getByRole('button', { name: 'Stop audio' })%0A    Expected: focused%0A    Received: inactive%0A    Timeout:  5000ms%0A%0A    Call log:%0A      - Expect "toBeFocused" getByRole('button', { name: 'Stop audio' }) with timeout 5000ms%0A      - waiting for getByRole('button', { name: 'Stop audio' })%0A        14 × locator resolved to <button type="button" class="primary-action" aria-describedby="audio-status-note">Stop audio</button>%0A           - unexpected value "inactive"%0A%0A%0A      112 |   await expect(page.getByText('Running', { exact: true })).toBeVisible()%0A      113 |   const stop = page.getByRole('button', { name: 'Stop audio' })%0A    > 114 |   await expect(stop).toBeFocused()%0A          |                      ^%0A      115 |   await page.keyboard.press('Enter')%0A      116 |   await expect(page.getByText('Stopped', { exact: true })).toBeVisible()%0A      117 |%0A        at /home/runner/work/greygen/greygen/e2e/accessibility.spec.ts:114:22
+::error file=e2e/accessibility.spec.ts,title=[chromium] › e2e/accessibility.spec.ts:92:1 › core controls expose semantic names, visible focus, and keyboard fine/coarse adjustment,line=114,col=22::  1) [chromium] › e2e/accessibility.spec.ts:92:1 › core controls expose semantic names, visible focus, and keyboard fine/coarse adjustment %0A%0A    Retry #2 ───────────────────────────────────────────────────────────────────────────────────────%0A    Error: expect(locator).toBeFocused() failed%0A%0A    Locator:  getByRole('button', { name: 'Stop audio' })%0A    Expected: focused%0A    Received: inactive%0A    Timeout:  5000ms%0A%0A    Call log:%0A      - Expect "toBeFocused" getByRole('button', { name: 'Stop audio' }) with timeout 5000ms%0A      - waiting for getByRole('button', { name: 'Stop audio' })%0A        14 × locator resolved to <button type="button" class="primary-action" aria-describedby="audio-status-note">Stop audio</button>%0A           - unexpected value "inactive"%0A%0A%0A      112 |   await expect(page.getByText('Running', { exact: true })).toBeVisible()%0A      113 |   const stop = page.getByRole('button', { name: 'Stop audio' })%0A    > 114 |   await expect(stop).toBeFocused()%0A          |                      ^%0A      115 |   await page.keyboard.press('Enter')%0A      116 |   await expect(page.getByText('Stopped', { exact: true })).toBeVisible()%0A      117 |%0A        at /home/runner/work/greygen/greygen/e2e/accessibility.spec.ts:114:22
+·××F
+::error file=e2e/accessibility.spec.ts,title=[chromium] › e2e/accessibility.spec.ts:221:1 › narrow portrait and landscape layouts keep the ten-band scroller bounded and transport immediately reachable,line=235,col=32::  2) [chromium] › e2e/accessibility.spec.ts:221:1 › narrow portrait and landscape layouts keep the ten-band scroller bounded and transport immediately reachable %0A    Error: expect(received).toBeLessThanOrEqual(expected)%0A%0A    Expected: <= 844%0A    Received:    851%0A%0A      233 |       scrollWidth: document.documentElement.scrollWidth,%0A      234 |     }))%0A    > 235 |     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth)%0A          |                                ^%0A      236 |%0A      237 |     const bandScroll = page.locator('.band-scroll')%0A      238 |     const scrollMetrics = await bandScroll.evaluate((element) => ({%0A        at /home/runner/work/greygen/greygen/e2e/accessibility.spec.ts:235:32
+::error file=e2e/accessibility.spec.ts,title=[chromium] › e2e/accessibility.spec.ts:221:1 › narrow portrait and landscape layouts keep the ten-band scroller bounded and transport immediately reachable,line=235,col=32::  2) [chromium] › e2e/accessibility.spec.ts:221:1 › narrow portrait and landscape layouts keep the ten-band scroller bounded and transport immediately reachable %0A%0A    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────%0A    Error: expect(received).toBeLessThanOrEqual(expected)%0A%0A    Expected: <= 844%0A    Received:    851%0A%0A      233 |       scrollWidth: document.documentElement.scrollWidth,%0A      234 |     }))%0A    > 235 |     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth)%0A          |                                ^%0A      236 |%0A      237 |     const bandScroll = page.locator('.band-scroll')%0A      238 |     const scrollMetrics = await bandScroll.evaluate((element) => ({%0A        at /home/runner/work/greygen/greygen/e2e/accessibility.spec.ts:235:32
+::error file=e2e/accessibility.spec.ts,title=[chromium] › e2e/accessibility.spec.ts:221:1 › narrow portrait and landscape layouts keep the ten-band scroller bounded and transport immediately reachable,line=235,col=32::  2) [chromium] › e2e/accessibility.spec.ts:221:1 › narrow portrait and landscape layouts keep the ten-band scroller bounded and transport immediately reachable %0A%0A    Retry #2 ───────────────────────────────────────────────────────────────────────────────────────%0A    Error: expect(received).toBeLessThanOrEqual(expected)%0A%0A    Expected: <= 844%0A    Received:    851%0A%0A      233 |       scrollWidth: document.documentElement.scrollWidth,%0A      234 |     }))%0A    > 235 |     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth)%0A          |                                ^%0A      236 |%0A      237 |     const bandScroll = page.locator('.band-scroll')%0A      238 |     const scrollMetrics = await bandScroll.evaluate((element) => ({%0A        at /home/runner/work/greygen/greygen/e2e/accessibility.spec.ts:235:32
+························
+
+  1) [chromium] › e2e/accessibility.spec.ts:92:1 › core controls expose semantic names, visible focus, and keyboard fine/coarse adjustment 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('button', { name: 'Stop audio' })
+    Expected: focused
+    Received: inactive
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('button', { name: 'Stop audio' }) with timeout 5000ms
+      - waiting for getByRole('button', { name: 'Stop audio' })
+        14 × locator resolved to <button type="button" class="primary-action" aria-describedby="audio-status-note">Stop audio</button>
+           - unexpected value "inactive"
+
+
+      112 |   await expect(page.getByText('Running', { exact: true })).toBeVisible()
+      113 |   const stop = page.getByRole('button', { name: 'Stop audio' })
+    > 114 |   await expect(stop).toBeFocused()
+          |                      ^
+      115 |   await page.keyboard.press('Enter')
+      116 |   await expect(page.getByText('Stopped', { exact: true })).toBeVisible()
+      117 |
+        at /home/runner/work/greygen/greygen/e2e/accessibility.spec.ts:114:22
+
+    Error Context: test-results/accessibility-core-control-0e234-oard-fine-coarse-adjustment-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('button', { name: 'Stop audio' })
+    Expected: focused
+    Received: inactive
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('button', { name: 'Stop audio' }) with timeout 5000ms
+      - waiting for getByRole('button', { name: 'Stop audio' })
+        14 × locator resolved to <button type="button" class="primary-action" aria-describedby="audio-status-note">Stop audio</button>
+           - unexpected value "inactive"
+
+
+      112 |   await expect(page.getByText('Running', { exact: true })).toBeVisible()
+      113 |   const stop = page.getByRole('button', { name: 'Stop audio' })
+    > 114 |   await expect(stop).toBeFocused()
+          |                      ^
+      115 |   await page.keyboard.press('Enter')
+      116 |   await expect(page.getByText('Stopped', { exact: true })).toBeVisible()
+      117 |
+        at /home/runner/work/greygen/greygen/e2e/accessibility.spec.ts:114:22
+
+    Error Context: test-results/accessibility-core-control-0e234-oard-fine-coarse-adjustment-chromium-retry1/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/accessibility-core-control-0e234-oard-fine-coarse-adjustment-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/accessibility-core-control-0e234-oard-fine-coarse-adjustment-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #2 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('button', { name: 'Stop audio' })
+    Expected: focused
+    Received: inactive
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('button', { name: 'Stop audio' }) with timeout 5000ms
+      - waiting for getByRole('button', { name: 'Stop audio' })
+        14 × locator resolved to <button type="button" class="primary-action" aria-describedby="audio-status-note">Stop audio</button>
+           - unexpected value "inactive"
+
+
+      112 |   await expect(page.getByText('Running', { exact: true })).toBeVisible()
+      113 |   const stop = page.getByRole('button', { name: 'Stop audio' })
+    > 114 |   await expect(stop).toBeFocused()
+          |                      ^
+      115 |   await page.keyboard.press('Enter')
+      116 |   await expect(page.getByText('Stopped', { exact: true })).toBeVisible()
+      117 |
+        at /home/runner/work/greygen/greygen/e2e/accessibility.spec.ts:114:22
+
+    Error Context: test-results/accessibility-core-control-0e234-oard-fine-coarse-adjustment-chromium-retry2/error-context.md
+
+  2) [chromium] › e2e/accessibility.spec.ts:221:1 › narrow portrait and landscape layouts keep the ten-band scroller bounded and transport immediately reachable 
+
+    Error: expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 844
+    Received:    851
+
+      233 |       scrollWidth: document.documentElement.scrollWidth,
+      234 |     }))
+    > 235 |     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth)
+          |                                ^
+      236 |
+      237 |     const bandScroll = page.locator('.band-scroll')
+      238 |     const scrollMetrics = await bandScroll.evaluate((element) => ({
+        at /home/runner/work/greygen/greygen/e2e/accessibility.spec.ts:235:32
+
+    Error Context: test-results/accessibility-narrow-portr-b9a35-sport-immediately-reachable-chromium/error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 844
+    Received:    851
+
+      233 |       scrollWidth: document.documentElement.scrollWidth,
+      234 |     }))
+    > 235 |     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth)
+          |                                ^
+      236 |
+      237 |     const bandScroll = page.locator('.band-scroll')
+      238 |     const scrollMetrics = await bandScroll.evaluate((element) => ({
+        at /home/runner/work/greygen/greygen/e2e/accessibility.spec.ts:235:32
+
+    Error Context: test-results/accessibility-narrow-portr-b9a35-sport-immediately-reachable-chromium-retry1/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/accessibility-narrow-portr-b9a35-sport-immediately-reachable-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/accessibility-narrow-portr-b9a35-sport-immediately-reachable-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #2 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 844
+    Received:    851
+
+      233 |       scrollWidth: document.documentElement.scrollWidth,
+      234 |     }))
+    > 235 |     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth)
+          |                                ^
+      236 |
+      237 |     const bandScroll = page.locator('.band-scroll')
+      238 |     const scrollMetrics = await bandScroll.evaluate((element) => ({
+        at /home/runner/work/greygen/greygen/e2e/accessibility.spec.ts:235:32
+
+    Error Context: test-results/accessibility-narrow-portr-b9a35-sport-immediately-reachable-chromium-retry2/error-context.md
+
+  2 failed
+    [chromium] › e2e/accessibility.spec.ts:92:1 › core controls expose semantic names, visible focus, and keyboard fine/coarse adjustment 
+    [chromium] › e2e/accessibility.spec.ts:221:1 › narrow portrait and landscape layouts keep the ten-band scroller bounded and transport immediately reachable 
+  25 passed (38.0s)
+::notice title=🎭 Playwright Run Summary::  2 failed%0A    [chromium] › e2e/accessibility.spec.ts:92:1 › core controls expose semantic names, visible focus, and keyboard fine/coarse adjustment %0A    [chromium] › e2e/accessibility.spec.ts:221:1 › narrow portrait and landscape layouts keep the ten-band scroller bounded and transport immediately reachable %0A  25 passed (38.0s)
+exit_status=1
