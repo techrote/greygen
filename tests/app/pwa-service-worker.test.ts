@@ -73,6 +73,20 @@ describe('PWA cache versioning', () => {
       'PWA precache must contain index.html',
     )
   })
+
+  it('matches the versioned shell and assets independently of server Vary headers', () => {
+    const revision = createPwaCacheRevision(baseEntries)
+    const source = renderServiceWorker(
+      baseEntries.map((entry) => entry.path),
+      revision,
+    )
+
+    expect(source).toContain("cache.match(scopedUrl('index.html'), {")
+    expect(source).toContain('ignoreVary: true')
+    expect(source).toContain(
+      'const cached = await cache.match(request, { ignoreVary: true })',
+    )
+  })
 })
 
 describe('service worker URL resolution', () => {
