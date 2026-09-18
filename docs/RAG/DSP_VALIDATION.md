@@ -176,7 +176,7 @@ Provide a benchmark harness separate from pass/fail unit tests. Record at least:
 - wall time / realtime factor;
 - environment metadata where available.
 
-The worklet inner loop must not allocate per sample. A later release gate should define device/browser budgets from observed data instead of inventing a universal CPU percentage.
+The worklet inner loop must not allocate per sample. Issue #19 establishes the reference-runner policy in `CONFORMANCE.md`: CI records characterization at 44.1, 48, and 96 kHz and the release candidate must remain comfortably faster than realtime without an obvious regression. The realtime factor remains machine-local evidence, not a universal CPU-percentage/device guarantee and not a flaky hosted-runner pass/fail threshold unless a later evidence-backed contract explicitly defines one.
 
 ## Golden audio policy
 
@@ -193,4 +193,4 @@ Any PR that changes a DSP threshold must:
 
 ## Runtime analyzer validation
 
-The optional live analyzer must keep FFT/render work outside the AudioWorklet. Prefer native browser analysis, bound UI sampling, stop loops/listeners on unmount/hidden state, and retain textual numeric diagnostics. Analyzer instrumentation must not relax or replace deterministic offline DSP validation.
+The optional live analyzer must keep FFT/render work outside the AudioWorklet. Prefer native browser analysis, bound UI sampling, stop loops/listeners on unmount/hidden state, and retain textual numeric diagnostics. Sampling must not disconnect or rebuild the live audio graph; graph disconnection belongs to stop/dispose cleanup. Analyzer instrumentation must not relax or replace deterministic offline DSP validation.
