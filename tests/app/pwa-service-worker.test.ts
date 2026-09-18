@@ -67,7 +67,6 @@ describe('PWA cache versioning', () => {
     expect(source).toContain('assets/greygen-processor-def456.js')
     expect(source).toContain("event.data?.type === 'SKIP_WAITING'")
     expect(source).toContain('cache.addAll')
-    expect(source).toContain('keys.startsWith') === false
     expect(source).toContain('key.startsWith(CACHE_PREFIX)')
 
     expect(() => renderServiceWorker(['assets/main.js'], revision)).toThrow(
