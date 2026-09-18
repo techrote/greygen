@@ -34,9 +34,10 @@ test('core generator state and persistence are interoperable', async ({
   await expect(page.locator('#animation-speed')).toHaveValue('1.25')
   await expect(page.getByRole('button', { name: 'Start audio' })).toBeEnabled()
 
-  expect(pageErrors, `${browserName(testInfo.project.name)} page errors`).toEqual(
-    [],
-  )
+  expect(
+    pageErrors,
+    `${browserName(testInfo.project.name)} page errors`,
+  ).toEqual([])
 })
 
 test('real AudioWorklet lifecycle survives repeated start/stop and analyzer teardown', async ({
@@ -77,9 +78,10 @@ test('real AudioWorklet lifecycle survives repeated start/stop and analyzer tear
     ).toBeVisible()
   }
 
-  expect(pageErrors, `${browserName(testInfo.project.name)} page errors`).toEqual(
-    [],
-  )
+  expect(
+    pageErrors,
+    `${browserName(testInfo.project.name)} page errors`,
+  ).toEqual([])
 })
 
 test('normal share URLs exclude private profile data and never auto-start', async ({
