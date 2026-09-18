@@ -37,8 +37,12 @@ describe('DSP characterization report', () => {
     }
 
     expect(report.filterBank.highBandMode).toBe('degraded-high-shelf')
-    expect(report.filterBank.neutralMaximumAbsoluteSampleError).toBeLessThan(1e-10)
-    expect(report.filterBank.neutralMaximumMagnitudeDeviationDb).toBeLessThan(1e-8)
+    expect(report.filterBank.neutralMaximumAbsoluteSampleError).toBeLessThan(
+      1e-10,
+    )
+    expect(report.filterBank.neutralMaximumMagnitudeDeviationDb).toBeLessThan(
+      1e-8,
+    )
     expect(report.filterBank.bands).toHaveLength(10)
 
     expect(
@@ -118,7 +122,9 @@ describe('DSP characterization report', () => {
     expect(() => characterizeDsp({ seed: 0x1_0000_0000 })).toThrow(
       /unsigned 32-bit/u,
     )
-    expect(() => characterizeDsp({ stereoWidth: 1.0001 })).toThrow(/stereo width/u)
+    expect(() => characterizeDsp({ stereoWidth: 1.0001 })).toThrow(
+      /stereo width/u,
+    )
     expect(() => characterizeDsp({ animationDepthDb: 12.001 })).toThrow(
       /depthDb/u,
     )

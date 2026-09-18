@@ -1,7 +1,4 @@
-import {
-  fitPsdSlopeDbPerOctave,
-  welchPsd,
-} from './spectrum'
+import { fitPsdSlopeDbPerOctave, welchPsd } from './spectrum'
 import {
   type AnimationMode,
   SpectralAnimation,
@@ -158,7 +155,10 @@ function assertSampleRate(value: number): number {
 }
 
 function assertFrameCount(value: number): number {
-  if (!Number.isSafeInteger(value) || value < CHARACTERIZATION_WELCH_SEGMENT_LENGTH) {
+  if (
+    !Number.isSafeInteger(value) ||
+    value < CHARACTERIZATION_WELCH_SEGMENT_LENGTH
+  ) {
     throw new RangeError(
       `frameCount must be a safe integer >= ${CHARACTERIZATION_WELCH_SEGMENT_LENGTH}`,
     )
@@ -220,7 +220,10 @@ function sineResponseDb(
   sampleRate: number,
 ): number {
   const settleFrames = Math.max(4096, Math.ceil((sampleRate / frequencyHz) * 8))
-  const measureFrames = Math.max(8192, Math.ceil((sampleRate / frequencyHz) * 16))
+  const measureFrames = Math.max(
+    8192,
+    Math.ceil((sampleRate / frequencyHz) * 16),
+  )
   let inputPower = 0
   let outputPower = 0
   let phase = 0
@@ -243,7 +246,9 @@ function sineResponseDb(
   return gainToDecibels(gain)
 }
 
-function characterizeFilterBank(sampleRate: number): CharacterizationReport['filterBank'] {
+function characterizeFilterBank(
+  sampleRate: number,
+): CharacterizationReport['filterBank'] {
   const neutral = new TenBandFilterBank(sampleRate)
   const impulseFrames = 32_768
   let maxSampleError = 0
@@ -295,7 +300,10 @@ function characterizeFilterBank(sampleRate: number): CharacterizationReport['fil
   }
 }
 
-function pearsonCorrelation(left: ArrayLike<number>, right: ArrayLike<number>): number {
+function pearsonCorrelation(
+  left: ArrayLike<number>,
+  right: ArrayLike<number>,
+): number {
   if (left.length !== right.length || left.length < 2) {
     throw new RangeError('correlation inputs must have equal length >= 2')
   }
@@ -495,7 +503,9 @@ function fixed(value: number, digits = 4): string {
   return Number.isFinite(value) ? value.toFixed(digits) : String(value)
 }
 
-export function formatCharacterizationReport(report: CharacterizationReport): string {
+export function formatCharacterizationReport(
+  report: CharacterizationReport,
+): string {
   const lines = [
     `Greygen DSP characterization v${report.schemaVersion}`,
     `engine DSP v${report.engine.dspVersion}; spectral realization v${report.engine.spectralRealizationVersion}`,

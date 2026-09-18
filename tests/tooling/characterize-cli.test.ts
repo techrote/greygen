@@ -75,11 +75,15 @@ describe('characterization CLI', () => {
   })
 
   it('prints help without starting the characterization runtime', () => {
-    const result = spawnSync(process.execPath, ['scripts/characterize.mjs', '--help'], {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-      timeout: 10_000,
-    })
+    const result = spawnSync(
+      process.execPath,
+      ['scripts/characterize.mjs', '--help'],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        timeout: 10_000,
+      },
+    )
 
     expect(result.status).toBe(0)
     expect(result.stderr).toBe('')

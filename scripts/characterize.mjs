@@ -79,11 +79,17 @@ function parseArgs(args) {
         options.animationEnergyPreserving = false
         break
       case '--sample-rate':
-        options.sampleRate = parseNumber(takeValue(args, index, argument), argument)
+        options.sampleRate = parseNumber(
+          takeValue(args, index, argument),
+          argument,
+        )
         index += 1
         break
       case '--frames':
-        options.frameCount = parseNumber(takeValue(args, index, argument), argument)
+        options.frameCount = parseNumber(
+          takeValue(args, index, argument),
+          argument,
+        )
         index += 1
         break
       case '--seed':
@@ -100,13 +106,18 @@ function parseArgs(args) {
         break
       }
       case '--width':
-        options.stereoWidth = parseNumber(takeValue(args, index, argument), argument)
+        options.stereoWidth = parseNumber(
+          takeValue(args, index, argument),
+          argument,
+        )
         index += 1
         break
       case '--animation': {
         const value = takeValue(args, index, argument)
         if (!ANIMATION_MODES.has(value)) {
-          throw new Error('--animation must be off, drift, breathe, wander, or orbit')
+          throw new Error(
+            '--animation must be off, drift, breathe, wander, or orbit',
+          )
         }
         options.animationMode = value
         index += 1
