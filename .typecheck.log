@@ -1,0 +1,32 @@
+
+> greygen@0.0.0 typecheck
+> tsc -b
+
+src/audio/analysis/characterization.ts(8,8): error TS2307: Cannot find module '../../../tests/helpers/spectralAnalysis' or its corresponding type declarations.
+src/audio/analysis/characterization.ts(10,3): error TS6133: 'ANIMATION_DEPTH_MAX_DB' is declared but its value is never read.
+src/audio/analysis/characterization.ts(11,3): error TS6133: 'ANIMATION_SPEED_MAX' is declared but its value is never read.
+src/audio/analysis/characterization.ts(13,3): error TS2305: Module '"../dsp/animation"' has no exported member 'getAnimationBandOffsets'.
+src/audio/analysis/characterization.ts(17,3): error TS2305: Module '"../dsp/filterBank"' has no exported member 'TEN_BAND_NOMINAL_FREQUENCIES_HZ'.
+src/audio/analysis/characterization.ts(18,3): error TS2724: '"../dsp/filterBank"' has no exported member named 'createTenBandFilterBank'. Did you mean 'TenBandFilterBank'?
+src/audio/analysis/characterization.ts(20,40): error TS2307: Cannot find module '../dsp/math' or its corresponding type declarations.
+src/audio/analysis/characterization.ts(21,32): error TS6133: 'SeededRng' is declared but its value is never read.
+src/audio/analysis/characterization.ts(21,49): error TS2307: Cannot find module '../dsp/prng' or its corresponding type declarations.
+src/audio/analysis/characterization.ts(24,3): error TS2305: Module '"../dsp/spectra"' has no exported member 'getSpectrumBandOffsets'.
+src/audio/analysis/characterization.ts(24,3): error TS6133: 'getSpectrumBandOffsets' is declared but its value is never read.
+src/audio/analysis/characterization.ts(26,8): error TS2724: '"../dsp/spectra"' has no exported member named 'SpectrumPresetId'. Did you mean 'SpectralPresetId'?
+src/audio/analysis/characterization.ts(31,8): error TS2307: Cannot find module '../dsp/stereoWidth' or its corresponding type declarations.
+src/audio/analysis/characterization.ts(151,7): error TS6133: 'MIN_POSITIVE_POWER' is declared but its value is never read.
+src/audio/analysis/characterization.ts(359,49): error TS7006: Parameter 'bandSamples' implicitly has an 'any' type.
+src/audio/analysis/characterization.ts(359,62): error TS7006: Parameter 'index' implicitly has an 'any' type.
+src/audio/analysis/characterization.ts(362,33): error TS7006: Parameter 'best' implicitly has an 'any' type.
+src/audio/analysis/characterization.ts(362,39): error TS7006: Parameter 'candidate' implicitly has an 'any' type.
+src/audio/analysis/characterization.ts(368,43): error TS7006: Parameter 'best' implicitly has an 'any' type.
+src/audio/analysis/characterization.ts(368,49): error TS7006: Parameter 'candidate' implicitly has an 'any' type.
+src/audio/analysis/characterization.ts(528,34): error TS2551: Property 'targetPreGainDb' does not exist on type 'EngineTelemetry'. Did you mean 'safetyPreGainDb'?
+src/audio/analysis/characterization.ts(529,35): error TS2339: Property 'appliedPreGainDb' does not exist on type 'EngineTelemetry'.
+tests/dsp/characterization.test.ts(33,19): error TS2339: Property 'spectral' does not exist on type 'CharacterizationReport'.
+tests/dsp/characterization.test.ts(34,33): error TS2339: Property 'spectral' does not exist on type 'CharacterizationReport'.
+tests/dsp/characterization.test.ts(40,30): error TS2551: Property 'neutralMaximumAbsoluteSampleError' does not exist on type 'FilterBankCharacterization'. Did you mean 'neutralMaximumSampleError'?
+tests/dsp/characterization.test.ts(46,30): error TS2339: Property 'bands' does not exist on type 'FilterBankCharacterization'.
+tests/dsp/characterization.test.ts(53,35): error TS2551: Property 'stereoRmsBalanceDb' does not exist on type '{ left: BlockStatistics; right: BlockStatistics; stereoCorrelation: number; rmsBalanceDb: number; }'. Did you mean 'rmsBalanceDb'?
+tests/dsp/characterization.test.ts(55,29): error TS2339: Property 'wallTimeMs' does not exist on type '{ renderedAudioSeconds: number; wallTimeSeconds: number; realtimeFactor: number | null; informationalOnly: true; }'.
