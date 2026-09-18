@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const crossBrowserCore = /cross-browser\.spec\.ts/u
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -15,6 +17,16 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'firefox-core',
+      testMatch: crossBrowserCore,
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'webkit-core',
+      testMatch: crossBrowserCore,
+      use: { ...devices['Desktop Safari'] },
     },
   ],
   webServer: {
