@@ -70,6 +70,12 @@ The normal build targets `/`; `build:pages` targets `/greygen/` for the reposito
 
 `.github/workflows/deploy-pages.yml` provides a static HTTPS GitHub Pages deployment with no repository secrets. Before its first manual run, repository Pages must be enabled once under **Settings → Pages → Build and deployment → GitHub Actions**. See `docs/RAG/PWA_DEPLOYMENT.md` for the cache/version, privacy, base-path, deployment, and update contracts.
 
+### Accessibility and responsive interaction
+
+Issue #18 hardens the existing native control surface rather than replacing it with custom widgets. Transport, presets, spectral bands, profile management, and guided calibration have keyboard-only regression coverage; focus is visible and deliberately restored through the calibration workflow; the global lifecycle transport remains fixed within reach while audio can run; the ten-band bank keeps useful control sizes by scrolling horizontally on narrow screens; and ordinary button/select plus band-reset targets are at least 44 px at the default root size.
+
+`prefers-reduced-motion` suppresses presentation motion only. It never alters spectral-animation mode, seed, depth, speed, normalization, samples, or persisted SoundState. Automated Chromium coverage checks semantic names, duplicate IDs/tab order, range boundaries/coarse movement, keyboard profile/calibration flows, phone portrait/landscape containment, immediate Stop reachability, and reduced-motion behavior. A current desktop screen-reader spot check remains an explicit release-time human task rather than a CI claim. See `docs/RAG/ACCESSIBILITY_RESPONSIVE.md`.
+
 ### Verification commands
 
 ```bash
@@ -117,9 +123,10 @@ Start with:
 15. `docs/RAG/ANALYZER_DIAGNOSTICS.md`
 16. `docs/RAG/DSP_CHARACTERIZATION.md`
 17. `docs/RAG/PWA_DEPLOYMENT.md`
-18. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
-19. `docs/RAG/UX_STATE.md`
-20. `docs/RAG/AGENT_PLAYBOOK.md`
-21. `docs/RAG/ROADMAP.md`
+18. `docs/RAG/ACCESSIBILITY_RESPONSIVE.md`
+19. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
+20. `docs/RAG/UX_STATE.md`
+21. `docs/RAG/AGENT_PLAYBOOK.md`
+22. `docs/RAG/ROADMAP.md`
 
 The GitHub issues are executable work packets. Each issue must be completed end-to-end: implementation, tests, documentation updates, PR, automated checks, review of failures, and merge only after required checks pass.
