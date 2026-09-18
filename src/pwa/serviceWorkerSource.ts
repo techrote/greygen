@@ -71,9 +71,10 @@ export function renderServiceWorker(
   }
 
   const serializedPaths = JSON.stringify(paths, null, 2)
+  const cacheName = `${CACHE_PREFIX}${revision}`
 
   return `const CACHE_PREFIX = ${JSON.stringify(CACHE_PREFIX)}
-const CACHE_NAME = \`${CACHE_PREFIX}\${${JSON.stringify(revision)}}\`
+const CACHE_NAME = ${JSON.stringify(cacheName)}
 const PRECACHE_PATHS = ${serializedPaths}
 
 function scopedUrl(path) {
