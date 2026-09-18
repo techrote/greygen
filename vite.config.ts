@@ -10,9 +10,7 @@ import {
 const PUBLIC_PWA_ASSETS = ['manifest.webmanifest', 'icons/greygen.svg'] as const
 
 function sourceSignature(source: string | Uint8Array): string {
-  return typeof source === 'string'
-    ? source
-    : Array.from(source).join(',')
+  return typeof source === 'string' ? source : Array.from(source).join(',')
 }
 
 function greygenPwaPlugin(): Plugin {
