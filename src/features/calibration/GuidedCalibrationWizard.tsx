@@ -1,4 +1,9 @@
-import { type KeyboardEvent, useState } from 'react'
+import {
+  type KeyboardEvent,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import type { AudioEngineStatus } from '../../audio/AudioEngine'
 import type { CalibrationStimulusChannel } from '../../audio/dsp/calibrationStimulus'
 import { NOMINAL_BAND_CENTERS_HZ } from '../../audio/dsp/filterBank'
@@ -120,6 +125,12 @@ export default function GuidedCalibrationWizard({
   onRestoreSavedProfile,
   onSave,
 }: GuidedCalibrationWizardProps) {
+  const introRegionRef = useRef<HTMLElement>(null)
+  const activeRegionRef = useRef<HTMLElement>(null)
+  const previousWizardActiveRef = useRef(false)
+  const previousPhaseRef = useRef<GuidedChannelCalibrationState['phase'] | null>(
+    null,
+  )
   const [comfortableConfirmed, setComfortableConfirmed] = useState(false)
   const [channelMode, setChannelMode] =
     useState<CalibrationChannelMode>('linked')
@@ -135,6 +146,22 @@ export default function GuidedCalibrationWizard({
     useState<CalibrationApplicationMode>('off')
   const [profileName, setProfileName] = useState('')
   const [profileNote, setProfileNote] = useState('')
+
+  useEffect(() => {
+    const wasActive = previousWizardActiveRef.current
+    const isActive = wizard !== null
+    const previousPhase = previousPhaseRef.current
+    const nextPhase = wizard?.phase ?? null
+
+    if (isActive && (!wasActive || previousPhase !== nextPhase)) {
+      activeRegionRef.current?.focus()
+    } else if (!isActive && wasActive) {
+      introRegionRef.current?.focus()
+    }
+
+    previousWizardActiveRef.current = isActive
+    previousPhaseRef.current = nextPhase
+  }, [wizard])
 
   const resetAuditionFlags = (): void => {
     setHeardReference(false)
@@ -316,7 +343,12 @@ export default function GuidedCalibrationWizard({
 
   if (!wizard) {
     return (
-      <section className="guided-calibration" aria-labelledby="guided-heading">
+      <section
+        ref={introRegionRef}
+        className="guided-calibration"
+        aria-labelledby="guided-heading"
+        tabIndex={-1}
+      >
         <h4 id="guided-heading">Guided perceived-level calibration</h4>
         <p>
           Match narrow-band noise against a 1 kHz reference. Results describe
@@ -412,9 +444,14 @@ export default function GuidedCalibrationWizard({
     const canJudge = heardReference && heardTest
     return (
       <section
+        ref={activeRegionRef}
+        id="guided-keyboard-control"
         className="guided-calibration guided-calibration-active"
         aria-labelledby="guided-heading"
+        aria-describedby="guided-keyboard-help"
         data-channel={wizard.phase}
+        tabIndex={-1}
+        onKeyDown={handleKeyboard}
       >
         <div className="section-heading-row">
           <div>
@@ -425,7 +462,9 @@ export default function GuidedCalibrationWizard({
             </p>
             <h4 id="guided-heading">{frequencyLabel(frequency)} test band</h4>
           </div>
-          <output aria-live="polite">{formatCorrection(correction)}</output>
+          <output aria-live="polite" aria-atomic="true">
+            {formatCorrection(correction)}
+          </output>
         </div>
         <p>
           Space alternates reference/test in{' '}
@@ -455,18 +494,10 @@ export default function GuidedCalibrationWizard({
             Silence calibration
           </button>
         </div>
-        <p className="status-note" aria-live="polite">
+        <p className="status-note" aria-live="polite" aria-atomic="true">
           Heard reference: {heardReference ? 'yes' : 'no'} · Heard test:{' '}
           {heardTest ? 'yes' : 'no'}
         </p>
-        <button
-          id="guided-keyboard-control"
-          type="button"
-          className="secondary-action"
-          onKeyDown={handleKeyboard}
-        >
-          Keyboard controls
-        </button>
         <div className="calibration-judgement-row">
           <button
             type="button"
@@ -501,7 +532,7 @@ export default function GuidedCalibrationWizard({
             Abort calibration
           </button>
         </div>
-        <p className="status-note">
+        <p className="status-note" id="guided-keyboard-help">
           Keyboard: Space alternate · ← quieter · ↓ equal · → louder · K skip ·
           S silence · Esc abort.
         </p>
@@ -521,8 +552,11 @@ export default function GuidedCalibrationWizard({
 
   return (
     <section
+      ref={activeRegionRef}
       className="guided-calibration guided-calibration-active"
       aria-labelledby="guided-heading"
+      tabIndex={-1}
+      onKeyDown={handleKeyboard}
     >
       <div className="section-heading-row">
         <div>
