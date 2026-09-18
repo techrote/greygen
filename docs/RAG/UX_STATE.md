@@ -1,6 +1,6 @@
 # UX and State Model
 
-Status: canonical product-state and interaction guidance for the initial application, reconciled through issue #11 presets and sharing.
+Status: canonical product-state and interaction guidance, reconciled through issue #18 accessibility/responsive hardening.
 
 ## Primary interaction model
 
@@ -30,6 +30,8 @@ Required primary controls:
 
 Advanced controls belong in a collapsible/secondary surface. The analyzer/diagnostics panel is secondary, defaults closed for new/legacy state, and persists its open/closed presentation preference locally.
 
+The authoritative transport actions remain fixed at the viewport edge so Start/Resume/Stop remains immediately reachable while deep in calibration, profile, sharing, or analyzer controls. This is presentation of the existing AudioEngine lifecycle actions, not a parallel transport state machine.
+
 ## Band behavior
 
 Recommended display labels:
@@ -37,6 +39,8 @@ Recommended display labels:
 `31, 62, 125, 250, 500, 1k, 2k, 4k, 8k, 16k`.
 
 Each band control needs keyboard increments, an accessible name including frequency/current gain, a numeric readout, neutral reset, and clear text for any runtime degradation. Do not communicate band level using colour alone.
+
+The current native range contract uses 1 dB fine Arrow-key steps, Home/End bounds, and browser-native PageUp/PageDown coarse movement. Horizontal scrolling on narrow screens is deliberate so the ten controls keep useful dimensions.
 
 ## Start/lifecycle UX
 
@@ -67,6 +71,8 @@ Names must be sanitized/bounded before storage/display and rendered as text rath
 ## Animation
 
 Shipping modes are conceptual names: Off, Drift, Breathe, Wander, Orbit. UI exposes depth, speed, and mean-band-power normalization. Animation is deterministic given state + seed and respects global gain/safety bounds.
+
+`prefers-reduced-motion` is a visual-presentation preference only. It may reduce analyzer/CSS motion, but must not silently alter spectral-animation mode, depth, speed, seed, normalization, samples, or persisted SoundState.
 
 ## Metering
 
@@ -157,25 +163,35 @@ An explicit advanced private-profile export may later exist only through a separ
 
 Default guided calibration should explain its non-medical/playback-chain nature, require comfortable level confirmation, use bounded reference/test comparisons, permit skip/cannot-match, randomize/retest, and save a named local profile only after review.
 
+Keyboard shortcuts on the active guided region supplement—not replace—the visible native buttons. Focus moves into the active region when the flow starts or changes major phase, and returns to the guided entry region on Save/Abort so keyboard users are not dropped back to the document body.
+
 ## Accessibility
 
 Minimum requirements:
 
 - all controls keyboard operable;
-- logical tab order;
-- visible focus states;
+- logical tab order with no positive `tabindex`;
+- visible focus states for native controls, disclosure summaries, and programmatically focused workflow regions;
 - native semantic controls where possible;
 - labels/readouts available to screen readers;
 - no pointer-only drag requirement for precise values;
-- visual motion respects reduced-motion preferences;
+- both fine and coarse keyboard range adjustment;
+- visual motion respects reduced-motion preferences without changing audio animation;
+- practical touch targets, including a 44 px minimum for ordinary buttons/selects and the band reset action;
 - sufficient contrast;
-- status changes exposed without chatty live-region spam.
+- status changes exposed without chatty live-region spam;
+- no state depends on hue alone;
+- global Stop remains immediately reachable while audio can run.
 
 Saved preset names are ordinary escaped text. Share URLs use selectable text inputs with labelled buttons/forms.
+
+The detailed implemented contract, browser regression evidence, and release-time assistive-technology checklist live in `ACCESSIBILITY_RESPONSIVE.md`.
 
 ## Responsive behavior
 
 The ten-band surface must remain usable on narrow displays. Do not shrink hit targets to microscopic sizes; horizontal spectral scrolling is preferable when needed. Preset/share forms may stack into a single column on narrow viewports.
+
+The document itself must remain horizontally contained at representative phone portrait and landscape sizes. The transport action dock is safe-area aware and action rows may stack on narrow screens; extra page-bottom space prevents it from covering final controls.
 
 ## Error states
 

@@ -324,7 +324,17 @@ export function GeneratorSurface({
 }: GeneratorSurfaceProps) {
   const [presetNameDraft, setPresetNameDraft] = useState('')
   const [shareImportDraft, setShareImportDraft] = useState('')
+  const primaryActionRef = useRef<HTMLButtonElement>(null)
+  const previousAudioStatusRef = useRef(audioSnapshot.status)
   const telemetry = audioSnapshot.telemetry
+
+  useEffect(() => {
+    const previousStatus = previousAudioStatusRef.current
+    if (previousStatus === 'starting' && audioSnapshot.status !== 'starting') {
+      primaryActionRef.current?.focus()
+    }
+    previousAudioStatusRef.current = audioSnapshot.status
+  }, [audioSnapshot.status])
   const modified =
     matchedUserPresetName === null && isModifiedPreset(spectrumState)
   const selectedPreset = GENERATOR_PRESETS.find(
@@ -396,6 +406,7 @@ export function GeneratorSurface({
           </div>
           <div className="transport-actions compact-actions">
             <button
+              ref={primaryActionRef}
               className="primary-action"
               type="button"
               disabled={primaryDisabled}

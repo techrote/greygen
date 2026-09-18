@@ -174,3 +174,7 @@ Native main-thread AnalyserNode spectrum, bounded/lazy diagnostics UI, reduced-m
 ### Implemented: issue #16 DSP characterization/reference tooling
 
 A browser-independent developer CLI now emits versioned human-readable or JSON characterization reports for White/Pink/Brown spectral slope, neutral/filter-bank response, stereo correlation/RMS balance, gain-safety/final-guard telemetry, bounded animation statistics, and machine-local offline realtime factor. Required 44.1/48/96 kHz coverage and adversarial numeric boundaries are test-gated; the benchmark remains informational rather than a universal CI timing threshold.
+
+### Implemented: issue #18 accessibility/responsive hardening
+
+The native generator/profile/calibration control surface now has explicit keyboard/focus contracts, viewport-reachable lifecycle Stop, 44 px critical touch targets, deliberate narrow-screen ten-band scrolling, and visual-only reduced-motion behavior. Chromium regressions cover semantic names/IDs/tab order, fine/coarse range operation, keyboard profile creation/selection, complete guided calibration plus abort/focus restoration, portrait/landscape containment, and Stop reachability. `ACCESSIBILITY_RESPONSIVE.md` records the source/DOM manual review and keeps a real desktop screen-reader spot check as a release-time human gate rather than claiming CI substitutes for assistive technology. With #18 complete, #19 cross-browser/performance/conformance is the next dependency-ready hardening issue.
