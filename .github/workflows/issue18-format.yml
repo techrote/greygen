@@ -1,0 +1,31 @@
+name: Issue 18 formatter
+
+on:
+  push:
+    branches:
+      - issue-18-accessibility-responsive
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run format
+      - name: Commit formatter output
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/App.tsx src/features/calibration/GuidedCalibrationWizard.tsx e2e/accessibility.spec.ts src/styles/accessibility.css docs/RAG/ACCESSIBILITY_RESPONSIVE.md docs/RAG/UX_STATE.md docs/RAG/ROADMAP.md README.md src/main.tsx
+          git commit -m "style: apply formatter after accessibility repair" || exit 0
+          git push
