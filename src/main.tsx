@@ -7,6 +7,7 @@ import './styles/animation.css'
 import './styles/presets.css'
 import './styles/analyzer.css'
 import './styles/pwa.css'
+import './styles/accessibility.css'
 
 const rootElement = document.getElementById('root')
 
