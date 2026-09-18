@@ -1,172 +1,169 @@
+import { fitPsdSlopeDbPerOctave, welchPsd } from './spectrum'
 import {
-  FFT_SIZE,
-  WELCH_FIT_MAX_HZ,
-  WELCH_FIT_MIN_HZ,
-  WELCH_HOP_SIZE,
-  estimatePsdDb,
-  fitLogFrequencySlope,
-} from '../../../tests/helpers/spectralAnalysis'
-import {
-  ANIMATION_DEPTH_MAX_DB,
-  ANIMATION_SPEED_MAX,
-  createAnimationState,
-  getAnimationBandOffsets,
   type AnimationMode,
+  SpectralAnimation,
+  createAnimationState,
 } from '../dsp/animation'
 import {
-  TEN_BAND_NOMINAL_FREQUENCIES_HZ,
-  createTenBandFilterBank,
-} from '../dsp/filterBank'
-import { dbToAmplitude, rmsToDb } from '../dsp/math'
-import { createSeededRng, type SeededRng } from '../dsp/prng'
-import {
-  createSpectrumState,
-  getSpectrumBandOffsets,
-  SPECTRAL_REALIZATION_VERSION,
-  type SpectrumPresetId,
-} from '../dsp/spectra'
-import {
-  createStereoWidthState,
-  stereoWidthToCorrelation,
-} from '../dsp/stereoWidth'
-import {
-  DSP_ENGINE_VERSION,
   DEFAULT_ENGINE_PRESET,
   DEFAULT_ENGINE_SEED,
+  DSP_ENGINE_VERSION,
   GreygenDspEngine,
 } from '../dsp/engine'
+import {
+  BAND_COUNT,
+  NOMINAL_BAND_CENTERS_HZ,
+  TenBandFilterBank,
+} from '../dsp/filterBank'
 import { createGainStageState } from '../dsp/gainSafety'
+import { gainToDecibels } from '../dsp/numbers'
+import { Xoshiro128StarStar } from '../dsp/rng'
+import { blockStatistics } from '../dsp/statistics'
+import {
+  BROWN_PSD_SLOPE_DB_PER_OCTAVE,
+  PINK_PSD_SLOPE_DB_PER_OCTAVE,
+  PRESET_PSD_FIT_MAXIMUM_HZ,
+  PRESET_PSD_FIT_MINIMUM_HZ,
+  SPECTRAL_REALIZATION_VERSION,
+  WHITE_PSD_SLOPE_DB_PER_OCTAVE,
+  type SpectralPresetId,
+  applySpectrumStateToFilterBank,
+  createSpectrumState,
+} from '../dsp/spectra'
+import {
+  DEFAULT_STEREO_WIDTH,
+  createStereoWidthState,
+  stereoWidthToCorrelation,
+} from '../dsp/stereo'
 
 export const CHARACTERIZATION_REPORT_SCHEMA_VERSION = 1 as const
 export const DEFAULT_CHARACTERIZATION_SAMPLE_RATE = 48_000
-export const DEFAULT_CHARACTERIZATION_FRAME_COUNT = 2 ** 18
-export const CHARACTERIZATION_MIN_FRAME_COUNT = FFT_SIZE
+export const DEFAULT_CHARACTERIZATION_FRAME_COUNT = 1 << 18
+export const CHARACTERIZATION_WELCH_SEGMENT_LENGTH = 2048
+
+const SPECTRAL_PRESETS = [
+  ['white', WHITE_PSD_SLOPE_DB_PER_OCTAVE],
+  ['pink', PINK_PSD_SLOPE_DB_PER_OCTAVE],
+  ['brown', BROWN_PSD_SLOPE_DB_PER_OCTAVE],
+] as const
 
 export interface CharacterizationEnvironment {
-  runtime: string
-  platform: string
-  architecture: string
+  readonly runtime: string
+  readonly platform: string
+  readonly architecture: string
 }
 
 export interface CharacterizationOptions {
-  sampleRate?: number
-  frameCount?: number
-  seed?: number
-  presetId?: SpectrumPresetId
-  stereoWidth?: number
-  animationMode?: AnimationMode
-  animationDepthDb?: number
-  animationSpeed?: number
-  animationEnergyPreserving?: boolean
-  environment?: CharacterizationEnvironment
-  now?: () => number
+  readonly sampleRate?: number
+  readonly frameCount?: number
+  readonly seed?: number
+  readonly presetId?: SpectralPresetId
+  readonly stereoWidth?: number
+  readonly animationMode?: AnimationMode
+  readonly animationDepthDb?: number
+  readonly animationSpeed?: number
+  readonly animationEnergyPreserving?: boolean
+  readonly environment?: CharacterizationEnvironment
+  readonly now?: () => number
 }
 
-export interface PsdSlopeCharacterization {
-  measuredDbPerOctave: number
-  targetDbPerOctave: number
-  errorDbPerOctave: number
-  rSquared: number
+export interface SpectralSlopeCharacterization {
+  readonly presetId: 'white' | 'pink' | 'brown'
+  readonly expectedDbPerOctave: number
+  readonly measuredDbPerOctave: number
+  readonly errorDbPerOctave: number
+  readonly rSquared: number
+  readonly binCount: number
 }
 
-export interface BlockStatistics {
-  mean: number
-  rms: number
-  peak: number
-}
-
-export interface FilterBandCharacterization {
-  nominalFrequencyHz: number
-  centerResponseDb: number
-}
-
-export interface FilterBankCharacterization {
-  highBandMode: 'bounded-bandpass' | 'degraded-high-shelf'
-  neutralMaximumSampleError: number
-  neutralMaximumMagnitudeDeviationDb: number
-  nominalBandCenterResponses: FilterBandCharacterization[]
-}
-
-export interface AnimationCharacterization {
-  enabled: boolean
-  maximumAbsoluteOffsetDb: number
-  meanAbsoluteBandPowerErrorDb: number
-  maximumAbsoluteBandPowerErrorDb: number
+export interface BandResponseCharacterization {
+  readonly bandIndex: number
+  readonly nominalCenterHz: number
+  readonly isolatedCenterResponseDb: number
 }
 
 export interface CharacterizationReport {
-  schemaVersion: typeof CHARACTERIZATION_REPORT_SCHEMA_VERSION
-  engine: {
-    dspVersion: number
-    spectralRealizationVersion: number
+  readonly schemaVersion: typeof CHARACTERIZATION_REPORT_SCHEMA_VERSION
+  readonly engine: {
+    readonly dspVersion: number
+    readonly spectralRealizationVersion: number
   }
-  input: {
-    sampleRate: number
-    frameCount: number
-    seed: number
-    presetId: SpectrumPresetId
-    stereoWidth: number
-    targetStereoCorrelation: number
-    animation: {
-      mode: AnimationMode
-      depthDb: number
-      speed: number
-      energyPreserving: boolean
+  readonly input: {
+    readonly sampleRate: number
+    readonly frameCount: number
+    readonly seed: number
+    readonly presetId: SpectralPresetId
+    readonly stereoWidth: number
+    readonly targetStereoCorrelation: number
+    readonly animation: {
+      readonly mode: AnimationMode
+      readonly depthDb: number
+      readonly speed: number
+      readonly energyPreserving: boolean
     }
   }
-  environment: CharacterizationEnvironment
-  psd: {
-    estimator: 'welch-hann'
-    fftSize: number
-    hopSize: number
-    fitRangeHz: readonly [number, number]
-    white: PsdSlopeCharacterization
-    pink: PsdSlopeCharacterization
-    brown: PsdSlopeCharacterization
+  readonly environment: CharacterizationEnvironment
+  readonly spectral: {
+    readonly fitRangeHz: readonly [number, number]
+    readonly welchSegmentLength: number
+    readonly presets: readonly SpectralSlopeCharacterization[]
   }
-  filterBank: FilterBankCharacterization
-  output: {
-    left: BlockStatistics
-    right: BlockStatistics
-    stereoCorrelation: number
-    rmsBalanceDb: number
+  readonly filterBank: {
+    readonly highBandMode: string
+    readonly neutralMaximumAbsoluteSampleError: number
+    readonly neutralMaximumMagnitudeDeviationDb: number
+    readonly bands: readonly BandResponseCharacterization[]
   }
-  safety: {
-    targetPreGainDb: number
-    appliedPreGainDb: number
-    guardInterventions: number
+  readonly output: {
+    readonly left: {
+      readonly mean: number
+      readonly rms: number
+      readonly peakAbsolute: number
+    }
+    readonly right: {
+      readonly mean: number
+      readonly rms: number
+      readonly peakAbsolute: number
+    }
+    readonly stereoCorrelation: number
+    readonly stereoRmsBalanceDb: number
   }
-  animation: AnimationCharacterization
-  benchmark: {
-    renderedAudioSeconds: number
-    wallTimeSeconds: number
-    realtimeFactor: number | null
-    informationalOnly: true
+  readonly safety: {
+    readonly targetPreGainDb: number
+    readonly appliedPreGainDb: number
+    readonly guardInterventions: number
+  }
+  readonly animation: {
+    readonly enabled: boolean
+    readonly maximumAbsoluteOffsetDb: number
+    readonly meanAbsoluteBandPowerErrorDb: number
+    readonly maximumAbsoluteBandPowerErrorDb: number
+  }
+  readonly benchmark: {
+    readonly renderedAudioSeconds: number
+    readonly wallTimeMs: number
+    readonly realtimeFactor: number | null
+    readonly informationalOnly: true
   }
 }
 
-const SPECTRAL_SLOPE_FIXTURE_SEED = 0x5350_4543
-const FILTER_BANK_FIXTURE_SEED = 0x4642_414e
-const DEFAULT_STEREO_WIDTH = 0.5
-const MIN_POSITIVE_POWER = 1e-30
-
-function assertSampleRate(sampleRate: number): number {
-  if (!Number.isFinite(sampleRate) || sampleRate <= 0) {
-    throw new RangeError('sampleRate must be a finite positive number')
+function assertSampleRate(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new RangeError('sampleRate must be finite and positive')
   }
-  return sampleRate
+  return value
 }
 
-function assertFrameCount(frameCount: number): number {
+function assertFrameCount(value: number): number {
   if (
-    !Number.isInteger(frameCount) ||
-    frameCount < CHARACTERIZATION_MIN_FRAME_COUNT
+    !Number.isSafeInteger(value) ||
+    value < CHARACTERIZATION_WELCH_SEGMENT_LENGTH
   ) {
     throw new RangeError(
-      `frameCount must be an integer >= ${CHARACTERIZATION_MIN_FRAME_COUNT}`,
+      `frameCount must be a safe integer >= ${CHARACTERIZATION_WELCH_SEGMENT_LENGTH}`,
     )
   }
-  return frameCount
+  return value
 }
 
 function assertUint32(value: number, label: string): number {
@@ -176,225 +173,171 @@ function assertUint32(value: number, label: string): number {
   return value
 }
 
-function blockStatistics(samples: Float32Array): BlockStatistics {
-  let sum = 0
-  let sumSquares = 0
-  let peak = 0
-  for (const sample of samples) {
-    sum += sample
-    sumSquares += sample * sample
-    peak = Math.max(peak, Math.abs(sample))
-  }
-  return {
-    mean: sum / samples.length,
-    rms: Math.sqrt(sumSquares / samples.length),
-    peak,
-  }
-}
-
-function pearsonCorrelation(left: Float32Array, right: Float32Array): number {
-  if (left.length !== right.length || left.length === 0) {
-    throw new RangeError('stereo blocks must have equal non-zero length')
-  }
-
-  let sumLeft = 0
-  let sumRight = 0
-  for (let index = 0; index < left.length; index += 1) {
-    sumLeft += left[index]
-    sumRight += right[index]
-  }
-  const meanLeft = sumLeft / left.length
-  const meanRight = sumRight / right.length
-
-  let covariance = 0
-  let varianceLeft = 0
-  let varianceRight = 0
-  for (let index = 0; index < left.length; index += 1) {
-    const centeredLeft = left[index] - meanLeft
-    const centeredRight = right[index] - meanRight
-    covariance += centeredLeft * centeredRight
-    varianceLeft += centeredLeft * centeredLeft
-    varianceRight += centeredRight * centeredRight
-  }
-
-  const denominator = Math.sqrt(varianceLeft * varianceRight)
-  return denominator > 0 ? covariance / denominator : 0
-}
-
-function rmsBalanceDb(leftRms: number, rightRms: number): number {
-  return 20 * Math.log10(Math.max(leftRms, 1e-30) / Math.max(rightRms, 1e-30))
-}
-
-function seededNoise(frameCount: number, seed: number): Float32Array {
-  const rng = createSeededRng(seed)
-  const samples = new Float32Array(frameCount)
-  for (let index = 0; index < frameCount; index += 1) {
-    samples[index] = rng.nextFloatSigned()
-  }
-  return samples
-}
-
-function characterizePsdSlope(
-  samples: Float32Array,
-  sampleRate: number,
-  targetDbPerOctave: number,
-): PsdSlopeCharacterization {
-  const psd = estimatePsdDb(samples, sampleRate)
-  const fit = fitLogFrequencySlope(
-    psd,
-    WELCH_FIT_MIN_HZ,
-    Math.min(WELCH_FIT_MAX_HZ, sampleRate * 0.45),
-  )
-  return {
-    measuredDbPerOctave: fit.slopeDbPerOctave,
-    targetDbPerOctave,
-    errorDbPerOctave: fit.slopeDbPerOctave - targetDbPerOctave,
-    rSquared: fit.rSquared,
-  }
-}
-
-function renderSpectralFixture(
-  presetId: SpectrumPresetId,
+function renderPreset(
+  presetId: SpectralPresetId,
   sampleRate: number,
   frameCount: number,
   seed: number,
 ): Float32Array {
-  const engine = new GreygenDspEngine({
-    sampleRate,
-    seed,
-    spectrumState: createSpectrumState(presetId),
-    gainStageState: createGainStageState(),
-    stereoWidthState: createStereoWidthState(0),
-    animationState: createAnimationState('off', 0),
-  })
-  const left = new Float32Array(frameCount)
-  const right = new Float32Array(frameCount)
-  engine.renderStereo(left, right)
-  return left
+  const bank = new TenBandFilterBank(sampleRate)
+  applySpectrumStateToFilterBank(bank, createSpectrumState(presetId))
+  const generator = new Xoshiro128StarStar(seed, sampleRate)
+  const output = new Float32Array(frameCount)
+
+  for (let index = 0; index < frameCount; index += 1) {
+    output[index] = bank.processSample(generator.nextBipolar())
+  }
+
+  return output
 }
 
-function characterizePsd(
+function characterizeSpectralSlopes(
   sampleRate: number,
   frameCount: number,
-): CharacterizationReport['psd'] {
-  const spectralFrameCount = Math.max(frameCount, 32_768)
-  return {
-    estimator: 'welch-hann',
-    fftSize: FFT_SIZE,
-    hopSize: WELCH_HOP_SIZE,
-    fitRangeHz: [WELCH_FIT_MIN_HZ, WELCH_FIT_MAX_HZ],
-    white: characterizePsdSlope(
-      renderSpectralFixture(
-        'white',
-        sampleRate,
-        spectralFrameCount,
-        SPECTRAL_SLOPE_FIXTURE_SEED,
-      ),
-      sampleRate,
-      0,
-    ),
-    pink: characterizePsdSlope(
-      renderSpectralFixture(
-        'pink',
-        sampleRate,
-        spectralFrameCount,
-        SPECTRAL_SLOPE_FIXTURE_SEED,
-      ),
-      sampleRate,
-      -3.010299956639812,
-    ),
-    brown: characterizePsdSlope(
-      renderSpectralFixture(
-        'brown',
-        sampleRate,
-        spectralFrameCount,
-        SPECTRAL_SLOPE_FIXTURE_SEED,
-      ),
-      sampleRate,
-      -6.020599913279624,
-    ),
+  seed: number,
+): readonly SpectralSlopeCharacterization[] {
+  return SPECTRAL_PRESETS.map(([presetId, expectedDbPerOctave]) => {
+    const samples = renderPreset(presetId, sampleRate, frameCount, seed)
+    const fit = fitPsdSlopeDbPerOctave(
+      welchPsd(samples, sampleRate, CHARACTERIZATION_WELCH_SEGMENT_LENGTH),
+      PRESET_PSD_FIT_MINIMUM_HZ,
+      PRESET_PSD_FIT_MAXIMUM_HZ,
+    )
+    return {
+      presetId,
+      expectedDbPerOctave,
+      measuredDbPerOctave: fit.slopeDbPerOctave,
+      errorDbPerOctave: fit.slopeDbPerOctave - expectedDbPerOctave,
+      rSquared: fit.rSquared,
+      binCount: fit.binCount,
+    }
+  })
+}
+
+function sineResponseDb(
+  bank: TenBandFilterBank,
+  frequencyHz: number,
+  sampleRate: number,
+): number {
+  const settleFrames = Math.max(4096, Math.ceil((sampleRate / frequencyHz) * 8))
+  const measureFrames = Math.max(
+    8192,
+    Math.ceil((sampleRate / frequencyHz) * 16),
+  )
+  let inputPower = 0
+  let outputPower = 0
+  let phase = 0
+  const phaseIncrement = (Math.PI * 2 * frequencyHz) / sampleRate
+
+  for (let frame = 0; frame < settleFrames + measureFrames; frame += 1) {
+    const input = Math.sin(phase)
+    phase += phaseIncrement
+    if (phase >= Math.PI * 2) {
+      phase -= Math.PI * 2
+    }
+    const output = bank.processSample(input)
+    if (frame >= settleFrames) {
+      inputPower += input * input
+      outputPower += output * output
+    }
   }
+
+  const gain = Math.sqrt(outputPower / inputPower)
+  return gainToDecibels(gain)
 }
 
 function characterizeFilterBank(
   sampleRate: number,
-  frameCount: number,
-): FilterBankCharacterization {
-  const filterBank = createTenBandFilterBank(sampleRate)
-  const input = seededNoise(frameCount, FILTER_BANK_FIXTURE_SEED)
-  const bands = TEN_BAND_NOMINAL_FREQUENCIES_HZ.map(
-    () => new Float32Array(frameCount),
-  )
-  const reconstructed = new Float32Array(frameCount)
-  let neutralMaximumSampleError = 0
+): CharacterizationReport['filterBank'] {
+  const neutral = new TenBandFilterBank(sampleRate)
+  const impulseFrames = 32_768
+  let maxSampleError = 0
+  for (let frame = 0; frame < impulseFrames; frame += 1) {
+    const input = frame === 0 ? 1 : 0
+    const output = neutral.processSample(input)
+    maxSampleError = Math.max(maxSampleError, Math.abs(output - input))
+  }
 
-  for (let frame = 0; frame < frameCount; frame += 1) {
-    const bandValues = filterBank.processSample(input[frame])
-    let sum = 0
-    for (let band = 0; band < bandValues.length; band += 1) {
-      bands[band][frame] = bandValues[band]
-      sum += bandValues[band]
-    }
-    reconstructed[frame] = sum
-    neutralMaximumSampleError = Math.max(
-      neutralMaximumSampleError,
-      Math.abs(sum - input[frame]),
+  const maximumProbeHz = Math.min(20_000, sampleRate * 0.45)
+  const probeCount = 24
+  let maxMagnitudeDeviationDb = 0
+  for (let index = 0; index < probeCount; index += 1) {
+    const position = index / (probeCount - 1)
+    const frequencyHz = 20 * (maximumProbeHz / 20) ** position
+    const responseDb = sineResponseDb(
+      new TenBandFilterBank(sampleRate),
+      frequencyHz,
+      sampleRate,
+    )
+    maxMagnitudeDeviationDb = Math.max(
+      maxMagnitudeDeviationDb,
+      Math.abs(responseDb),
     )
   }
 
-  const inputPsd = estimatePsdDb(input, sampleRate)
-  const reconstructedPsd = estimatePsdDb(reconstructed, sampleRate)
-  let neutralMaximumMagnitudeDeviationDb = 0
-  for (let index = 0; index < inputPsd.length; index += 1) {
-    const frequency = inputPsd[index].frequencyHz
-    if (frequency < 20 || frequency > sampleRate * 0.45) {
-      continue
-    }
-    neutralMaximumMagnitudeDeviationDb = Math.max(
-      neutralMaximumMagnitudeDeviationDb,
-      Math.abs(reconstructedPsd[index].powerDb - inputPsd[index].powerDb),
-    )
-  }
-
-  const nominalBandCenterResponses = bands.map((bandSamples, index) => {
-    const nominalFrequencyHz = TEN_BAND_NOMINAL_FREQUENCIES_HZ[index]
-    const psd = estimatePsdDb(bandSamples, sampleRate)
-    const nearest = psd.reduce((best, candidate) =>
-      Math.abs(candidate.frequencyHz - nominalFrequencyHz) <
-      Math.abs(best.frequencyHz - nominalFrequencyHz)
-        ? candidate
-        : best,
-    )
-    const inputNearest = inputPsd.reduce((best, candidate) =>
-      Math.abs(candidate.frequencyHz - nominalFrequencyHz) <
-      Math.abs(best.frequencyHz - nominalFrequencyHz)
-        ? candidate
-        : best,
-    )
+  const bands = NOMINAL_BAND_CENTERS_HZ.map((nominalCenterHz, bandIndex) => {
+    const bank = new TenBandFilterBank(sampleRate)
+    const gains = new Float64Array(BAND_COUNT)
+    gains[bandIndex] = 1
+    bank.setBandGainsLinear(gains)
+    bank.setUltrasonicResidualGainLinear(0)
     return {
-      nominalFrequencyHz,
-      centerResponseDb: nearest.powerDb - inputNearest.powerDb,
+      bandIndex,
+      nominalCenterHz,
+      isolatedCenterResponseDb: sineResponseDb(
+        bank,
+        nominalCenterHz,
+        sampleRate,
+      ),
     }
   })
 
   return {
-    highBandMode:
-      sampleRate >= 96_000 ? 'bounded-bandpass' : 'degraded-high-shelf',
-    neutralMaximumSampleError,
-    neutralMaximumMagnitudeDeviationDb,
-    nominalBandCenterResponses,
+    highBandMode: neutral.highBandMode,
+    neutralMaximumAbsoluteSampleError: maxSampleError,
+    neutralMaximumMagnitudeDeviationDb: maxMagnitudeDeviationDb,
+    bands,
   }
 }
 
+function pearsonCorrelation(
+  left: ArrayLike<number>,
+  right: ArrayLike<number>,
+): number {
+  if (left.length !== right.length || left.length < 2) {
+    throw new RangeError('correlation inputs must have equal length >= 2')
+  }
+
+  let meanLeft = 0
+  let meanRight = 0
+  let covariance = 0
+  let varianceLeft = 0
+  let varianceRight = 0
+
+  for (let index = 0; index < left.length; index += 1) {
+    const count = index + 1
+    const leftDelta = left[index] - meanLeft
+    const rightDelta = right[index] - meanRight
+    meanLeft += leftDelta / count
+    meanRight += rightDelta / count
+    covariance += leftDelta * (right[index] - meanRight)
+    varianceLeft += leftDelta * (left[index] - meanLeft)
+    varianceRight += rightDelta * (right[index] - meanRight)
+  }
+
+  const denominator = Math.sqrt(varianceLeft * varianceRight)
+  return denominator > 0 ? covariance / denominator : 1
+}
+
 function characterizeAnimation(
+  sampleRate: number,
+  frameCount: number,
   mode: AnimationMode,
+  seed: number,
   depthDb: number,
   speed: number,
   energyPreserving: boolean,
-  sampleRate: number,
-  frameCount: number,
-  seed: number,
-): AnimationCharacterization {
+): CharacterizationReport['animation'] {
   if (mode === 'off') {
     return {
       enabled: false,
@@ -404,30 +347,27 @@ function characterizeAnimation(
     }
   }
 
-  const state = createAnimationState(
-    mode,
-    seed,
-    depthDb,
-    speed,
-    energyPreserving,
+  const animation = new SpectralAnimation(
+    sampleRate,
+    createAnimationState(mode, seed, depthDb, speed, energyPreserving),
   )
+  const offsetsDb = new Float64Array(BAND_COUNT)
   let maximumAbsoluteOffsetDb = 0
   let sumAbsoluteBandPowerErrorDb = 0
   let maximumAbsoluteBandPowerErrorDb = 0
 
   for (let frame = 0; frame < frameCount; frame += 1) {
-    const offsets = getAnimationBandOffsets(state, frame, sampleRate)
-    let bandPower = 0
-    for (const offsetDb of offsets) {
+    animation.nextOffsets(offsetsDb)
+    let meanBandPower = 0
+    for (let band = 0; band < BAND_COUNT; band += 1) {
       maximumAbsoluteOffsetDb = Math.max(
         maximumAbsoluteOffsetDb,
-        Math.abs(offsetDb),
+        Math.abs(offsetsDb[band]),
       )
-      const amplitude = dbToAmplitude(offsetDb)
-      bandPower += amplitude * amplitude
+      meanBandPower += 10 ** (offsetsDb[band] / 10)
     }
-    const meanBandPower = bandPower / offsets.length
-    const powerErrorDb = Math.abs(rmsToDb(Math.sqrt(meanBandPower)))
+    meanBandPower /= BAND_COUNT
+    const powerErrorDb = Math.abs(10 * Math.log10(meanBandPower))
     sumAbsoluteBandPowerErrorDb += powerErrorDb
     maximumAbsoluteBandPowerErrorDb = Math.max(
       maximumAbsoluteBandPowerErrorDb,
@@ -469,10 +409,9 @@ export function characterizeDsp(
   const animationEnergyPreserving = options.animationEnergyPreserving ?? true
   const now = options.now ?? (() => globalThis.performance.now())
 
-  const animationSeed = (seed ^ 0x414e_494d) >>> 0
   const animationState = createAnimationState(
     animationMode,
-    animationSeed,
+    (seed ^ 0x414e_494d) >>> 0,
     animationDepthDb,
     animationSpeed,
     animationEnergyPreserving,
@@ -516,51 +455,52 @@ export function characterizeDsp(
       },
     },
     environment: options.environment ?? defaultEnvironment(),
-    psd: characterizePsd(sampleRate, frameCount),
-    filterBank: characterizeFilterBank(sampleRate, frameCount),
+    spectral: {
+      fitRangeHz: [PRESET_PSD_FIT_MINIMUM_HZ, PRESET_PSD_FIT_MAXIMUM_HZ],
+      welchSegmentLength: CHARACTERIZATION_WELCH_SEGMENT_LENGTH,
+      presets: characterizeSpectralSlopes(sampleRate, frameCount, seed),
+    },
+    filterBank: characterizeFilterBank(sampleRate),
     output: {
-      left: leftStats,
-      right: rightStats,
+      left: {
+        mean: leftStats.mean,
+        rms: leftStats.rms,
+        peakAbsolute: leftStats.peakAbsolute,
+      },
+      right: {
+        mean: rightStats.mean,
+        rms: rightStats.rms,
+        peakAbsolute: rightStats.peakAbsolute,
+      },
       stereoCorrelation: pearsonCorrelation(left, right),
-      rmsBalanceDb: rmsBalanceDb(leftStats.rms, rightStats.rms),
+      stereoRmsBalanceDb: 20 * Math.log10(leftStats.rms / rightStats.rms),
     },
     safety: {
-      targetPreGainDb: telemetry.targetPreGainDb,
-      appliedPreGainDb: telemetry.appliedPreGainDb,
+      targetPreGainDb: telemetry.safetyPreGainTargetDb,
+      appliedPreGainDb: telemetry.safetyPreGainDb,
       guardInterventions: telemetry.guardInterventions,
     },
     animation: characterizeAnimation(
+      sampleRate,
+      frameCount,
       animationMode,
+      animationState.seed,
       animationDepthDb,
       animationSpeed,
       animationEnergyPreserving,
-      sampleRate,
-      frameCount,
-      animationSeed,
     ),
     benchmark: {
       renderedAudioSeconds,
-      wallTimeSeconds: wallTimeMs / 1000,
+      wallTimeMs,
       realtimeFactor:
-        wallTimeMs > 0 ? (renderedAudioSeconds * 1000) / wallTimeMs : null,
+        wallTimeMs > 0 ? renderedAudioSeconds / (wallTimeMs / 1000) : null,
       informationalOnly: true,
     },
   }
 }
 
-function formatSigned(value: number, digits: number): string {
-  return `${value >= 0 ? '+' : ''}${value.toFixed(digits)}`
-}
-
-function formatScientific(value: number): string {
-  return value.toExponential(3)
-}
-
-function formatPsdLine(
-  label: string,
-  result: PsdSlopeCharacterization,
-): string {
-  return `  ${label}: ${formatSigned(result.measuredDbPerOctave, 4)} dB/oct (target ${formatSigned(result.targetDbPerOctave, 4)}; error ${formatSigned(result.errorDbPerOctave, 4)}; R² ${result.rSquared.toFixed(4)})`
+function fixed(value: number, digits = 4): string {
+  return Number.isFinite(value) ? value.toFixed(digits) : String(value)
 }
 
 export function formatCharacterizationReport(
@@ -571,18 +511,37 @@ export function formatCharacterizationReport(
     `engine DSP v${report.engine.dspVersion}; spectral realization v${report.engine.spectralRealizationVersion}`,
     `input: ${report.input.sampleRate} Hz, ${report.input.frameCount} frames, seed 0x${report.input.seed.toString(16).padStart(8, '0')}, preset ${report.input.presetId}`,
     `environment: ${report.environment.runtime}; ${report.environment.platform}/${report.environment.architecture}`,
-    `PSD fit: ${report.psd.fitRangeHz[0]}..${report.psd.fitRangeHz[1]} Hz, Welch ${report.psd.fftSize}`,
-    formatPsdLine('white', report.psd.white),
-    formatPsdLine('pink', report.psd.pink),
-    formatPsdLine('brown', report.psd.brown),
-    `filter bank: ${report.filterBank.highBandMode}; neutral max sample error ${report.filterBank.neutralMaximumSampleError.toExponential(3)}; max magnitude deviation ${report.filterBank.neutralMaximumMagnitudeDeviationDb.toFixed(6)} dB`,
-    `stereo: correlation ${report.output.stereoCorrelation.toFixed(4)} (target ${report.input.targetStereoCorrelation.toFixed(4)}); L/R RMS balance ${report.output.rmsBalanceDb.toFixed(4)} dB`,
-    `output: L mean ${formatScientific(report.output.left.mean)}, RMS ${report.output.left.rms.toFixed(4)}, peak ${report.output.left.peak.toFixed(4)}; R mean ${formatScientific(report.output.right.mean)}, RMS ${report.output.right.rms.toFixed(4)}, peak ${report.output.right.peak.toFixed(4)}`,
-    `safety: target ${report.safety.targetPreGainDb.toFixed(4)} dB, applied ${report.safety.appliedPreGainDb.toFixed(4)} dB, guard interventions ${report.safety.guardInterventions}`,
-    report.animation.enabled
-      ? `animation: max |offset| ${report.animation.maximumAbsoluteOffsetDb.toFixed(4)} dB; mean/max power error ${report.animation.meanAbsoluteBandPowerErrorDb.toExponential(3)}/${report.animation.maximumAbsoluteBandPowerErrorDb.toExponential(3)} dB`
-      : 'animation: off',
-    `benchmark: ${report.benchmark.renderedAudioSeconds.toFixed(3)} s audio in ${(report.benchmark.wallTimeSeconds * 1000).toFixed(2)} ms (${report.benchmark.realtimeFactor === null ? 'n/a' : `${report.benchmark.realtimeFactor.toFixed(2)}x`} realtime; informational only)`,
+    `PSD fit: ${report.spectral.fitRangeHz[0]}..${report.spectral.fitRangeHz[1]} Hz, Welch ${report.spectral.welchSegmentLength}`,
   ]
+
+  for (const preset of report.spectral.presets) {
+    lines.push(
+      `  ${preset.presetId}: ${fixed(preset.measuredDbPerOctave)} dB/oct (target ${fixed(preset.expectedDbPerOctave)}; error ${fixed(preset.errorDbPerOctave)}; R² ${fixed(preset.rSquared)})`,
+    )
+  }
+
+  lines.push(
+    `filter bank: ${report.filterBank.highBandMode}; neutral max sample error ${report.filterBank.neutralMaximumAbsoluteSampleError.toExponential(3)}; max magnitude deviation ${fixed(report.filterBank.neutralMaximumMagnitudeDeviationDb, 6)} dB`,
+    `stereo: correlation ${fixed(report.output.stereoCorrelation)} (target ${fixed(report.input.targetStereoCorrelation)}); L/R RMS balance ${fixed(report.output.stereoRmsBalanceDb)} dB`,
+    `output: L mean ${report.output.left.mean.toExponential(3)}, RMS ${fixed(report.output.left.rms)}, peak ${fixed(report.output.left.peakAbsolute)}; R mean ${report.output.right.mean.toExponential(3)}, RMS ${fixed(report.output.right.rms)}, peak ${fixed(report.output.right.peakAbsolute)}`,
+    `safety: target ${fixed(report.safety.targetPreGainDb)} dB, applied ${fixed(report.safety.appliedPreGainDb)} dB, guard interventions ${report.safety.guardInterventions}`,
+  )
+
+  if (report.animation.enabled) {
+    lines.push(
+      `animation ${report.input.animation.mode}: max |offset| ${fixed(report.animation.maximumAbsoluteOffsetDb)} dB; mean/max band-power error ${fixed(report.animation.meanAbsoluteBandPowerErrorDb, 6)}/${fixed(report.animation.maximumAbsoluteBandPowerErrorDb, 6)} dB`,
+    )
+  } else {
+    lines.push('animation: off')
+  }
+
+  const realtime =
+    report.benchmark.realtimeFactor === null
+      ? 'n/a'
+      : `${fixed(report.benchmark.realtimeFactor, 2)}x realtime`
+  lines.push(
+    `benchmark: ${fixed(report.benchmark.renderedAudioSeconds, 3)} s audio in ${fixed(report.benchmark.wallTimeMs, 2)} ms (${realtime}; informational only)`,
+  )
+
   return `${lines.join('\n')}\n`
 }
