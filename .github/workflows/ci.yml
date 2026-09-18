@@ -12,7 +12,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -29,13 +29,19 @@ jobs:
         run: npm run typecheck
       - name: Unit tests
         run: npm test
+      - name: DSP conformance characterization
+        shell: bash
+        run: |
+          for sample_rate in 44100 48000 96000; do
+            npm run characterize -- --sample-rate "$sample_rate"
+          done
       - name: Production build
         run: npm run build
       - name: Verify production PWA artifact
         run: npm run verify:pwa
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Browser smoke and offline tests
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Browser smoke, lifecycle, privacy, and offline tests
         run: npm run test:e2e
       - name: GitHub Pages base-path build
         run: npm run build:pages
