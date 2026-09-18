@@ -50,7 +50,10 @@ export function PwaUpdatePrompt() {
     })
 
     if (!activateWaitingServiceWorker(waitingRegistration)) {
-      navigator.serviceWorker.removeEventListener('controllerchange', reloadOnce)
+      navigator.serviceWorker.removeEventListener(
+        'controllerchange',
+        reloadOnce,
+      )
       setIsReloading(false)
       setWaitingRegistration(null)
     }
