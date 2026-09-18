@@ -170,3 +170,7 @@ No v0.1 release until:
 ### Implemented: issue #12 analyzer/diagnostics
 
 Native main-thread AnalyserNode spectrum, bounded/lazy diagnostics UI, reduced-motion/visibility lifecycle, and private-safe runtime diagnostics are implemented and test-gated.
+
+### Implemented: issue #16 DSP characterization/reference tooling
+
+A browser-independent developer CLI now emits versioned human-readable or JSON characterization reports for White/Pink/Brown spectral slope, neutral/filter-bank response, stereo correlation/RMS balance, gain-safety/final-guard telemetry, bounded animation statistics, and machine-local offline realtime factor. Required 44.1/48/96 kHz coverage and adversarial numeric boundaries are test-gated; the benchmark remains informational rather than a universal CI timing threshold.
