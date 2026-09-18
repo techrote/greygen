@@ -330,10 +330,7 @@ export function GeneratorSurface({
 
   useEffect(() => {
     const previousStatus = previousAudioStatusRef.current
-    if (
-      previousStatus === 'starting' &&
-      audioSnapshot.status !== 'starting'
-    ) {
+    if (previousStatus === 'starting' && audioSnapshot.status !== 'starting') {
       primaryActionRef.current?.focus()
     }
     previousAudioStatusRef.current = audioSnapshot.status
