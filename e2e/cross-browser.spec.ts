@@ -1,10 +1,10 @@
-import { expect, test } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
 
 const browserName = (projectName: string): string =>
   projectName.replace(/-core$/u, '')
 
 const expectStartedAudio = async (
-  page: Parameters<typeof test>[0] extends never ? never : any,
+  page: Page,
   projectName: string,
 ): Promise<'running' | 'suspended-firefox'> => {
   const status = page.locator('.status-value')
