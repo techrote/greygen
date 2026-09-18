@@ -24,7 +24,7 @@ summary:focus-visible {
   border-radius: 0.25rem;
 }
 
-input:not([type='range']):not([type='checkbox']):not([type='radio']),
+input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
 textarea {
   max-width: 100%;
   min-height: 2.75rem;
@@ -76,7 +76,7 @@ textarea {
   min-height: 2.75rem;
 }
 
-.guided-calibration[tabindex='-1']:focus-visible {
+.guided-calibration[tabindex="-1"]:focus-visible {
   outline: 3px solid #d8e4c9;
   outline-offset: 4px;
 }

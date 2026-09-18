@@ -272,9 +272,11 @@ test('reduced-motion preference suppresses visual transitions without changing s
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/')
-  expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(
-    true,
-  )
+  expect(
+    await page.evaluate(
+      () => matchMedia('(prefers-reduced-motion: reduce)').matches,
+    ),
+  ).toBe(true)
 
   const mode = page.locator('#animation-mode')
   await mode.focus()

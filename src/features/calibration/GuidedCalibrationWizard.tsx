@@ -1,9 +1,4 @@
-import {
-  type KeyboardEvent,
-  useEffect,
-  useRef,
-  useState,
-} from 'react'
+import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import type { AudioEngineStatus } from '../../audio/AudioEngine'
 import type { CalibrationStimulusChannel } from '../../audio/dsp/calibrationStimulus'
 import { NOMINAL_BAND_CENTERS_HZ } from '../../audio/dsp/filterBank'
@@ -128,9 +123,9 @@ export default function GuidedCalibrationWizard({
   const introRegionRef = useRef<HTMLElement>(null)
   const activeRegionRef = useRef<HTMLElement>(null)
   const previousWizardActiveRef = useRef(false)
-  const previousPhaseRef = useRef<GuidedChannelCalibrationState['phase'] | null>(
-    null,
-  )
+  const previousPhaseRef = useRef<
+    GuidedChannelCalibrationState['phase'] | null
+  >(null)
   const [comfortableConfirmed, setComfortableConfirmed] = useState(false)
   const [channelMode, setChannelMode] =
     useState<CalibrationChannelMode>('linked')
