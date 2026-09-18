@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Greygen">
+  <rect width="512" height="512" rx="96" fill="#10141a" />
+  <g fill="none" stroke="#d9e1e8" stroke-linecap="round" stroke-width="24">
+    <path d="M96 176c48-64 80 64 128 0s80 64 128 0 64 16 64 16" />
+    <path d="M96 256c48-64 80 64 128 0s80 64 128 0 64 16 64 16" />
+    <path d="M96 336c48-64 80 64 128 0s80 64 128 0 64 16 64 16" />
+  </g>
+</svg>
