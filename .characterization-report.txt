@@ -1,0 +1,18 @@
+
+> greygen@0.0.0 characterize
+> node scripts/characterize.mjs --sample-rate 48000 --frames 16384
+
+Greygen DSP characterization v1
+engine DSP v1; spectral realization v1
+input: 48000 Hz, 16384 frames, seed 0x47524559, preset grey
+environment: node v24.21.0; linux/x64
+PSD fit: 125..8000 Hz, Welch 2048
+  white: -0.0650 dB/oct (target 0.0000; error -0.0650; R² 0.0042)
+  pink: -3.3347 dB/oct (target -3.0103; error -0.3244; R² 0.9102)
+  brown: -6.1870 dB/oct (target -6.0206; error -0.1664; R² 0.9730)
+filter bank: degraded-high-shelf; neutral max sample error 2.220e-16; max magnitude deviation 0.000000 dB
+stereo: correlation 0.7043 (target 0.7071); L/R RMS balance 0.0116 dB
+output: L mean 1.836e-4, RMS 0.0196, peak 0.0586; R mean 2.937e-4, RMS 0.0196, peak 0.0573
+safety: target -1.0000 dB, applied -1.0000 dB, guard interventions 0
+animation: off
+benchmark: 0.341 s audio in 49.47 ms (6.90x realtime; informational only)

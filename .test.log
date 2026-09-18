@@ -1,0 +1,135 @@
+
+> greygen@0.0.0 test
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.0 [39m[90m/home/runner/work/greygen/greygen[39m
+
+ [32m✓[39m tests/audio/AudioEngine.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m tests/app/app-state.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m tests/app/app-state-repository.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+ [32m✓[39m tests/app/presets-share.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+ [32m✓[39m tests/audio/protocol.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m tests/dsp/filterBank.response.test.ts [2m([22m[2m11 tests[22m[2m)[22m[33m 491[2mms[22m[39m
+ [32m✓[39m tests/app/user-preset-repository.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m tests/app-shell.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 116[2mms[22m[39m
+ [32m✓[39m tests/app/guided-calibration.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m tests/dsp/engine.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 4741[2mms[22m[39m
+   [32m✓[39m GreygenDspEngine [2m(15)[22m
+     [33m[2m✓[22m[39m keeps maximum accepted gain layers finite and legal at 44100 Hz[33m 426[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps maximum accepted gain layers finite and legal at 48000 Hz[33m 466[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps maximum accepted gain layers finite and legal at 96000 Hz[33m 449[2mms[22m[39m
+     [33m[2m✓[22m[39m white at 0 dB master does not rely on the emergency guard in a long fixture[33m 755[2mms[22m[39m
+     [33m[2m✓[22m[39m pink at 0 dB master does not rely on the emergency guard in a long fixture[33m 620[2mms[22m[39m
+     [33m[2m✓[22m[39m brown at 0 dB master does not rely on the emergency guard in a long fixture[33m 766[2mms[22m[39m
+     [33m[2m✓[22m[39m grey at 0 dB master does not rely on the emergency guard in a long fixture[33m 766[2mms[22m[39m
+ [31m❯[39m tests/dsp/characterization.test.ts [2m([22m[2m8 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 1093[2mms[22m[39m
+   [31m❯[39m DSP characterization report [2m(8)[22m
+     [33m[2m✓[22m[39m matches the existing spectral, stereo, safety, and neutral-bank contracts[33m 721[2mms[22m[39m
+     [32m✓[39m supports offline characterization at 44100 Hz without browser or audio-device state[32m 64[2mms[22m[39m
+     [32m✓[39m supports offline characterization at 48000 Hz without browser or audio-device state[32m 70[2mms[22m[39m
+     [32m✓[39m supports offline characterization at 96000 Hz without browser or audio-device state[32m 129[2mms[22m[39m
+[31m     [31m×[31m reports bounded, energy-preserving animation statistics when enabled[39m[32m 10[2mms[22m[39m
+[31m     [31m×[31m is deterministic apart from caller-supplied benchmark/environment metadata[39m[32m 1[2mms[22m[39m
+     [32m✓[39m rejects adversarial numeric boundaries rather than emitting invalid JSON data[32m 2[2mms[22m[39m
+     [32m✓[39m formats a compact human-readable report with units and benchmark caveat[32m 93[2mms[22m[39m
+ [32m✓[39m tests/dsp/animation.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 6214[2mms[22m[39m
+   [32m✓[39m spectral animation [2m(15)[22m
+     [33m[2m✓[22m[39m drift is exactly reproducible for equal seed, state, and sample time[33m 575[2mms[22m[39m
+     [33m[2m✓[22m[39m breathe is exactly reproducible for equal seed, state, and sample time[33m 484[2mms[22m[39m
+     [33m[2m✓[22m[39m wander is exactly reproducible for equal seed, state, and sample time[33m 569[2mms[22m[39m
+     [33m[2m✓[22m[39m orbit is exactly reproducible for equal seed, state, and sample time[33m 582[2mms[22m[39m
+     [33m[2m✓[22m[39m modes are structurally distinct rather than aliases with different names[33m 934[2mms[22m[39m
+     [33m[2m✓[22m[39m drift remains finite and within configured depth over a long max-speed run[33m 412[2mms[22m[39m
+     [33m[2m✓[22m[39m breathe remains finite and within configured depth over a long max-speed run[33m 334[2mms[22m[39m
+     [33m[2m✓[22m[39m wander remains finite and within configured depth over a long max-speed run[33m 366[2mms[22m[39m
+     [33m[2m✓[22m[39m orbit remains finite and within configured depth over a long max-speed run[33m 304[2mms[22m[39m
+     [33m[2m✓[22m[39m rendered output converges back to the identical unanimated base path after Off[33m 713[2mms[22m[39m
+     [33m[2m✓[22m[39m animation extrema participate in conservative safety pre-gain and stay finite[33m 415[2mms[22m[39m
+     [33m[2m✓[22m[39m rapid accepted animation changes at 96 kHz remain finite[33m 314[2mms[22m[39m
+ [32m✓[39m tests/dsp/spectra.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m tests/dsp/channel-calibration.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 378[2mms[22m[39m
+ [32m✓[39m tests/app/calibration-profile.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/app/calibration-profile-channels.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/dsp/gainSafety.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 35[2mms[22m[39m
+ [32m✓[39m tests/app/guided-channel-calibration.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m tests/app/calibration-profile-guided.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/dsp/preset-spectrum.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 1205[2mms[22m[39m
+ [32m✓[39m tests/app/profile-portability.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/dsp/calibration-stimulus.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 294[2mms[22m[39m
+ [32m✓[39m tests/audio/calibration-stimulus-protocol.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 5[2mms[22m[39m
+ [32m✓[39m tests/tooling/characterize-cli.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 1976[2mms[22m[39m
+   [32m✓[39m characterization CLI [2m(3)[22m
+     [33m[2m✓[22m[39m emits parseable versioned JSON without browser or audio hardware[33m 759[2mms[22m[39m
+     [33m[2m✓[22m[39m rejects malformed and out-of-range CLI values with a non-zero exit[33m 949[2mms[22m[39m
+ [32m✓[39m tests/dsp/smoothing.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 55[2mms[22m[39m
+ [32m✓[39m tests/dsp/stereo.test.ts [2m([22m[2m8 tests[22m[2m)[22m[33m 10895[2mms[22m[39m
+   [32m✓[39m stereo width model [2m(8)[22m
+     [33m[2m✓[22m[39m tracks requested correlation and channel power at width 0[33m 1084[2mms[22m[39m
+     [33m[2m✓[22m[39m tracks requested correlation and channel power at width 0.5[33m 835[2mms[22m[39m
+     [33m[2m✓[22m[39m tracks requested correlation and channel power at width 1[33m 870[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps combined nominal RMS stable across normal width settings[33m 3749[2mms[22m[39m
+     [33m[2m✓[22m[39m reproduces stereo output exactly for the same seed and state[33m 4041[2mms[22m[39m
+ [32m✓[39m tests/dsp/spectrum-analysis.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 20[2mms[22m[39m
+ [32m✓[39m tests/app/generator-ui-model.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/dsp/onePole.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m tests/dsp/rng.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 1140[2mms[22m[39m
+   [32m✓[39m bipolar noise mapping [2m(2)[22m
+     [33m[2m✓[22m[39m is reproducible and statistically sane over a long fixed fixture[33m 1132[2mms[22m[39m
+ [32m✓[39m tests/app/analyzer-model.test.ts [2m([22m[2m3 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m tests/dsp/numbers.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m tests/app/analyzer-loop.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m tests/dsp/meters.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m tests/dsp/statistics.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+ [32m✓[39m tests/dsp/filterBank.test.ts [2m([22m[2m14 tests[22m[2m)[22m[33m 14428[2mms[22m[39m
+   [32m✓[39m TenBandFilterBank topology and state [2m(14)[22m
+     [33m[2m✓[22m[39m has finite decaying impulse components at 44100 Hz[33m 2191[2mms[22m[39m
+     [33m[2m✓[22m[39m has finite decaying impulse components at 48000 Hz[33m 2579[2mms[22m[39m
+     [33m[2m✓[22m[39m has finite decaying impulse components at 96000 Hz[33m 2546[2mms[22m[39m
+     [33m[2m✓[22m[39m remains finite over a long non-neutral deterministic render at 44100 Hz[33m 2368[2mms[22m[39m
+     [33m[2m✓[22m[39m remains finite over a long non-neutral deterministic render at 48000 Hz[33m 2346[2mms[22m[39m
+     [33m[2m✓[22m[39m remains finite over a long non-neutral deterministic render at 96000 Hz[33m 2355[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests/dsp/characterization.test.ts[2m > [22mDSP characterization report[2m > [22mreports bounded, energy-preserving animation statistics when enabled
+[31m[1mRangeError[22m: animation seed must be an unsigned 32-bit integer[39m
+[36m [2m❯[22m createAnimationState src/audio/dsp/animation.ts:[2m72:11[22m[39m
+    [90m 70|[39m ): AnimationState {
+    [90m 71|[39m   if (!isUint32(seed)) {
+    [90m 72|[39m     throw new RangeError('animation seed must be an unsigned 32-bit in…
+    [90m   |[39m           [31m^[39m
+    [90m 73|[39m   }
+    [90m 74|[39m   if (typeof energyPreserving !== 'boolean') {
+[90m [2m❯[22m characterizeDsp src/audio/analysis/characterization.ts:[2m412:26[22m[39m
+[90m [2m❯[22m tests/dsp/characterization.test.ts:[2m81:20[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests/dsp/characterization.test.ts[2m > [22mDSP characterization report[2m > [22mis deterministic apart from caller-supplied benchmark/environment metadata
+[31m[1mRangeError[22m: animation seed must be an unsigned 32-bit integer[39m
+[36m [2m❯[22m createAnimationState src/audio/dsp/animation.ts:[2m72:11[22m[39m
+    [90m 70|[39m ): AnimationState {
+    [90m 71|[39m   if (!isUint32(seed)) {
+    [90m 72|[39m     throw new RangeError('animation seed must be an unsigned 32-bit in…
+    [90m   |[39m           [31m^[39m
+    [90m 73|[39m   }
+    [90m 74|[39m   if (typeof energyPreserving !== 'boolean') {
+[90m [2m❯[22m characterizeDsp src/audio/analysis/characterization.ts:[2m412:26[22m[39m
+[90m [2m❯[22m tests/dsp/characterization.test.ts:[2m108:19[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m35 passed[39m[22m[90m (36)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m232 passed[39m[22m[90m (234)[39m
+[2m   Start at [22m 01:26:09
+[2m   Duration [22m 21.61s[2m (tests 95%, transform 2%, import 2%)[22m
+
+[2m    Isolate [22m [33m36 workers spawned[39m[2m · ~128ms startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~1.41s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+
+
+::error file=/home/runner/work/greygen/greygen/src/audio/dsp/animation.ts,title=tests/dsp/characterization.test.ts > DSP characterization report > reports bounded%2C energy-preserving animation statistics when enabled,line=72,column=11::RangeError: animation seed must be an unsigned 32-bit integer%0A ❯ createAnimationState src/audio/dsp/animation.ts:72:11%0A ❯ characterizeDsp src/audio/analysis/characterization.ts:412:26%0A ❯ tests/dsp/characterization.test.ts:81:20%0A%0A
+
+::error file=/home/runner/work/greygen/greygen/src/audio/dsp/animation.ts,title=tests/dsp/characterization.test.ts > DSP characterization report > is deterministic apart from caller-supplied benchmark/environment metadata,line=72,column=11::RangeError: animation seed must be an unsigned 32-bit integer%0A ❯ createAnimationState src/audio/dsp/animation.ts:72:11%0A ❯ characterizeDsp src/audio/analysis/characterization.ts:412:26%0A ❯ tests/dsp/characterization.test.ts:108:19%0A%0A
