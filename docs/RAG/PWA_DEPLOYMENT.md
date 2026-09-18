@@ -46,7 +46,11 @@ The cache name includes a deterministic revision derived from the emitted bundle
 
 Installation must finish `cache.addAll(...)` before the worker becomes install-complete. This makes the cached application shell an atomic version set rather than allowing the main-thread application and AudioWorklet processor to drift independently.
 
-Same-origin application assets are cache-first once installed. Navigation is network-first and falls back to the cached `index.html` when offline. URL fragments are not sent in HTTP requests, so normal share-state fragments remain available to the application on offline navigation without entering the service-worker cache key.
+Once a worker controls a page, navigation and same-origin application assets use that worker's revisioned cache first. This is deliberate: a reload must not combine a newly published `index.html` with an older controlling worker/worklet set before the user accepts an update. Registration still performs normal service-worker update discovery; a newer completed worker waits for the explicit update action described below.
+
+Cache lookup for in-scope assets ignores HTTP `Vary` metadata. The key is already constrained to same-origin requests under the service-worker scope and to the active revisioned cache. This avoids an offline miss when a static server changes request-dependent `Vary` headers between precache population and browser module requests, while query strings and paths remain distinct cache keys.
+
+URL fragments are not sent in HTTP requests, so normal share-state fragments remain available to the application on offline navigation without entering the service-worker cache key.
 
 ## Update activation
 
@@ -64,7 +68,7 @@ Offline reload does not create an autoplay exception. Persisted state may restor
 
 CI verifies:
 
-- unit/adversarial tests for deterministic cache revisioning, worklet-version invalidation, unsafe/duplicate precache paths, required navigation shell, and root/subpath service-worker URL resolution;
+- unit/adversarial tests for deterministic cache revisioning, worklet-version invalidation, unsafe/duplicate precache paths, required navigation shell, Vary-independent scoped cache lookup, and root/subpath service-worker URL resolution;
 - the built manifest and icon;
 - root and `/greygen/` production base paths;
 - presence of the actual emitted AudioWorklet asset in the generated service-worker precache;
