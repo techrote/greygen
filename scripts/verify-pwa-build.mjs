@@ -1,5 +1,4 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
 
 const baseArgument = process.argv.find((argument) => argument.startsWith('--base='))
 const expectedBase = baseArgument?.slice('--base='.length) ?? '/'
