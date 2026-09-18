@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 import { expect, test, type Page } from '@playwright/test'
 
 interface SemanticAuditResult {
@@ -51,13 +53,7 @@ async function runSemanticAudit(page: Page): Promise<SemanticAuditResult> {
           return labelText
         }
       }
-      if (
-        element instanceof HTMLButtonElement ||
-        element instanceof HTMLElement
-      ) {
-        return element.textContent?.trim() ?? ''
-      }
-      return ''
+      return element.textContent?.trim() ?? ''
     }
 
     const ids = Array.from(document.querySelectorAll<HTMLElement>('[id]')).map(
@@ -285,8 +281,17 @@ test('reduced-motion preference suppresses visual transitions without changing s
   await page.reload()
   await expect(mode).toHaveValue('orbit')
 
-  const transitionDuration = await page
+  const transitionDurationMs = await page
     .getByRole('button', { name: 'Start audio' })
-    .evaluate((element) => getComputedStyle(element).transitionDuration)
-  expect(transitionDuration).toMatch(/0\.00001s|0\.01ms/)
+    .evaluate((element) => {
+      const value = getComputedStyle(element).transitionDuration.trim()
+      if (value.endsWith('ms')) {
+        return Number.parseFloat(value)
+      }
+      if (value.endsWith('s')) {
+        return Number.parseFloat(value) * 1000
+      }
+      return Number.POSITIVE_INFINITY
+    })
+  expect(transitionDurationMs).toBeLessThanOrEqual(0.02)
 })
