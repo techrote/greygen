@@ -1,0 +1,123 @@
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-padding-bottom: 6.5rem;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+.app-shell {
+  padding-bottom: 7.5rem;
+}
+
+.section-heading-row {
+  flex-wrap: wrap;
+}
+
+summary:focus-visible {
+  outline: 3px solid #d8e4c9;
+  outline-offset: 3px;
+  border-radius: 0.25rem;
+}
+
+input:not([type='range']):not([type='checkbox']):not([type='radio']),
+textarea {
+  max-width: 100%;
+  min-height: 2.75rem;
+}
+
+.band-reset {
+  width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+.calibration-comfort-check,
+.calibration-channel-mode label,
+.animation-energy-toggle {
+  min-height: 2.75rem;
+  align-items: center;
+}
+
+.calibration-comfort-check input,
+.calibration-channel-mode input,
+.animation-energy-toggle input {
+  flex: 0 0 auto;
+  width: 1.35rem;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  min-height: 1.35rem;
+}
+
+/*
+ * Keep the existing authoritative transport actions in reach while the user is
+ * deep in calibration/profile controls. The same native primary button remains
+ * Start/Resume/Stop according to lifecycle state; no second audio state machine
+ * is introduced here.
+ */
+.transport-actions.compact-actions {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 100;
+  margin: 0;
+  padding: 0.5rem;
+  border: 1px solid #62695e;
+  border-radius: 0.85rem;
+  background: rgba(21, 24, 22, 0.96);
+  box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.38);
+}
+
+.transport-actions.compact-actions button {
+  min-width: 9.5rem;
+  min-height: 2.75rem;
+}
+
+.guided-calibration[tabindex='-1']:focus-visible {
+  outline: 3px solid #d8e4c9;
+  outline-offset: 4px;
+}
+
+@media (max-width: 38rem) {
+  .app-shell {
+    padding-bottom: 8rem;
+  }
+
+  .transport-actions.compact-actions {
+    right: max(0.5rem, env(safe-area-inset-right));
+    left: max(0.5rem, env(safe-area-inset-left));
+    bottom: max(0.5rem, env(safe-area-inset-bottom));
+    width: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .transport-actions.compact-actions button {
+    width: 100%;
+  }
+
+  .calibration-audition-row,
+  .calibration-judgement-row,
+  .calibration-exit-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+}
