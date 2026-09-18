@@ -17,8 +17,24 @@ interface PackageMetadata {
   readonly dependencies: Readonly<Record<string, string>>
 }
 
+interface LockedPackage {
+  readonly version?: string
+  readonly resolved?: string
+  readonly license?: string
+}
+
+interface PackageLockMetadata {
+  readonly packages: Readonly<Record<string, LockedPackage>>
+}
+
 function packageMetadata(): PackageMetadata {
   return JSON.parse(readFileSync('package.json', 'utf8')) as PackageMetadata
+}
+
+function packageLockMetadata(): PackageLockMetadata {
+  return JSON.parse(
+    readFileSync('package-lock.json', 'utf8'),
+  ) as PackageLockMetadata
 }
 
 describe('v0.1 release metadata', () => {
@@ -44,5 +60,26 @@ describe('v0.1 release metadata', () => {
       ['react', '19.3.0'],
       ['react-dom', '19.3.0'],
     ])
+  })
+
+  it('keeps every locked third-party package attributable to registry metadata', () => {
+    const locked = Object.entries(packageLockMetadata().packages).filter(
+      ([path]) => path !== '',
+    )
+    const missingLicense = locked
+      .filter(([, metadata]) => !metadata.license?.trim())
+      .map(([path]) => path)
+    const nonRegistryResolution = locked
+      .filter(([, metadata]) => {
+        const resolved = metadata.resolved
+        return (
+          typeof resolved === 'string' &&
+          !resolved.startsWith('https://registry.npmjs.org/')
+        )
+      })
+      .map(([path]) => path)
+
+    expect(missingLicense).toEqual([])
+    expect(nonRegistryResolution).toEqual([])
   })
 })
