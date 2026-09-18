@@ -6,12 +6,14 @@ html {
   scroll-padding-bottom: 6.5rem;
 }
 
-body {
-  overflow-x: hidden;
-}
-
 .app-shell {
   padding-bottom: 7.5rem;
+}
+
+.app-shell > *,
+.app-shell fieldset {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .section-heading-row {
