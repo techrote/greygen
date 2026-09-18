@@ -34,7 +34,9 @@ function fnv1a32(input: string): number {
   return hash >>> 0
 }
 
-export function createPwaCacheRevision(entries: readonly PwaCacheEntry[]): string {
+export function createPwaCacheRevision(
+  entries: readonly PwaCacheEntry[],
+): string {
   const normalized = entries
     .map((entry) => ({
       path: normalizePrecachePath(entry.path),
