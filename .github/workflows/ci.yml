@@ -31,7 +31,13 @@ jobs:
         run: npm test
       - name: Production build
         run: npm run build
+      - name: Verify production PWA artifact
+        run: npm run verify:pwa
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
-      - name: Browser smoke test
+      - name: Browser smoke and offline tests
         run: npm run test:e2e
+      - name: GitHub Pages base-path build
+        run: npm run build:pages
+      - name: Verify GitHub Pages PWA artifact
+        run: npm run verify:pwa:pages

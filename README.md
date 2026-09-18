@@ -54,6 +54,22 @@ npm run characterize -- --json > characterization.json
 
 The JSON report is versioned. DSP/statistical fields are deterministic for a fixed engine version/state/seed; wall-time performance and environment metadata are machine-local observations. Characterization supplements the pass/fail validation suite—it does not weaken or replace it. See `docs/RAG/DSP_CHARACTERIZATION.md`.
 
+### PWA, offline use, and static deployment
+
+Production builds now include an installable web-app manifest and a generated service worker that precaches the application shell **and the exact emitted AudioWorklet asset as one revisioned version set**. After one successful online load/install, the core application can reload offline. Offline/persisted/share state never restores Running: audio still requires an explicit **Start audio** gesture.
+
+```bash
+npm run build
+npm run verify:pwa
+
+npm run build:pages
+npm run verify:pwa:pages
+```
+
+The normal build targets `/`; `build:pages` targets `/greygen/` for the repository Pages URL. PWA registration resolves from Vite's configured base, so the same runtime works at either path. Updates wait rather than silently replacing an active version; the UI presents **Reload update**, then reloads once when the new worker takes control.
+
+`.github/workflows/deploy-pages.yml` provides a static HTTPS GitHub Pages deployment with no repository secrets. Before its first manual run, repository Pages must be enabled once under **Settings → Pages → Build and deployment → GitHub Actions**. See `docs/RAG/PWA_DEPLOYMENT.md` for the cache/version, privacy, base-path, deployment, and update contracts.
+
 ### Verification commands
 
 ```bash
@@ -62,8 +78,11 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run verify:pwa
 npx playwright install chromium
 npm run test:e2e
+npm run build:pages
+npm run verify:pwa:pages
 ```
 
 Useful local commands:
@@ -75,7 +94,7 @@ npm run preview
 npm run characterize -- --help
 ```
 
-`npm run test:e2e` starts the production preview server automatically through Playwright configuration. CI installs Chromium for the current worklet/browser lifecycle gate; the broader cross-browser matrix is a later roadmap milestone.
+`npm run test:e2e` starts the production preview server automatically through Playwright configuration after a production build exists. CI builds first, verifies the PWA artifact, then runs Chromium browser/offline coverage. The broader cross-browser matrix is a later roadmap milestone.
 
 ## RAG / development ground truth
 
@@ -97,9 +116,10 @@ Start with:
 14. `docs/RAG/GUIDED_CALIBRATION.md`
 15. `docs/RAG/ANALYZER_DIAGNOSTICS.md`
 16. `docs/RAG/DSP_CHARACTERIZATION.md`
-17. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
-18. `docs/RAG/UX_STATE.md`
-19. `docs/RAG/AGENT_PLAYBOOK.md`
-20. `docs/RAG/ROADMAP.md`
+17. `docs/RAG/PWA_DEPLOYMENT.md`
+18. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
+19. `docs/RAG/UX_STATE.md`
+20. `docs/RAG/AGENT_PLAYBOOK.md`
+21. `docs/RAG/ROADMAP.md`
 
 The GitHub issues are executable work packets. Each issue must be completed end-to-end: implementation, tests, documentation updates, PR, automated checks, review of failures, and merge only after required checks pass.

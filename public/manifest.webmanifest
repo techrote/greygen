@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "Greygen",
+  "short_name": "Greygen",
+  "description": "Local-first spectral-noise generator and psychoacoustic playground.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#10141a",
+  "theme_color": "#10141a",
+  "icons": [
+    {
+      "src": "icons/greygen.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
