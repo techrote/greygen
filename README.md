@@ -76,6 +76,12 @@ Issue #18 hardens the existing native control surface rather than replacing it w
 
 `prefers-reduced-motion` suppresses presentation motion only. It never alters spectral-animation mode, seed, depth, speed, normalization, samples, or persisted SoundState. Automated Chromium coverage checks semantic names, duplicate IDs/tab order, range boundaries/coarse movement, keyboard profile/calibration flows, phone portrait/landscape containment, immediate Stop reachability, and reduced-motion behavior. A current desktop screen-reader spot check remains an explicit release-time human task rather than a CI claim. See `docs/RAG/ACCESSIBILITY_RESPONSIVE.md`.
 
+### Cross-browser and conformance hardening
+
+Issue #19 adds an explicit production-path browser matrix. Chromium runs the complete Playwright suite; Firefox and WebKit run a focused engine-neutral core that exercises persistence, a real AudioWorklet, repeated start/stop, analyzer teardown, share privacy, and the no-autostart contract. Playwright WebKit is Safari-class automation rather than a claim that CI replaces a current physical Safari release check.
+
+CI also runs `npm run characterize` at 44.1, 48, and 96 kHz. The numeric DSP thresholds remain deterministic pass/fail contracts, while the machine-local realtime factor is retained as comparative performance evidence rather than a universal CPU/device threshold. The #19 hot-path audit confirms that worklet rendering reuses preallocated DSP storage instead of allocating objects/arrays per sample. It also repaired an analyzer lifecycle defect where sampling could disconnect the live Web Audio graph; analyzer reads are now non-destructive and cleanup owns disconnection. See `docs/RAG/CONFORMANCE.md`.
+
 ### Verification commands
 
 ```bash
@@ -83,9 +89,12 @@ npm run format:check
 npm run lint
 npm run typecheck
 npm test
+npm run characterize -- --sample-rate 44100
+npm run characterize -- --sample-rate 48000
+npm run characterize -- --sample-rate 96000
 npm run build
 npm run verify:pwa
-npx playwright install chromium
+npx playwright install --with-deps chromium firefox webkit
 npm run test:e2e
 npm run build:pages
 npm run verify:pwa:pages
@@ -100,7 +109,7 @@ npm run preview
 npm run characterize -- --help
 ```
 
-`npm run test:e2e` starts the production preview server automatically through Playwright configuration after a production build exists. CI builds first, verifies the PWA artifact, then runs Chromium browser/offline coverage. The broader cross-browser matrix is a later roadmap milestone.
+`npm run test:e2e` starts the production preview server automatically through Playwright configuration after a production build exists. Chromium runs the complete integration/offline suite; Firefox and WebKit run the cross-browser core against the same production preview. CI records all three DSP characterization sample rates before the browser matrix.
 
 ## RAG / development ground truth
 
@@ -124,9 +133,10 @@ Start with:
 16. `docs/RAG/DSP_CHARACTERIZATION.md`
 17. `docs/RAG/PWA_DEPLOYMENT.md`
 18. `docs/RAG/ACCESSIBILITY_RESPONSIVE.md`
-19. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
-20. `docs/RAG/UX_STATE.md`
-21. `docs/RAG/AGENT_PLAYBOOK.md`
-22. `docs/RAG/ROADMAP.md`
+19. `docs/RAG/CONFORMANCE.md`
+20. `docs/RAG/PSYCHOACOUSTICS_SAFETY.md`
+21. `docs/RAG/UX_STATE.md`
+22. `docs/RAG/AGENT_PLAYBOOK.md`
+23. `docs/RAG/ROADMAP.md`
 
 The GitHub issues are executable work packets. Each issue must be completed end-to-end: implementation, tests, documentation updates, PR, automated checks, review of failures, and merge only after required checks pass.
