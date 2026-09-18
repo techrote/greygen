@@ -1,10 +1,12 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './app/App'
+import { PwaUpdatePrompt } from './pwa/PwaUpdatePrompt'
 import './styles/base.css'
 import './styles/animation.css'
 import './styles/presets.css'
 import './styles/analyzer.css'
+import './styles/pwa.css'
 
 const rootElement = document.getElementById('root')
 
@@ -15,5 +17,6 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <App />
+    <PwaUpdatePrompt />
   </StrictMode>,
 )
