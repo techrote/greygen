@@ -352,9 +352,7 @@ function characterizeFilterBank(
     }
     neutralMaximumMagnitudeDeviationDb = Math.max(
       neutralMaximumMagnitudeDeviationDb,
-      Math.abs(
-        reconstructedPsd[index].powerDb - inputPsd[index].powerDb,
-      ),
+      Math.abs(reconstructedPsd[index].powerDb - inputPsd[index].powerDb),
     )
   }
 
@@ -543,7 +541,8 @@ export function characterizeDsp(
     benchmark: {
       renderedAudioSeconds,
       wallTimeSeconds: wallTimeMs / 1000,
-      realtimeFactor: wallTimeMs > 0 ? (renderedAudioSeconds * 1000) / wallTimeMs : null,
+      realtimeFactor:
+        wallTimeMs > 0 ? (renderedAudioSeconds * 1000) / wallTimeMs : null,
       informationalOnly: true,
     },
   }
