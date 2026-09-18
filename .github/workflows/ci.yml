@@ -32,9 +32,18 @@ jobs:
       - name: DSP conformance characterization
         shell: bash
         run: |
+          mkdir -p conformance-artifacts
           for sample_rate in 44100 48000 96000; do
-            npm run characterize -- --sample-rate "$sample_rate"
+            npm run characterize -- --sample-rate "$sample_rate" \
+              | tee "conformance-artifacts/characterization-${sample_rate}.txt"
           done
+      - name: Preserve DSP characterization evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsp-conformance-characterization
+          path: conformance-artifacts/characterization-*.txt
+          if-no-files-found: error
+          retention-days: 14
       - name: Production build
         run: npm run build
       - name: Verify production PWA artifact
