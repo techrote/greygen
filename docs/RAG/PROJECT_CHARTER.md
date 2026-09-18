@@ -1,6 +1,6 @@
 # Greygen Project Charter
 
-Status: canonical project intent and scope.
+Status: canonical project intent and scope, reconciled for the v0.1 release candidate.
 
 ## Mission
 
@@ -42,7 +42,7 @@ Later work may add a continuous high-resolution spectral curve, imported correct
 5. **Smooth all audible parameter changes.** No direct discontinuous gain/filter jumps on the audio thread.
 6. **Separate nominal shaping from safety gain.** User/preset/calibration gains describe the target spectrum. Automatic pre-gain protects headroom independently and is inspectable.
 7. **Do not make hidden limiter behavior part of the sound.** The final limiter is an emergency guard. Normal presets/configurations should have sufficient pre-gain that it rarely acts.
-8. **Local-first privacy.** Calibration profiles and named playback profiles stay local unless the user explicitly exports/shares them. Share URLs exclude personal calibration by default.
+8. **Local-first privacy.** Calibration profiles and named playback profiles stay local unless the user explicitly exports them. Share URLs exclude personal calibration by default.
 9. **Accessibility is part of control correctness.** Every slider and transport action must be operable and understandable with keyboard and assistive technology.
 10. **Repository docs evolve with code.** Any implementation that invalidates a RAG statement updates the affected document in the same PR.
 
@@ -61,22 +61,32 @@ Later work may add a continuous high-resolution spectral curve, imported correct
 
 - Audio starts only after an explicit user gesture and resumes correctly after browser suspension.
 - State survives reload through a versioned storage schema.
-- UI never implies browser dBFS/LUFS values are acoustic dB SPL.
+- UI never implies browser dBFS values are acoustic dB SPL.
 - Unsupported/unsafe high-frequency bands are surfaced clearly at low sample rates.
 - No network dependency is required once the app is installed/cached, except optional external links.
 
 ### Engineering
 
-Required CI eventually includes: format/lint, TypeScript typecheck, unit tests, DSP validation tests, production build, and Playwright smoke tests on a local secure-equivalent origin (`localhost`).
+Required CI includes: high-severity dependency advisory audit, format/lint, TypeScript typecheck, unit and deterministic DSP validation tests, 44.1/48/96 kHz characterization evidence, production/PWA builds, Chromium full Playwright coverage, Firefox/WebKit core production-path coverage, and GitHub Pages base-path verification.
 
-## Target support
+## v0.1 browser support evidence
 
-Primary: current Chromium, Firefox, and Safari-class browsers with Web Audio and AudioWorklet support. The implementation should detect required capabilities rather than UA-sniff. Exact support policy is set during release hardening from the browser matrix collected by CI/manual validation.
+The v0.1 browser statement is evidence-based rather than aspirational:
+
+- **Chromium:** complete production-path Playwright suite, including specialized accessibility, calibration, sharing, analyzer, PWA/offline, and failure journeys.
+- **Firefox:** production-build core journey covering persistence/no-autostart, real AudioWorklet startup, repeated lifecycle cleanup, analyzer sampling/teardown, and privacy-safe sharing.
+- **Playwright WebKit:** the same engine-neutral core journey as Safari-class evidence.
+
+Runtime support requires a secure context plus Web Audio `AudioContext`, `AudioWorklet`, and `AudioWorkletNode`. Greygen detects capabilities rather than UA-sniffing and does not silently substitute a different audio engine.
+
+Playwright WebKit is not a completed physical Safari/macOS/iOS validation. A current Safari hardware lifecycle/interruption check and a current desktop NVDA/VoiceOver spot check remain explicit pre-tag operator gates in `docs/RELEASE_CHECKLIST.md`. The project must not imply those manual checks happened when they did not.
 
 ## Clean-room/IP boundary
 
 Greygen may reproduce general ideas and standard DSP techniques, but implementation and product expression must be original. Do not scrape or copy source/assets from the reference site. Do not transcribe copyrighted tables from paid standards. Public standards pages may be cited for definitions and scope; any numerical data incorporated into the product must have a documented reuse basis or be independently derived/created.
 
+The v0.1 provenance audit is recorded in `docs/RELEASE_AUDIT.md`. No Greygen source license has been selected by the owner; the public repository must not be described as open source until that governance decision is explicit.
+
 ## Decision ownership
 
-The canonical architecture is in `ARCHITECTURE.md`; validation rules in `DSP_VALIDATION.md`; psychoacoustic/safety constraints in `PSYCHOACOUSTICS_SAFETY.md`; UX/state contracts in `UX_STATE.md`; execution policy in `AGENT_PLAYBOOK.md`; dependency order in `ROADMAP.md`.
+The canonical architecture is in `ARCHITECTURE.md`; validation rules in `DSP_VALIDATION.md`; psychoacoustic/safety constraints in `PSYCHOACOUSTICS_SAFETY.md`; UX/state contracts in `UX_STATE.md`; execution policy in `AGENT_PLAYBOOK.md`; dependency order in `ROADMAP.md`. User-facing operation and release mechanics live in `../USER_GUIDE.md` and `../RELEASE_CHECKLIST.md`.
