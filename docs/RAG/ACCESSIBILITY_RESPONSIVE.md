@@ -18,9 +18,11 @@ Every user operation has a non-pointer path:
 - each band exposes its frequency and current signed gain through its accessible name/value text and has a keyboard-operable neutral reset;
 - master, stereo width, and animation use native controls;
 - preset/profile save, load, import/export, bypass, reset, and delete actions use labelled native controls;
-- guided calibration keeps visible button alternatives for every shortcut and also accepts Space, arrows, K, S, and Escape while focus is anywhere in the active calibration region except text/select entry where appropriate.
+- guided calibration keeps visible button alternatives for every shortcut. Space, arrows, K, S, and Escape are owned by the programmatically focused active calibration region; when focus moves into a native input, select, button, or link, that control keeps its normal keyboard behavior and the region does not intercept the keystroke.
 
 Guided calibration moves focus to the active region when the flow begins or changes channel/review phase. When Save/Abort returns to the entry surface, focus returns to the guided-calibration region rather than disappearing to the document body. The active region is programmatically focusable with `tabIndex=-1`; it does not add an extra normal Tab stop.
+
+Starting audio temporarily disables the authoritative transport button while the AudioContext is being created. If that browser-required disabled interval drops keyboard focus, focus is restored to the same lifecycle button as soon as startup resolves, so the next keyboard action remains Stop/Retry rather than disappearing to the document body.
 
 ## Immediate audio stop
 
@@ -57,11 +59,12 @@ The analyzer's already-existing reduced-motion sampling policy remains independe
 
 - native control naming/label association on the rendered core surface;
 - duplicate IDs and forbidden positive tab indices;
-- first-interaction focus visibility and keyboard Start/Stop;
+- first-interaction focus visibility, startup focus restoration, and keyboard Start/Stop;
 - keyboard preset changes plus fine/coarse/boundary ten-band range operation;
 - the 44 px band-reset target;
 - keyboard profile creation/selection;
 - complete guided calibration through keyboard shortcuts, review/save focus, and Escape abort/focus restoration;
+- native calibration buttons remaining native keyboard controls rather than double-firing region shortcuts;
 - 360×640 portrait and 844×390 landscape document containment, intentional band scrolling, and viewport-reachable Stop after scrolling to the bottom;
 - reduced-motion presentation while serialized spectral-animation state remains unchanged across reload.
 
@@ -71,13 +74,13 @@ This semantic audit is deliberately small and repository-owned rather than prese
 
 The issue #18 implementation was manually reviewed at source/DOM-contract level alongside Chromium Playwright evidence:
 
-- **Keyboard/focus:** native controls are retained; no positive tab index is introduced; the first transport action is the first normal interactive stop; guided start/phase/end focus routing is explicit; visible focus rules cover buttons, inputs, selects, links, summary, and programmatically focused guided regions.
+- **Keyboard/focus:** native controls are retained; no positive tab index is introduced; the first transport action is the first normal interactive stop; startup restores lifecycle-button focus after the temporary disabled state; guided start/phase/end focus routing is explicit; visible focus rules cover buttons, inputs, selects, links, summary, and programmatically focused guided regions.
 - **Names/roles/values:** transport/preset/profile/calibration controls are native and labelled; ten-band ranges expose frequency + signed gain; range readouts remain visible; destructive profile buttons carry record-specific accessible labels.
 - **Non-colour state:** Running/Suspended/Error, preset/Modified, High shelf degradation, guard activity, notices, and errors all have text equivalents.
 - **Contrast:** the hardening pass preserves the existing high-contrast light-on-dark palette and focus outline; no new hue-only information is introduced.
-- **Responsive/touch:** the fixed transport is safe-area aware, action rows stack at phone width, ten-band scrolling remains deliberate, and the smallest band button is raised to 44 px.
+- **Responsive/touch:** the fixed transport is safe-area aware, action rows stack at phone width, ten-band scrolling remains deliberate, the document is contained at the tested portrait/landscape boundaries, and the smallest band button is raised to 44 px.
 - **Reduced motion:** CSS motion is suppressed without touching audio animation state.
-- **Calibration safety:** comfortable-level acknowledgement, skip, silence, abort, global Stop, non-medical wording, and no-auto-master behavior remain intact and keyboard reachable.
+- **Calibration safety:** comfortable-level acknowledgement, skip, silence, abort, global Stop, non-medical wording, and no-auto-master behavior remain intact and keyboard reachable; native controls inside the shortcut region retain their normal activation semantics.
 - **Imported/recovered state:** existing visible storage/share/import status and no-autoplay contracts are unchanged.
 
 A desktop NVDA/VoiceOver hardware session is not available inside GitHub Actions, so this document does **not** claim a human screen-reader product certification. The regression strategy instead keeps native semantics, role/name/value assertions, focus journeys, and a release-time assistive-technology spot-check as an explicit human checklist item rather than fabricating evidence.
