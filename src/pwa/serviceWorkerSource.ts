@@ -134,7 +134,9 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
-        const shell = await cache.match(scopedUrl('index.html'))
+        const shell = await cache.match(scopedUrl('index.html'), {
+          ignoreVary: true,
+        })
         return shell ?? fetch(request)
       }),
     )
@@ -143,7 +145,7 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {
-      const cached = await cache.match(request)
+      const cached = await cache.match(request, { ignoreVary: true })
       if (cached) {
         return cached
       }
