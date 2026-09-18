@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
 
-async function waitForServiceWorkerControl(page: import('@playwright/test').Page) {
+async function waitForServiceWorkerControl(
+  page: import('@playwright/test').Page,
+) {
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready
     if (navigator.serviceWorker.controller) {
@@ -8,9 +10,13 @@ async function waitForServiceWorkerControl(page: import('@playwright/test').Page
     }
 
     await new Promise<void>((resolve) => {
-      navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), {
-        once: true,
-      })
+      navigator.serviceWorker.addEventListener(
+        'controllerchange',
+        () => resolve(),
+        {
+          once: true,
+        },
+      )
     })
   })
 }
