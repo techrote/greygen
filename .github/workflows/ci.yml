@@ -41,6 +41,31 @@ jobs:
         run: npm run verify:pwa
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium firefox webkit
+      - name: Start virtual audio sink
+        shell: bash
+        run: |
+          sudo apt-get install -y pulseaudio pulseaudio-utils
+          export XDG_RUNTIME_DIR="${RUNNER_TEMP}/xdg-runtime"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+
+          pulseaudio --start --exit-idle-time=-1
+          ready=0
+          for _ in {1..20}; do
+            if pactl info >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 0.25
+          done
+          test "$ready" -eq 1
+
+          sink_module="$(pactl load-module module-null-sink sink_name=greygen_ci sink_properties=device.description=GreygenCI)"
+          test -n "$sink_module"
+          pactl set-default-sink greygen_ci
+          pactl info
+          pactl list short sinks
       - name: Browser smoke, lifecycle, privacy, and offline tests
         run: npm run test:e2e
       - name: GitHub Pages base-path build
