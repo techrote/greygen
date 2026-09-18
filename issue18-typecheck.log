@@ -1,0 +1,5 @@
+
+> greygen@0.0.0 typecheck
+> tsc -b
+
+exit_status=0
