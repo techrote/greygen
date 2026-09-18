@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "characterize": "node scripts/characterize.mjs",
     "lint": "biome lint .",
     "format": "biome format --write .",
     "format:check": "biome format ."
