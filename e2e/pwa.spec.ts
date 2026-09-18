@@ -4,19 +4,29 @@ async function waitForServiceWorkerControl(
   page: import('@playwright/test').Page,
 ) {
   await page.evaluate(async () => {
-    await navigator.serviceWorker.ready
-    if (navigator.serviceWorker.controller) {
+    const serviceWorker = (
+      navigator as unknown as {
+        readonly serviceWorker: {
+          readonly ready: Promise<unknown>
+          readonly controller: unknown
+          addEventListener(
+            type: 'controllerchange',
+            listener: () => void,
+            options: { once: boolean },
+          ): void
+        }
+      }
+    ).serviceWorker
+
+    await serviceWorker.ready
+    if (serviceWorker.controller) {
       return
     }
 
     await new Promise<void>((resolve) => {
-      navigator.serviceWorker.addEventListener(
-        'controllerchange',
-        () => resolve(),
-        {
-          once: true,
-        },
-      )
+      serviceWorker.addEventListener('controllerchange', () => resolve(), {
+        once: true,
+      })
     })
   })
 }
