@@ -1,6 +1,6 @@
 # Analyzer and Diagnostics
 
-Status: canonical analyzer/runtime-inspection contract, reconciled through issue #19 conformance hardening.
+Status: canonical analyzer/runtime-inspection contract, reconciled through issue #20 release hardening.
 
 ## Architecture
 
@@ -19,9 +19,11 @@ The analyzer UI is code-split with `React.lazy` and mounted only while its panel
 
 ## Diagnostics
 
-The panel exposes generic bug-report/runtime state only: lifecycle, sample rate, DSP engine version, audio protocol version, sound seed, spectral target/Modified state, high-band mode, Peak/RMS, safety pre-gain/current target, guard interventions, stereo correlation, telemetry sequence, and rendered frame count.
+The panel exposes generic bug-report/runtime state only: lifecycle, sample rate, **Greygen application version**, DSP engine version, audio protocol version, sound seed, spectral target/Modified state, high-band mode, Peak/RMS, safety pre-gain/current target, guard interventions, stereo correlation, telemetry sequence, and rendered frame count.
 
-Private ProfileState/calibration names, notes, curves, and device metadata are structurally absent from analyzer props and diagnostics formatting.
+Private ProfileState/calibration names, notes, curves, evidence, and device metadata are structurally absent from analyzer props and diagnostics formatting.
+
+For v0.1 the visible identifiers are Greygen `0.1.0`, DSP engine `1`, and audio protocol `6`. Application version lives in `src/version.ts`; release metadata tests require it to match `package.json`.
 
 ## Performance evidence
 
