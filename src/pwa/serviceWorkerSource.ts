@@ -133,19 +133,10 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      (async () => {
-        try {
-          const response = await fetch(request)
-          if (response.ok) {
-            return response
-          }
-        } catch {
-          // Continue to the installed shell when the network is unavailable.
-        }
-
-        const cache = await caches.open(CACHE_NAME)
-        return (await cache.match(scopedUrl('index.html'))) ?? Response.error()
-      })(),
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const shell = await cache.match(scopedUrl('index.html'))
+        return shell ?? fetch(request)
+      }),
     )
     return
   }
