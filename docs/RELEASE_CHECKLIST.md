@@ -13,22 +13,23 @@ This checklist separates **repository readiness** from **public tag/release auth
 
 ## 2. Reproduce from a clean checkout
 
-Use the repository-pinned Node/npm versions and the committed lockfile:
+Use the repository-pinned Node version, declared npm version, and committed lockfile:
 
 ```bash
 git clone https://github.com/techrote/greygen.git
 cd greygen
 git checkout main
-corepack enable
 nvm use
+corepack enable
 npm ci
 ```
 
-If `nvm` is not installed, install/use Node `24.21.x`; `package.json` pins npm `11.19.0` through `packageManager`.
+If `nvm` is not installed, install/use Node `24.21.x`. `package.json` declares npm `11.19.0` through `packageManager`; use that npm version for a strict release reproduction if the local Node/Corepack setup does not honor the declaration automatically.
 
 Then run the same repository gates used for the release candidate:
 
 ```bash
+npm audit --audit-level=high
 npm run format:check
 npm run lint
 npm run typecheck
@@ -46,6 +47,7 @@ npm run verify:pwa:pages
 
 On headless Linux without an audio output, provide an OS-level virtual PulseAudio sink as `.github/workflows/ci.yml` does. Do not replace the native Web Audio/AudioWorklet path with a synthetic test implementation.
 
+- [ ] Dependency audit has no high/critical advisory that violates the CI gate.
 - [ ] All commands above pass without weakening a DSP, safety, privacy, or accessibility assertion.
 - [ ] Default-branch GitHub Actions CI is green at the exact commit proposed for tagging.
 - [ ] Characterization still reports the expected 44.1/48 kHz degraded high shelf and 96 kHz bounded bandpass topology.
@@ -172,6 +174,6 @@ If using GitHub Releases, create release `v0.1.0` from that exact tag, copy the 
 
 ## Blocking policy
 
-A known high-severity DSP, gain-safety, privacy, autoplay, calibration, accessibility/Stop, version-coherence, or provenance defect blocks the tag. Fix the defect through the normal issue/PR/CI process; do not waive a deterministic threshold merely to finish release paperwork.
+A known high-severity DSP, gain-safety, privacy, autoplay, calibration, accessibility/Stop, dependency-security, version-coherence, or provenance defect blocks the tag. Fix the defect through the normal issue/PR/CI process; do not waive a deterministic threshold merely to finish release paperwork.
 
 Lower-severity known limitations may be released only when they are accurately documented and do not contradict the v0.1 support/safety/privacy contract.
