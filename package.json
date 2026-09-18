@@ -11,12 +11,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:pages": "tsc -b && vite build --base=/greygen/",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "characterize": "node scripts/characterize.mjs",
+    "verify:pwa": "node scripts/verify-pwa-build.mjs",
+    "verify:pwa:pages": "node scripts/verify-pwa-build.mjs --base=/greygen/",
     "lint": "biome lint .",
     "format": "biome format --write .",
     "format:check": "biome format ."
