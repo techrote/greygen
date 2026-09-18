@@ -73,12 +73,18 @@ function formatCorrection(value: number | null): string {
   return `${sign}${value.toFixed(1)} dB`
 }
 
-function isTextEntryTarget(target: EventTarget | null): boolean {
+function isNativeInteractiveTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false
   }
   const tag = target.tagName.toLowerCase()
-  return tag === 'input' || tag === 'textarea' || tag === 'select'
+  return (
+    tag === 'input' ||
+    tag === 'textarea' ||
+    tag === 'select' ||
+    tag === 'button' ||
+    tag === 'a'
+  )
 }
 
 function channelLabel(channel: GuidedCalibrationChannel): string {
@@ -307,12 +313,15 @@ export default function GuidedCalibrationWizard({
     if (!wizard) {
       return
     }
+    if (isNativeInteractiveTarget(event.target)) {
+      return
+    }
     if (event.key === 'Escape') {
       event.preventDefault()
       abort()
       return
     }
-    if (isTextEntryTarget(event.target) || wizard.phase === 'review') {
+    if (wizard.phase === 'review') {
       return
     }
     if (event.key === ' ') {
