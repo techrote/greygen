@@ -1,6 +1,6 @@
 # Versioned Application State and Persistence
 
-Status: canonical contract for application-state separation, local persistence, migration, recovery, presets, and reset semantics.
+Status: canonical contract for application-state separation, local persistence, migration, recovery, presets, calibration profiles, and reset semantics; reconciled for v0.1 in issue #20.
 
 ## Domain separation
 
@@ -8,7 +8,7 @@ Greygen persists four logically separate documents:
 
 1. **SoundState** — the currently requested shareable deterministic generator state;
 2. **UserPresetLibraryState** — local named snapshots of generic SoundState;
-3. **ProfileState** — private/local playback and calibration profile records;
+3. **ProfileState** — private/local playback and calibration profile records plus selection/application mode;
 4. **UiState** — presentation preferences only.
 
 The documents use different TypeScript types, serializers, storage keys, parsers, and mutation APIs. Generic sound/share serialization never reads ProfileState, the user-preset library, or UiState.
@@ -17,7 +17,7 @@ A user preset is sound-library metadata, not personal calibration data. Its snap
 
 ## Storage backend and keys
 
-The initial backend is browser `localStorage`, accessed only through `AppStateRepository` and `StoragePort`:
+The backend is browser `localStorage`, accessed only through `AppStateRepository` and `StoragePort`:
 
 - `greygen.storage-manifest` — app storage format version;
 - `greygen.sound-state` — current shareable sound document;
@@ -27,7 +27,7 @@ The initial backend is browser `localStorage`, accessed only through `AppStateRe
 
 DSP and AudioWorklet code never read browser storage directly.
 
-The overall manifest remains v1 for issue #11: the new preset library is an independently versioned optional document that older builds can safely ignore. Its own schema controls compatibility and write protection.
+The overall storage manifest remains v1. The sound, user-preset, profile, and UI documents are independently versioned so a change in one domain does not force reinterpretation of unrelated data.
 
 ## SoundState schema v3
 
@@ -43,7 +43,7 @@ The overall manifest remains v1 for issue #11: the new preset library is an inde
 
 Animation state contains its own schema version plus mode, independent unsigned 32-bit animation seed, depth, speed, and energy-preserving flag. Its semantics are defined by `SPECTRAL_ANIMATION.md`.
 
-Sound state deliberately excludes `running`, `started`, `AudioContext` state, or any other autoplay/lifecycle intent. Reload, saved-preset load, or share import can restore a sound but never restore Running.
+Sound state deliberately excludes `running`, `started`, `AudioContext` state, or any other autoplay/lifecycle intent. Reload, saved-preset load, normal share import, private profile import, or service-worker update can restore state but never restore Running.
 
 ### Validation and recovery
 
@@ -92,21 +92,36 @@ The initial library is bounded to 64 records. Duplicate ids, invalid records, an
 
 An unknown future preset-library schema loads an empty in-memory library for that boot, reports the incompatibility, leaves the stored document untouched, and write-protects only the preset-library domain. Current sound/profile/UI documents remain independently usable.
 
-User-preset semantics, name sanitation, and sharing boundaries are canonicalized in `PRESETS_SHARING.md`.
+User-preset semantics, name sanitation, persistence, and limits are canonicalized in `PRESETS_SHARING.md`.
+
+## ProfileState schema v2
+
+The private profile envelope is **schema v2** in the v0.1 implementation. It contains:
+
+- versioned local `calibration` / `playback` profile records;
+- `activeProfileId`, or `null`;
+- calibration application mode `off | balanced | full`.
+
+Each generic record keeps an independently versioned payload. Current calibration payloads are schema v3 and contain explicit linked/independent channel mode, left/right raw curves, optional sanitized playback-device note, and optional guided evidence. Historical calibration payload v1/v2 remains readable and is canonicalized to linked v3 semantics in memory. Unsupported future payloads are rejected rather than guessed.
+
+ProfileState remains physically and logically separate from SoundState and UserPresetLibraryState. Generic sound reset, saved-preset operations, built-in preset selection, and normal sound sharing cannot erase or serialize private profiles.
+
+Explicit personal profile export/import uses a different envelope and is not ProfileState persistence. Import validates, allocates a new local identity, stores the record unselected/unapplied, and never creates/resumes audio. See `CALIBRATION_PROFILES.md` and `PRESETS_SHARING.md`.
+
+## UiState schema v2
+
+UiState is presentation-only and currently contains:
+
+- `futureFeaturesVisible`;
+- `analyzerVisible`.
+
+UiState v1 predates persisted analyzer visibility and migrates deterministically with the analyzer closed. UI state has no audio meaning and cannot start/resume sound or change deterministic audio samples.
 
 ## Future-schema behavior
 
 A document newer than the running build is never guessed at. Greygen loads safe defaults for that document, reports the incompatibility, leaves the newer value untouched, and prevents that older build from overwriting it during the boot.
 
 A future storage-manifest version makes **all** persisted documents, including the user-preset library, read-only/unknown for that boot.
-
-## ProfileState schema v1
-
-Private profile state stores versioned `calibration` / `playback` records with local ids, names, payload schema versions, and finite JSON-compatible payloads. It remains physically and logically separate from SoundState and UserPresetLibraryState. Generic sound reset, saved-preset operations, and normal sharing cannot erase or serialize profiles.
-
-## UiState schema v1
-
-Current UI state contains presentation-only values such as `futureFeaturesVisible`. UI state has no audio meaning and cannot start/resume sound.
 
 ## Startup and share-import sequence
 
@@ -116,12 +131,12 @@ On browser mount:
 2. inspect a normal share fragment if present;
 3. if valid, use imported SoundState as current sound for this boot and consume the share fragment; if malformed/future, preserve local current sound and report the error;
 4. create `AudioEngine` with no AudioContext;
-5. preload requested audio seed, spectrum, master, stereo width, and animation through typed engine APIs;
+5. preload requested audio seed, spectrum, master, stereo width, animation, and any explicitly selected/applied profile correction through typed engine APIs;
 6. persist accepted migrated/imported current sound when writable;
 7. enable controls and remain Ready/silent;
 8. create/resume browser audio only after explicit Start.
 
-A corrupt document, malformed share link, or storage exception cannot prevent a safe Ready state.
+A corrupt document, malformed share link, profile record incompatibility, or storage exception cannot create autoplay intent and cannot prevent a safe Ready state.
 
 ## Save and failure semantics
 
@@ -153,9 +168,9 @@ UserPresetLibraryState, ProfileState, and UiState are preserved.
 
 Deletes only the selected local sound-preset record. It does not change current sound, profiles, or UI state.
 
-### Delete local profiles
+### Delete local profile / profiles
 
-This explicit separate action empties only ProfileState. Current sound, saved user presets, and UI settings remain intact.
+Single-profile deletion uses deliberate confirmation; deleting the active profile safely bypasses correction. The separate bulk action empties only ProfileState. Current sound, saved user presets, and UI settings remain intact.
 
 ## Privacy and share boundary
 
@@ -163,11 +178,11 @@ SoundState is generic/shareable. UserPresetLibraryState is local sound-library m
 
 Normal share URLs serialize **SoundState only**, including stereo and animation. They never read or serialize:
 
-- ProfileState records, calibration curves, profile ids, profile/device names or notes;
+- ProfileState records, calibration curves, profile ids/names/notes/evidence or correction curves;
 - user-preset display names or the local preset library;
 - UI preferences.
 
-The versioned share format and import bounds live in `PRESETS_SHARING.md`.
+The versioned normal-share format and import bounds live in `PRESETS_SHARING.md`. The separate personal calibration export is intentional private-data portability and never enters the normal `#s=` payload.
 
 ## Validation invariants
 
@@ -179,10 +194,13 @@ Automated persistence coverage includes:
 - explicit v0/v1/v2 sound migrations;
 - mono + animation-Off compatibility for pre-feature saves;
 - deterministic seed/width/animation restoration;
+- ProfileState schema v2 and historical calibration-payload compatibility;
+- UiState v1 -> v2 analyzer-closed migration;
 - user preset library round trip and future-schema write protection;
 - sound reset preserving user presets/profiles/UI;
 - profile deletion preserving current sound and user presets;
-- browser persistence for preset/bands/master/width/animation/UI;
+- personal profile import remaining unselected/unapplied and non-autoplaying;
+- browser persistence for preset/bands/master/width/animation/analyzer visibility;
 - shared-URL import remaining Ready/silent;
 - reload after Running returning Ready with no autoplay;
 - storage exceptions remaining non-fatal.
