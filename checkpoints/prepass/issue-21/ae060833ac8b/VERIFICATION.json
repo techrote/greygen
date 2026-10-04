@@ -1,0 +1,14 @@
+{
+  "core_compilation": "PASS",
+  "independent_crosscheck_compilation": "PASS",
+  "core_named_cases": 11,
+  "generated_simple_roundtrips": 160,
+  "invalid_rejections": 10,
+  "independent_projection_cases": 43,
+  "repeat_run_results_json_byte_identical": true,
+  "repeat_run_curves_csv_byte_identical": true,
+  "github_mutations": 0,
+  "audio_rendered": false,
+  "source_assessed_commit": "00ab20354d2ba2af7ca41147f01f324c70c74006",
+  "completed_utc": "2026-10-04T21:48:39.769955+00:00"
+}

@@ -1,0 +1,51 @@
+{
+  "repository": "techrote/greygen",
+  "issue": 21,
+  "assessed_commit": "00ab20354d2ba2af7ca41147f01f324c70c74006",
+  "root_tree": "3fa675d115fc02b4a9dbb4bea2abf04fc88e0c66",
+  "accessed_date_utc": "2026-10-04",
+  "access_mode": "GitHub connector GET/read only",
+  "identity_note": "Git blob IDs observed in connector tree responses; full source bytes not retained or locally rehashed",
+  "files": [
+    {
+      "path": "src/audio/dsp/filterBank.ts",
+      "git_blob_sha1": "94ed2306d585b96cd5e89cfffcd0c3fc698b80e1",
+      "url": "https://github.com/techrote/greygen/blob/00ab20354d2ba2af7ca41147f01f324c70c74006/src/audio/dsp/filterBank.ts"
+    },
+    {
+      "path": "src/audio/dsp/spectra.ts",
+      "git_blob_sha1": "c58bf3df4d2dc2d20cdb9682e681bbb81b3195a4",
+      "url": "https://github.com/techrote/greygen/blob/00ab20354d2ba2af7ca41147f01f324c70c74006/src/audio/dsp/spectra.ts"
+    },
+    {
+      "path": "src/features/generator/uiModel.ts",
+      "git_blob_sha1": "b3c141dd75562d7b2bb4f4bd420106fda24c6c1b",
+      "url": "https://github.com/techrote/greygen/blob/00ab20354d2ba2af7ca41147f01f324c70c74006/src/features/generator/uiModel.ts"
+    },
+    {
+      "path": "docs/RAG/SPECTRAL_TARGETS.md",
+      "git_blob_sha1": "54eb49ec1bdcfd77731c0fadd5e4b8651af0cecf",
+      "url": "https://github.com/techrote/greygen/blob/00ab20354d2ba2af7ca41147f01f324c70c74006/docs/RAG/SPECTRAL_TARGETS.md"
+    },
+    {
+      "path": "docs/RAG/DSP_VALIDATION.md",
+      "git_blob_sha1": "6420b0b32c07b53f30cf347d5b847f01e8e1ed66",
+      "url": "https://github.com/techrote/greygen/blob/00ab20354d2ba2af7ca41147f01f324c70c74006/docs/RAG/DSP_VALIDATION.md"
+    },
+    {
+      "path": "docs/RAG/DSP_CHARACTERIZATION.md",
+      "git_blob_sha1": "1d0dad2d970ecb4edc774191322232517f98c4a1",
+      "url": "https://github.com/techrote/greygen/blob/00ab20354d2ba2af7ca41147f01f324c70c74006/docs/RAG/DSP_CHARACTERIZATION.md"
+    },
+    {
+      "path": "docs/RAG/PRESETS_SHARING.md",
+      "git_blob_sha1": "a1e941506eddfa1250aebaf14ab9b76e437cd34e",
+      "url": "https://github.com/techrote/greygen/blob/00ab20354d2ba2af7ca41147f01f324c70c74006/docs/RAG/PRESETS_SHARING.md"
+    },
+    {
+      "path": "docs/RAG/STATE_PERSISTENCE.md",
+      "git_blob_sha1": "6e94ae5f035fe56a54c500bb8bb9919ad5d07dd7",
+      "url": "https://github.com/techrote/greygen/blob/00ab20354d2ba2af7ca41147f01f324c70c74006/docs/RAG/STATE_PERSISTENCE.md"
+    }
+  ]
+}

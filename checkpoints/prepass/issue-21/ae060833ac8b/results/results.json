@@ -1,0 +1,368 @@
+{
+  "scope": "target-space representation only; no audio rendered",
+  "base_commit": "00ab20354d2ba2af7ca41147f01f324c70c74006",
+  "grid_id": "log2-31p25-96ppo-20-20000-v1",
+  "knots": 958,
+  "silent_max_db": 1e-06,
+  "numerical_guard_db": 1e-10,
+  "solver_tolerance_db": 1e-12,
+  "cases": [
+    {
+      "target_id": "white",
+      "offsets_db": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "metrics": {
+        "max_abs_db": 0.0,
+        "rms_log_db": 0.0,
+        "worst_knot_index": 0,
+        "worst_frequency_hz": 20.0
+      },
+      "decision": "silent-numerical",
+      "sweeps": 1,
+      "projected_kkt_violation_db": 0.0,
+      "active_bounds": [],
+      "name": "white_neutral",
+      "target_slope_125_8000_db_oct": 0.0,
+      "control_roundtrip_max_db": 0.0,
+      "projection_idempotence_max_db": 0.0
+    },
+    {
+      "target_id": "pink",
+      "offsets_db": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "metrics": {
+        "max_abs_db": 0.0,
+        "rms_log_db": 0.0,
+        "worst_knot_index": 0,
+        "worst_frequency_hz": 20.0
+      },
+      "decision": "silent-numerical",
+      "sweeps": 1,
+      "projected_kkt_violation_db": 0.0,
+      "active_bounds": [],
+      "name": "pink_neutral",
+      "target_slope_125_8000_db_oct": -3.0102999999999995,
+      "control_roundtrip_max_db": 0.0,
+      "projection_idempotence_max_db": 0.0
+    },
+    {
+      "target_id": "brown",
+      "offsets_db": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "metrics": {
+        "max_abs_db": 0.0,
+        "rms_log_db": 0.0,
+        "worst_knot_index": 0,
+        "worst_frequency_hz": 20.0
+      },
+      "decision": "silent-numerical",
+      "sweeps": 1,
+      "projected_kkt_violation_db": 0.0,
+      "active_bounds": [],
+      "name": "brown_neutral",
+      "target_slope_125_8000_db_oct": -6.020599999999999,
+      "control_roundtrip_max_db": 0.0,
+      "projection_idempotence_max_db": 0.0
+    },
+    {
+      "target_id": "grey",
+      "offsets_db": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "metrics": {
+        "max_abs_db": 0.0,
+        "rms_log_db": 0.0,
+        "worst_knot_index": 0,
+        "worst_frequency_hz": 20.0
+      },
+      "decision": "silent-numerical",
+      "sweeps": 1,
+      "projected_kkt_violation_db": 0.0,
+      "active_bounds": [],
+      "name": "grey_neutral",
+      "target_slope_125_8000_db_oct": 0.07500000000000001,
+      "control_roundtrip_max_db": 0.0,
+      "projection_idempotence_max_db": 0.0
+    },
+    {
+      "target_id": "pink",
+      "offsets_db": [
+        0.24999999999951641,
+        -1.1249999999993499,
+        2.749999999999515,
+        -3.499999999999705,
+        4.124999999999842,
+        -5.249999999999923,
+        6.374999999999965,
+        -7.499999999999987,
+        8.624999999999996,
+        -9.75
+      ],
+      "metrics": {
+        "max_abs_db": 6.501466032204917e-13,
+        "rms_log_db": 2.1680168440888723e-13,
+        "worst_knot_index": 158,
+        "worst_frequency_hz": 62.5
+      },
+      "decision": "silent-numerical",
+      "sweeps": 23,
+      "projected_kkt_violation_db": 4.0811798385220754e-13,
+      "active_bounds": [],
+      "name": "pink_fractional_controls",
+      "target_slope_125_8000_db_oct": -2.8900803987534456,
+      "control_roundtrip_max_db": 6.501466032204917e-13,
+      "projection_idempotence_max_db": 6.503686478254167e-13
+    },
+    {
+      "target_id": "brown",
+      "offsets_db": [
+        -23.999999999999684,
+        23.99999999999958,
+        -23.999999999999687,
+        23.999999999999808,
+        -23.999999999999897,
+        23.999999999999947,
+        -23.999999999999975,
+        23.99999999999999,
+        -24.0,
+        24.0
+      ],
+      "metrics": {
+        "max_abs_db": 4.192202140984591e-13,
+        "rms_log_db": 1.4065152707021788e-13,
+        "worst_knot_index": 158,
+        "worst_frequency_hz": 62.5
+      },
+      "decision": "silent-numerical",
+      "sweeps": 24,
+      "projected_kkt_violation_db": 2.6290081223123707e-13,
+      "active_bounds": [
+        8,
+        9
+      ],
+      "name": "brown_alternating_bounds",
+      "target_slope_125_8000_db_oct": -6.020599999999999,
+      "control_roundtrip_max_db": 4.192202140984591e-13,
+      "projection_idempotence_max_db": 4.227729277772596e-13
+    },
+    {
+      "target_id": "white",
+      "offsets_db": [
+        0.00013553529862243968,
+        -0.0007946620413591365,
+        0.003043112865619424,
+        -0.01137778942038733,
+        0.042468044815533894,
+        -0.15849438984155342,
+        -0.15849048544942893,
+        0.04245633163928306,
+        -0.01133484110771554,
+        0.0028830327915822106
+      ],
+      "metrics": {
+        "max_abs_db": 23.841507562354508,
+        "rms_log_db": 0.6303946484020045,
+        "worst_knot_index": 590,
+        "worst_frequency_hz": 1414.213562373095
+      },
+      "decision": "confirm-approximation",
+      "sweeps": 19,
+      "projected_kkt_violation_db": 2.9867059346544433e-13,
+      "active_bounds": [],
+      "name": "white_narrow_notch_24db",
+      "target_slope_125_8000_db_oct": -0.006908421437695274,
+      "projection_idempotence_max_db": 4.758693439299577e-13,
+      "notch": {
+        "center_hz": 1414.213562373095,
+        "depth_db": 24.0,
+        "support_width_octaves": 0.020833333333333332,
+        "support_width_hz": 20.422222098058995,
+        "center_only_false_negative_max_db": 0.0,
+        "naive_center_sampling_true_metrics": {
+          "max_abs_db": 24.0,
+          "rms_log_db": 0.6335403124916253,
+          "worst_knot_index": 590,
+          "worst_frequency_hz": 1414.213562373095
+        }
+      }
+    },
+    {
+      "target_id": "white",
+      "offsets_db": [
+        2.6024956779397625e-12,
+        -1.686308729839165e-11,
+        6.40588351790918e-11,
+        -2.37684382714457e-10,
+        8.852128686269599e-10,
+        -3.3022366214659466e-09,
+        -3.301750158330753e-09,
+        8.844490061527056e-10,
+        -2.361219011295509e-10,
+        6.005793793649638e-11
+      ],
+      "metrics": {
+        "max_abs_db": 4.966980066101016e-07,
+        "rms_log_db": 1.3133221843781319e-08,
+        "worst_knot_index": 590,
+        "worst_frequency_hz": 1414.213562373095
+      },
+      "decision": "silent-numerical",
+      "sweeps": 6,
+      "projected_kkt_violation_db": 4.2196767587963826e-13,
+      "active_bounds": [],
+      "name": "notch_below_numerical_budget",
+      "target_slope_125_8000_db_oct": -1.4392544661865152e-10,
+      "projection_idempotence_max_db": 6.604437777649119e-13
+    },
+    {
+      "target_id": "white",
+      "offsets_db": [
+        1.1504480894526143e-11,
+        -6.693495540272334e-11,
+        2.5441812156513784e-10,
+        -9.488173990182444e-10,
+        3.5394409712205074e-09,
+        -1.3208110084474816e-08,
+        -1.3207421485034446e-08,
+        3.537977272388162e-09,
+        -9.44552256033537e-10,
+        2.4024819594991927e-10
+      ],
+      "metrics": {
+        "max_abs_db": 1.9867922342152452e-06,
+        "rms_log_db": 5.2532887367538156e-08,
+        "worst_knot_index": 590,
+        "worst_frequency_hz": 1414.213562373095
+      },
+      "decision": "confirm-approximation",
+      "sweeps": 7,
+      "projected_kkt_violation_db": 4.800329598959001e-13,
+      "active_bounds": [],
+      "name": "notch_above_numerical_budget",
+      "target_slope_125_8000_db_oct": -5.757017864746061e-10,
+      "projection_idempotence_max_db": 8.253373834416684e-13
+    },
+    {
+      "target_id": "white",
+      "offsets_db": [
+        23.999999999999996,
+        24.0,
+        24.0,
+        24.0,
+        24.0,
+        24.0,
+        -24.0,
+        -24.0,
+        -24.0,
+        -24.0
+      ],
+      "metrics": {
+        "max_abs_db": 24.0,
+        "rms_log_db": 4.344296069476252,
+        "worst_knot_index": 590,
+        "worst_frequency_hz": 1414.213562373095
+      },
+      "decision": "confirm-approximation",
+      "sweeps": 2,
+      "projected_kkt_violation_db": 0.0,
+      "active_bounds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "name": "white_bounded_step",
+      "target_slope_125_8000_db_oct": -11.654506965391926,
+      "projection_idempotence_max_db": 3.552713678800501e-15
+    },
+    {
+      "target_id": "white",
+      "offsets_db": [
+        -0.10860229174420037,
+        0.029104466289530652,
+        -0.007815573415407315,
+        0.0021578273730125043,
+        -0.0008157360771399377,
+        0.001105116935792735,
+        -0.003604731666141434,
+        0.013313809728817651,
+        -0.04965050724914467,
+        0.18528821926776493
+      ],
+      "metrics": {
+        "max_abs_db": 23.8913977082558,
+        "rms_log_db": 0.5839768494898462,
+        "worst_knot_index": 0,
+        "worst_frequency_hz": 20.0
+      },
+      "decision": "confirm-approximation",
+      "sweeps": 20,
+      "projected_kkt_violation_db": 3.7126551832855625e-13,
+      "active_bounds": [],
+      "name": "white_both_domain_edges",
+      "target_slope_125_8000_db_oct": 0.0,
+      "projection_idempotence_max_db": 5.914782552629561e-13
+    }
+  ],
+  "ui_1db_rounding_negative_control": {
+    "rule": "nearest 1 dB; half ties toward +infinity (negative control, NOT recommended)",
+    "metrics": {
+      "max_abs_db": 0.5,
+      "rms_log_db": 0.2602426083532435,
+      "worst_knot_index": 350,
+      "worst_frequency_hz": 250.0
+    },
+    "decision": "confirm-approximation"
+  },
+  "random_simple_roundtrips": {
+    "count": 160,
+    "seed": 21004,
+    "max_control_error_db": 1.5916157281026244e-12
+  },
+  "invalid_inputs_rejected": 10,
+  "all_assertions_passed": true
+}

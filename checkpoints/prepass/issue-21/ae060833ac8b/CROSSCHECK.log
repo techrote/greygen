@@ -1,0 +1,12 @@
+{
+  "scope": "independent numerical cross-check of representation projection, not audio",
+  "numpy_version": "2.3.5",
+  "scipy_version": "1.17.0",
+  "scipy_method": "lsq_linear / bvls / dense exact QR or SVD",
+  "fixture_count": 43,
+  "max_control_disagreement_db": 1.5871748360041238e-12,
+  "gram_assembly_max_difference": 1.3322676295501878e-15,
+  "gram_smallest_eigenvalue": 0.34836801370294745,
+  "gram_condition_number_2": 3.061830204078484,
+  "all_assertions_passed": true
+}

@@ -1,0 +1,12 @@
+white_neutral: peak=0 dB rms=0 dB silent-numerical
+pink_neutral: peak=0 dB rms=0 dB silent-numerical
+brown_neutral: peak=0 dB rms=0 dB silent-numerical
+grey_neutral: peak=0 dB rms=0 dB silent-numerical
+pink_fractional_controls: peak=6.5014660322e-13 dB rms=2.16801684409e-13 dB silent-numerical
+brown_alternating_bounds: peak=4.19220214098e-13 dB rms=1.4065152707e-13 dB silent-numerical
+white_narrow_notch_24db: peak=23.8415075624 dB rms=0.630394648402 dB confirm-approximation
+notch_below_numerical_budget: peak=4.9669800661e-07 dB rms=1.31332218438e-08 dB silent-numerical
+notch_above_numerical_budget: peak=1.98679223422e-06 dB rms=5.25328873675e-08 dB confirm-approximation
+white_bounded_step: peak=24 dB rms=4.34429606948 dB confirm-approximation
+white_both_domain_edges: peak=23.8913977083 dB rms=0.58397684949 dB confirm-approximation
+PASS: 11 named cases, 160 generated simple roundtrips, 10 invalid inputs rejected

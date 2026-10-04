@@ -1,0 +1,317 @@
+{
+  "scope": "independent numerical cross-check of representation projection, not audio",
+  "numpy_version": "2.3.5",
+  "scipy_version": "1.17.0",
+  "scipy_method": "lsq_linear / bvls / dense exact QR or SVD",
+  "fixture_count": 43,
+  "max_control_disagreement_db": 1.5871748360041238e-12,
+  "gram_assembly_max_difference": 1.3322676295501878e-15,
+  "gram_smallest_eigenvalue": 0.34836801370294745,
+  "gram_condition_number_2": 3.061830204078484,
+  "all_assertions_passed": true,
+  "cases": [
+    {
+      "name": "white_neutral",
+      "max_control_disagreement_db": 0.0,
+      "scipy_status": 3,
+      "scipy_optimality": 0.0,
+      "custom_kkt_db": 0.0
+    },
+    {
+      "name": "pink_neutral",
+      "max_control_disagreement_db": 0.0,
+      "scipy_status": 3,
+      "scipy_optimality": 0.0,
+      "custom_kkt_db": 0.0
+    },
+    {
+      "name": "brown_neutral",
+      "max_control_disagreement_db": 0.0,
+      "scipy_status": 3,
+      "scipy_optimality": 0.0,
+      "custom_kkt_db": 0.0
+    },
+    {
+      "name": "grey_neutral",
+      "max_control_disagreement_db": 0.0,
+      "scipy_status": 3,
+      "scipy_optimality": 0.0,
+      "custom_kkt_db": 0.0
+    },
+    {
+      "name": "pink_fractional_controls",
+      "max_control_disagreement_db": 6.548095399239173e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 3.1174790192336754e-15,
+      "custom_kkt_db": 4.0811798385220754e-13
+    },
+    {
+      "name": "brown_alternating_bounds",
+      "max_control_disagreement_db": 4.192202140984591e-13,
+      "scipy_status": 1,
+      "scipy_optimality": 9.067113926976449e-15,
+      "custom_kkt_db": 2.6290081223123707e-13
+    },
+    {
+      "name": "white_narrow_notch_24db",
+      "max_control_disagreement_db": 4.757805477720312e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 1.1481023380263689e-16,
+      "custom_kkt_db": 2.9867059346544433e-13
+    },
+    {
+      "name": "notch_below_numerical_budget",
+      "max_control_disagreement_db": 6.606504861055612e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 4.375312881168853e-24,
+      "custom_kkt_db": 4.2196767587963826e-13
+    },
+    {
+      "name": "notch_above_numerical_budget",
+      "max_control_disagreement_db": 8.253827931928681e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 1.750125152467541e-23,
+      "custom_kkt_db": 4.800329598959001e-13
+    },
+    {
+      "name": "white_bounded_step",
+      "max_control_disagreement_db": 1.4210854715202004e-14,
+      "scipy_status": 1,
+      "scipy_optimality": 1.4696564740275483e-14,
+      "custom_kkt_db": 0.0,
+      "unconstrained_then_clip_rms_db": 4.365677626640746,
+      "bounded_optimum_rms_db": 4.344296069476251
+    },
+    {
+      "name": "white_both_domain_edges",
+      "max_control_disagreement_db": 5.919396917075659e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 3.2081542283846076e-16,
+      "custom_kkt_db": 3.7126551832855625e-13
+    },
+    {
+      "name": "random_advanced_0",
+      "max_control_disagreement_db": 7.904787935331115e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 3.632510958695434e-15,
+      "custom_kkt_db": 4.960476474025199e-13
+    },
+    {
+      "name": "random_advanced_1",
+      "max_control_disagreement_db": 1.2958523143424827e-12,
+      "scipy_status": 3,
+      "scipy_optimality": 1.6067876196235176e-15,
+      "custom_kkt_db": 8.122391648157645e-13
+    },
+    {
+      "name": "random_advanced_2",
+      "max_control_disagreement_db": 1.4421797089880783e-12,
+      "scipy_status": 3,
+      "scipy_optimality": 1.8539857149502126e-15,
+      "custom_kkt_db": 9.057199434892027e-13
+    },
+    {
+      "name": "random_advanced_3",
+      "max_control_disagreement_db": 1.4271916981556387e-12,
+      "scipy_status": 3,
+      "scipy_optimality": 1.85268467234323e-15,
+      "custom_kkt_db": 8.942846463355636e-13
+    },
+    {
+      "name": "random_advanced_4",
+      "max_control_disagreement_db": 1.1315393066979595e-12,
+      "scipy_status": 3,
+      "scipy_optimality": 3.4377882485170375e-15,
+      "custom_kkt_db": 7.087663789206999e-13
+    },
+    {
+      "name": "random_advanced_5",
+      "max_control_disagreement_db": 4.900524430695441e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 1.4994653335676437e-15,
+      "custom_kkt_db": 3.0753177782116836e-13
+    },
+    {
+      "name": "random_advanced_6",
+      "max_control_disagreement_db": 8.260059303211165e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 3.3579909686221043e-15,
+      "custom_kkt_db": 5.17808018685173e-13
+    },
+    {
+      "name": "random_advanced_7",
+      "max_control_disagreement_db": 9.960920976936904e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 2.432949675057472e-15,
+      "custom_kkt_db": 6.246114736541131e-13
+    },
+    {
+      "name": "random_advanced_8",
+      "max_control_disagreement_db": 3.93796106834543e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 2.7756117716715156e-15,
+      "custom_kkt_db": 2.4502622153477205e-13
+    },
+    {
+      "name": "random_advanced_9",
+      "max_control_disagreement_db": 6.323830348264892e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 1.7377592420597665e-15,
+      "custom_kkt_db": 3.9745984281580604e-13
+    },
+    {
+      "name": "random_advanced_10",
+      "max_control_disagreement_db": 1.4903633882568101e-12,
+      "scipy_status": 3,
+      "scipy_optimality": 1.8149007856835044e-15,
+      "custom_kkt_db": 9.35695965154082e-13
+    },
+    {
+      "name": "random_advanced_11",
+      "max_control_disagreement_db": 6.163958232718869e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 1.4805864867462049e-15,
+      "custom_kkt_db": 3.859135233597044e-13
+    },
+    {
+      "name": "random_advanced_12",
+      "max_control_disagreement_db": 1.5871748360041238e-12,
+      "scipy_status": 3,
+      "scipy_optimality": 1.304512053934559e-15,
+      "custom_kkt_db": 9.96647209206003e-13
+    },
+    {
+      "name": "random_advanced_13",
+      "max_control_disagreement_db": 1.3136158827364852e-12,
+      "scipy_status": 3,
+      "scipy_optimality": 2.9413862838445493e-15,
+      "custom_kkt_db": 8.242295734817162e-13
+    },
+    {
+      "name": "random_advanced_14",
+      "max_control_disagreement_db": 7.651657085716579e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 2.5540195441273985e-15,
+      "custom_kkt_db": 4.809486142676178e-13
+    },
+    {
+      "name": "random_advanced_15",
+      "max_control_disagreement_db": 5.275779813018744e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 3.3449805425522783e-15,
+      "custom_kkt_db": 3.304023721284466e-13
+    },
+    {
+      "name": "random_advanced_16",
+      "max_control_disagreement_db": 9.612310947204605e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 3.1519383457412342e-15,
+      "custom_kkt_db": 6.038503030936226e-13
+    },
+    {
+      "name": "random_advanced_17",
+      "max_control_disagreement_db": 1.411759598113349e-12,
+      "scipy_status": 3,
+      "scipy_optimality": 1.5941566643140614e-15,
+      "custom_kkt_db": 8.862910405582625e-13
+    },
+    {
+      "name": "random_advanced_18",
+      "max_control_disagreement_db": 7.7982065249671e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 4.4630098228193305e-15,
+      "custom_kkt_db": 4.89164264649844e-13
+    },
+    {
+      "name": "random_advanced_19",
+      "max_control_disagreement_db": 1.1710077352233839e-12,
+      "scipy_status": 3,
+      "scipy_optimality": 2.721347452938616e-15,
+      "custom_kkt_db": 7.347455976969286e-13
+    },
+    {
+      "name": "random_advanced_20",
+      "max_control_disagreement_db": 8.22897305852166e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 3.3625446177465435e-15,
+      "custom_kkt_db": 5.133671265866724e-13
+    },
+    {
+      "name": "random_advanced_21",
+      "max_control_disagreement_db": 5.135059044647505e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 2.396520482061959e-15,
+      "custom_kkt_db": 3.2174263253637037e-13
+    },
+    {
+      "name": "random_advanced_22",
+      "max_control_disagreement_db": 1.340261235327489e-12,
+      "scipy_status": 3,
+      "scipy_optimality": 1.8685682341701426e-15,
+      "custom_kkt_db": 8.397726958264684e-13
+    },
+    {
+      "name": "random_advanced_23",
+      "max_control_disagreement_db": 7.782663402622347e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 1.6432907084974221e-15,
+      "custom_kkt_db": 4.890532423473815e-13
+    },
+    {
+      "name": "random_advanced_24",
+      "max_control_disagreement_db": 7.43766159772008e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 3.4633754197876954e-15,
+      "custom_kkt_db": 4.647116025324749e-13
+    },
+    {
+      "name": "random_advanced_25",
+      "max_control_disagreement_db": 4.60964599824365e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 1.5703584266280046e-15,
+      "custom_kkt_db": 2.90878432451791e-13
+    },
+    {
+      "name": "random_advanced_26",
+      "max_control_disagreement_db": 9.232614672782802e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 2.498432335134758e-15,
+      "custom_kkt_db": 5.779821066198565e-13
+    },
+    {
+      "name": "random_advanced_27",
+      "max_control_disagreement_db": 7.105427357601002e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 1.392982951209376e-15,
+      "custom_kkt_db": 4.447553436648377e-13
+    },
+    {
+      "name": "random_advanced_28",
+      "max_control_disagreement_db": 1.141753358524511e-12,
+      "scipy_status": 3,
+      "scipy_optimality": 2.0088097851811426e-15,
+      "custom_kkt_db": 7.176481631177012e-13
+    },
+    {
+      "name": "random_advanced_29",
+      "max_control_disagreement_db": 6.792344464656708e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 3.3258985843165334e-15,
+      "custom_kkt_db": 4.2432724001173483e-13
+    },
+    {
+      "name": "random_advanced_30",
+      "max_control_disagreement_db": 7.527312106958561e-13,
+      "scipy_status": 3,
+      "scipy_optimality": 1.7299529864178709e-15,
+      "custom_kkt_db": 4.720668300706166e-13
+    },
+    {
+      "name": "random_advanced_31",
+      "max_control_disagreement_db": 1.5822898546957731e-12,
+      "scipy_status": 3,
+      "scipy_optimality": 1.5619016496826177e-15,
+      "custom_kkt_db": 9.920952948050399e-13
+    }
+  ]
+}
